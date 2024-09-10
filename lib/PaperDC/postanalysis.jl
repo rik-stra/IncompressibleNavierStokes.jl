@@ -10,10 +10,6 @@
 # The learned CNN parameters are also saved.
 
 # ## Load packages
-#
-# Note: Run `setup.jl` to install and load all required packages.
-# `IncompressibleNavierStokes` and `NeuralClosure` are local packages
-# that need to be `Pkg.develop`ed. This is done in the `setup.jl` script.
 
 using Adapt
 using GLMakie
@@ -184,9 +180,9 @@ io_test = create_io_arrays([data_test], setups_test);
 ## jldsave("$outdir/io_test.jld2"; io_test)
 ##
 ## # Load IO arrays
-## io_train = load("$outdir/io_train.jld2"; "io_train")
-## io_valid = load("$outdir/io_valid.jld2"; "io_valid")
-## io_test = load("$outdir/io_test.jld2"; "io_test")
+## io_train = load("$outdir/io_train.jld2", "io_train")
+## io_valid = load("$outdir/io_valid.jld2", "io_valid")
+## io_test = load("$outdir/io_test.jld2", "io_test")
 
 # Check that data is reasonably bounded
 io_train[1].u |> extrema
@@ -451,7 +447,7 @@ smag = map(CartesianIndices((size(io_train, 2), 2))) do I
                 setup,
                 psolver,
                 method = RKProject(RK44(; T), getorder(iorder)),
-                closure_model = smagorinsky_closure(setup),
+                closure_model = IncompressibleNavierStokes.smagorinsky_closure(setup),
                 nupdate,
             )
             e += err(θ)

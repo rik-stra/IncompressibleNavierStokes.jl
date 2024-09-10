@@ -1,12 +1,4 @@
 """
-    create_initial_conditions(
-        setup,
-        initial_velocity,
-        t = 0;
-        psolver = default_psolver(setup),
-        doproject = true,
-    )
-
 Create divergence free initial velocity field `u` at starting time `t`.
 The initial conditions of `u[α]` are specified by the function
 `initial_velocity(Dimension(α), x...)`.
@@ -75,6 +67,7 @@ function create_spectrum(; setup, kp, rng = Random.default_rng())
     T = eltype(x[1])
     D = dimension()
     τ = T(2π)
+    @assert all(iseven, N) "Spectrum only implemented for even number of volumes."
 
     # Maximum wavenumber (remove ghost volumes)
     K = @. (N - 2) ÷ 2
@@ -170,17 +163,8 @@ function create_spectrum(; setup, kp, rng = Random.default_rng())
 end
 
 """
-    random_field(
-        setup, t = 0;
-        A = 1,
-        kp = 10,
-        psolver = default_psolver(setup),
-        rng = Random.default_rng(),
-    )
-
 Create random field, as in [Orlandi2000](@cite).
 
-- `K`: Maximum wavenumber
 - `A`: Eddy amplitude scaling
 - `kp`: Peak energy wavenumber
 """
@@ -192,9 +176,17 @@ function random_field(
     psolver = default_psolver(setup),
     rng = Random.default_rng(),
 )
-    (; dimension, x, Ip, Ω) = setup.grid
+    (; grid, boundary_conditions) = setup
+    (; dimension, N, x, Δ, Ip, Ω) = setup.grid
     D = dimension()
     T = eltype(x[1])
+
+    @assert(
+        all(==((PeriodicBC(), PeriodicBC())), boundary_conditions),
+        "Random field requires periodic boundary conditions."
+    )
+    @assert all(Δ -> all(≈(Δ[1]), Δ), Δ) "Random field requires uniform grid spacing."
+    @assert all(iseven, N) "Random field requires even number of volumes."
 
     # Create random velocity field
     uhat = create_spectrum(; setup, kp, rng)

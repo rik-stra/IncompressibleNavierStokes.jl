@@ -8,6 +8,7 @@ using IncompressibleNavierStokes
 
 # Output directory
 outdir = joinpath(@__DIR__, "output", "TaylorGreenVortex3D")
+ispath(outdir) || mkpath(outdir)
 
 # Floating point precision
 T = Float64
@@ -79,4 +80,4 @@ outputs.ehist
 outputs.espec
 
 # Export to VTK
-save_vtk(setup, u, t, "$outdir/solution"; psolver)
+save_vtk(state; setup, filename = joinpath(outdir, "solution"), psolver)

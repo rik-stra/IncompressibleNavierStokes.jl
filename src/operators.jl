@@ -37,10 +37,8 @@
 # In the future, Enzyme.jl might be able to do this automatically.
 
 """
-    e = Offset{D}()
-
 Cartesian index unit vector in `D = 2` or `D = 3` dimensions.
-Calling `e(α)` returns a Cartesian index with `1` in the dimension `α` and zeros
+Calling `Offset{D}()(α)` returns a Cartesian index with `1` in the dimension `α` and zeros
 elsewhere.
 
 See <https://b-fg.github.io/2023/05/07/waterlily-on-gpu.html>
@@ -59,8 +57,6 @@ Average scalar field `ϕ` in the `α`-direction.
 end
 
 """
-    divergence!(div, u, setup)
-
 Compute divergence of velocity field (in-place version).
 """
 function divergence!(div, u, setup)
@@ -101,8 +97,6 @@ function divergence_adjoint!(u, φ, setup)
 end
 
 """
-    divergence(u, setup)
-
 Compute divergence of velocity field.
 """
 divergence(u, setup) = divergence!(fill!(similar(u[1], setup.grid.N), 0), u, setup)
@@ -111,16 +105,12 @@ ChainRulesCore.rrule(::typeof(divergence), u, setup) = (
     divergence(u, setup),
     φ -> (
         NoTangent(),
-        divergence_adjoint!(Tangent{typeof(u)}(similar.(u)...), φ, setup),
-        # FIXME: ChainRulesTest and Zygote require conflicting definitions here
-        # divergence_adjoint!(similar.(u), φ, setup),
+        Tangent{typeof(u)}(divergence_adjoint!(similar.(u), φ, setup)...),
         NoTangent(),
     ),
 )
 
 """
-    pressuregradient!(G, p, setup)
-
 Compute pressure gradient (in-place).
 """
 function pressuregradient!(G, p, setup)
@@ -160,8 +150,6 @@ function pressuregradient_adjoint!(pbar, φ, setup)
 end
 
 """
-    pressuregradient(p, setup)
-
 Compute pressure gradient.
 """
 pressuregradient(p, setup) =
@@ -173,8 +161,6 @@ ChainRulesCore.rrule(::typeof(pressuregradient), p, setup) = (
 )
 
 """
-    applypressure!(u, p, setup)
-
 Subtract pressure gradient (in-place).
 """
 function applypressure!(u, p, setup)
@@ -214,8 +200,6 @@ end
 # end
 #
 # """
-#     applypressure(p, setup)
-#
 # Compute pressure gradient.
 # """
 # applypressure(u, p, setup) =
@@ -227,8 +211,6 @@ end
 # )
 
 """
-    laplacian!(L, p, setup)
-
 Compute Laplacian of pressure field (in-place version).
 """
 function laplacian!(L, p, setup)
@@ -307,15 +289,11 @@ function laplacian!(L, p, setup)
 end
 
 """
-    laplacian(p, setup)
-
 Compute Laplacian of pressure field.
 """
 laplacian(p, setup) = laplacian!(similar(p), p, setup)
 
 """
-    convection!(F, u, setup)
-
 Compute convective term.
 """
 function convection!(F, u, setup)
@@ -472,17 +450,12 @@ ChainRulesCore.rrule(::typeof(convection), u, setup) = (
     convection(u, setup),
     φ -> (
         NoTangent(),
-        convection_adjoint!(Tangent{typeof(u)}(zero.(u)...), (φ...,), u, setup),
-        # FIXME: ChainRulesTest and Zygote require conflicting definitions here
-        # convection_adjoint!(zero.(u), (φ...,), u, setup),
-        # convection_adjoint!(zero.(φ), (φ...,), u, setup),
+        Tangent{typeof(u)}(convection_adjoint!(zero.(u), (φ...,), u, setup)...),
         NoTangent(),
     ),
 )
 
 """
-    diffusion!(F, u, setup)
-
 Compute diffusive term.
 """
 function diffusion!(F, u, setup)
@@ -555,10 +528,7 @@ ChainRulesCore.rrule(::typeof(diffusion), u, setup) = (
     diffusion(u, setup),
     φ -> (
         NoTangent(),
-        diffusion_adjoint!(Tangent{typeof(u)}(zero.(u)...), (φ...,), setup),
-        # FIXME: ChainRulesTest and Zygote require conflicting definitions here
-        # diffusion_adjoint!(zero.(u), (φ...,), setup),
-        # diffusion_adjoint!(zero.(φ), (φ...,), setup),
+        Tangent{typeof(u)}(diffusion_adjoint!(zero.(u), (φ...,), setup)...),
         NoTangent(),
     ),
 )
@@ -600,13 +570,14 @@ end
 #
 # ChainRulesCore.rrule(::typeof(convectiondiffusion), u, setup) = (
 #     convection(u, setup),
-#     φ ->
-#         (NoTangent(), convectiondiffusion_adjoint!(similar.(u), φ, setup), NoTangent()),
+#     φ -> (
+#         NoTangent(),
+#         Tangent{typeof(u)}(convectiondiffusion_adjoint!(similar.(u), φ, setup)...),
+#         NoTangent(),
+#     ),
 # )
 
 """
-    convection_diffusion_temp!(c, u, temp, setup)
-
 Compute convection-diffusion term for the temperature equation.
 Add result to `c`.
 """
@@ -627,7 +598,7 @@ function convection_diffusion_temp!(c, u, temp, setup)
             uT2 = u[β][I] * avg(temp, Δ, I, β)
             cI += (-(uT2 - uT1) + α4 * (∂T∂x2 - ∂T∂x1)) / Δ[β][I[β]]
         end
-        c[I] = cI
+        c[I] += cI
     end
     I0 = first(Ip)
     I0 -= oneunit(I0)
@@ -690,8 +661,6 @@ end
 # end
 
 """
-    dissipation!(diss, diff, u, setup)
-
 Compute dissipation term for the temperature equation.
 Add result to `diss`.
 """
@@ -773,8 +742,6 @@ function ChainRulesCore.rrule(::typeof(dissipation), u, setup)
 end
 
 """
-    dissipation_from_strain!(ϵ, u, setup)
-
 Compute dissipation term
 ``2 \\nu \\langle S_{i j} S_{i j} \\rangle``
 from strain-rate tensor.
@@ -800,8 +767,6 @@ end
 dissipation_from_strain(u, setup) = dissipation_from_strain!(zero(u[1]), u, setup)
 
 """
-    bodyforce!(F, u, t, setup)
-
 Compute body force.
 """
 function bodyforce!(F, u, t, setup)
@@ -839,8 +804,6 @@ ChainRulesCore.rrule(::typeof(bodyforce), u, t, setup) =
     (bodyforce(u, t, setup), φ -> (NoTangent(), ZeroTangent(), NoTangent(), NoTangent()))
 
 """
-    gravity!(F, temp, setup)
-
 Compute gravity term (add to existing `F`).
 """
 function gravity!(F, temp, setup)
@@ -891,8 +854,6 @@ function ChainRulesCore.rrule(::typeof(gravity), temp, setup)
 end
 
 """
-    momentum!(F, u, temp, t, setup)
-
 Right hand side of momentum equations, excluding pressure gradient.
 Put the result in ``F``.
 """
@@ -920,8 +881,6 @@ end
 #     (tupleadd(u...), φ -> (NoTangent(), map(u -> φ, u)...))
 
 """
-    momentum(u, temp, t, setup)
-
 Right hand side of momentum equations, excluding pressure gradient.
 """
 function momentum(u, temp, t, setup)
@@ -947,15 +906,13 @@ end
 #     (error(); momentum(u, temp, t, setup)),
 #     φ -> (
 #         NoTangent(),
-#         momentum_pullback!(zero.(φ), φ, u, temp, t, setup),
+#         Tangent{typeof(u)}(momentum_pullback!(zero.(φ), φ, u, temp, t, setup)...),
 #         NoTangent(),
 #         NoTangent(),
 #     ),
 # )
 
 """
-    vorticity(u, setup)
-
 Compute vorticity field.
 """
 vorticity(u, setup) = vorticity!(
@@ -966,8 +923,6 @@ vorticity(u, setup) = vorticity!(
 )
 
 """
-    vorticity!(ω, u, setup)
-
 Compute vorticity field.
 """
 vorticity!(ω, u, setup) = vorticity!(setup.grid.dimension, ω, u, setup)
@@ -1036,8 +991,6 @@ end
     sqrt(sum(ntuple(α -> Δ[α][I[α]]^2, D)))
 
 """
-    smagtensor!(σ, u, θ, setup)
-
 Compute Smagorinsky stress tensors `σ[I]`.
 The Smagorinsky constant `θ` should be a scalar between `0` and `1`.
 """
@@ -1060,8 +1013,6 @@ function smagtensor!(σ, u, θ, setup)
 end
 
 """
-    divoftensor!(s, σ, setup)
-
 Compute divergence of a tensor with all components in the pressure points.
 The stress tensors should be precomputed and stored in `σ`.
 """
@@ -1109,8 +1060,6 @@ function divoftensor!(s, σ, setup)
 end
 
 """
-    m = smagorinsky_closure(setup)
-
 Create Smagorinsky closure model `m`.
 The model is called as `m(u, θ)`, where the Smagorinsky constant
 `θ` should be a scalar between `0` and `1` (for example `θ = 0.1`).
@@ -1131,8 +1080,6 @@ function smagorinsky_closure(setup)
 end
 
 """
-    tensorbasis!(B, V, u, setup)
-
 Compute symmetry tensor basis `B[1]`-`B[11]` and invariants `V[1]`-`V[5]`,
 as specified in [Silvis2017](@cite) in equations (9) and (11).
 Note that `B[1]` corresponds to ``T_0`` in the paper, and `V` to ``I``.
@@ -1184,8 +1131,6 @@ function tensorbasis!(B, V, u, setup)
 end
 
 """
-    tensorbasis(u, setup)
-
 Compute symmetry tensor basis `T[1]`-`T[11]` and invariants `V[1]`-`V[5]`.
 """
 function tensorbasis(u, setup)
@@ -1200,16 +1145,12 @@ function tensorbasis(u, setup)
 end
 
 """
-    interpolate_u_p(u, setup)
-
 Interpolate velocity to pressure points.
 """
 interpolate_u_p(u, setup) =
     interpolate_u_p!(ntuple(α -> similar(u[1], setup.grid.N), length(u)), u, setup)
 
 """
-    interpolate_u_p!(up, u, setup)
-
 Interpolate velocity to pressure points.
 """
 function interpolate_u_p!(up, u, setup)
@@ -1231,8 +1172,6 @@ function interpolate_u_p!(up, u, setup)
 end
 
 """
-    interpolate_ω_p(ω, setup)
-
 Interpolate vorticity to pressure points.
 """
 interpolate_ω_p(ω, setup) = interpolate_ω_p!(
@@ -1243,8 +1182,6 @@ interpolate_ω_p(ω, setup) = interpolate_ω_p!(
 )
 
 """
-    interpolate_ω_p!(ωp, ω, setup)
-
 Interpolate vorticity to pressure points.
 """
 interpolate_ω_p!(ωp, ω, setup) = interpolate_ω_p!(setup.grid.dimension, ωp, ω, setup)
@@ -1286,8 +1223,6 @@ function interpolate_ω_p!(::Dimension{3}, ωp, ω, setup)
 end
 
 """
-    Dfield!(d, G, p, setup; ϵ = eps(eltype(p)))
-
 Compute the ``D``-field [LiJiajia2019](@cite) given by
 
 ```math
@@ -1331,8 +1266,6 @@ function Dfield!(d, G, p, setup; ϵ = eps(eltype(p)))
 end
 
 """
-    Dfield(p, setup; kwargs...)
-
 Compute the ``D``-field.
 """
 Dfield(p, setup; kwargs...) = Dfield!(
@@ -1344,8 +1277,6 @@ Dfield(p, setup; kwargs...) = Dfield!(
 )
 
 """
-    Qfield!(Q, u, setup)
-
 Compute ``Q``-field [Jeong1995](@cite) given by
 
 ```math
@@ -1376,16 +1307,12 @@ function Qfield!(Q, u, setup)
 end
 
 """
-    Qfield(u, setup)
-
 Compute the ``Q``-field.
 """
 Qfield(u, setup) = Qfield!(similar(u[1], setup.grid.N), u, setup)
 
 """
-    eig2field!(λ, u, setup; ϵ = eps(eltype(λ)))
-
-Compute the second eigenvalue of ``S^2 + \\Omega^2``,
+Compute the second eigenvalue of ``S^2 + R^2``,
 as proposed by Jeong and Hussain [Jeong1995](@cite).
 """
 function eig2field!(λ, u, setup)
@@ -1398,9 +1325,9 @@ function eig2field!(λ, u, setup)
         I = I + I0
         ∇u = ∇(u, I, Δ, Δu)
         S = @. (∇u + ∇u') / 2
-        Ω = @. (∇u - ∇u') / 2
+        R = @. (∇u - ∇u') / 2
         # FIXME: Is not recognized as hermitian with Float64 on CPU
-        λ[I] = eigvals(S^2 + Ω^2)[2]
+        λ[I] = eigvals(S^2 + R^2)[2]
     end
     I0 = first(Ip)
     I0 -= oneunit(I0)
@@ -1409,16 +1336,12 @@ function eig2field!(λ, u, setup)
 end
 
 """
-    eig2field(u, setup)
-
 Compute the second eigenvalue of ``S^2 + \\Omega^2``,
 as proposed by Jeong and Hussain [Jeong1995](@cite).
 """
 eig2field(u, setup) = eig2field!(similar(u[1], setup.grid.N), u, setup)
 
 """
-    kinetic_energy!(k, u, setup; interpolate_first = false)
-
 Compute kinetic energy field ``k`` (in-place version).
 If `interpolate_first` is true, it is given by
 
@@ -1429,7 +1352,7 @@ k_I = \\frac{1}{8} \\sum_\\alpha (u^\\alpha_{I + h_\\alpha} + u^\\alpha_{I - h_\
 Otherwise, it is given by
 
 ```math
-k_I = \\frac{1}{4} \\sum_\\alpha (u^\\alpha_{I + h_\\alpha}^2 + u^\\alpha_{I - h_\\alpha}^2),
+k_I = \\frac{1}{4} \\sum_\\alpha ((u^\\alpha_{I + h_\\alpha})^2 + (u^\\alpha_{I - h_\\alpha})^2),
 ```
 
 as in [Sanderse2023](@cite).
@@ -1467,15 +1390,11 @@ function kinetic_energy!(ke, u, setup; interpolate_first = false)
 end
 
 """
-    kinetic_energy(u, setup; kwargs...)
-
 Compute kinetic energy field ``e`` (out-of-place version).
 """
 kinetic_energy(u, setup; kwargs...) = kinetic_energy!(similar(u[1]), u, setup; kwargs...)
 
 """
-    total_kinetic_energy(setup, u; kwargs...)
-
 Compute total kinetic energy. The velocity components are interpolated to the
 volume centers and squared.
 """
@@ -1483,12 +1402,10 @@ function total_kinetic_energy(u, setup; kwargs...)
     (; Ω, Ip) = setup.grid
     k = kinetic_energy(u, setup; kwargs...)
     k .*= Ω
-    sum(k[Ip])
+    sum(view(k, Ip))
 end
 
 """
-    get_scale_numbers(u, setup)
-
 Get the following dimensional scale numbers [Pope2000](@cite):
 
 - Velocity ``u_\\text{avg} = \\langle u_i u_i \\rangle^{1/2}``
