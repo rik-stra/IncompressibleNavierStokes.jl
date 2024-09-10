@@ -113,12 +113,12 @@ Random.seed!(rng, seeds.dns)
 # Parameters
 get_params(nlesscalar) = (;
     D = 2,
-    Re = T(10_000),
+    Re = T(6_000),
     tburn = T(0.05),
     tsim = T(0.5),
     Δt = T(5e-5),
     nles = map(n -> (n, n), nlesscalar), # LES resolutions
-    ndns = (n -> (n, n))(4096), # DNS resolution
+    ndns = (n -> (n, n))(1024), # DNS resolution
     filters = (FaceAverage(), VolumeAverage()),
     ArrayType,
     create_psolver = psolver_spectral,
@@ -128,9 +128,9 @@ get_params(nlesscalar) = (;
 )
 
 # Get parameters for multiple LES resolutions
-params_train = (; get_params([64, 128, 256])..., tsim = T(0.5), savefreq = 10);
-params_valid = (; get_params([64, 128, 256])..., tsim = T(0.1), savefreq = 40);
-params_test = (; get_params([64, 128, 256, 512, 1024])..., tsim = T(0.1), savefreq = 10);
+params_train = (; get_params([64])..., tsim = T(0.5), savefreq = 10);
+params_valid = (; get_params([64])..., tsim = T(0.1), savefreq = 40);
+params_test = (; get_params([64])..., tsim = T(0.1), savefreq = 10);
 
 # Create filtered DNS data
 data_train = [create_les_data(; params_train...) for _ = 1:5];
