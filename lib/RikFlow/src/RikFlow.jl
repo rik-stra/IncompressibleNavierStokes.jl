@@ -8,6 +8,15 @@ using IncompressibleNavierStokes
 using FFTW
 using Observables
 
+"""
+Create setup for Tau-orthogonal method (stored in a named tuple).
+"""
+function TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup)
+    masks = get_masks(qois, setup, ArrayType)
+    N_qois = length(qois)
+    to_setup = (; N_qois, qois, qoi_refs_folder, to_mode, masks)
+    return to_setup
+end
 
 function get_masks(QoIs, setup, ArrayType)
     N = setup.grid.Np
@@ -46,22 +55,22 @@ function to_track(u)
     pass
 end
 
-function compute_QoI(QoIs, masks, u_hat, w_hat, setup)
+function compute_QoI(u_hat, w_hat, to_setup, setup)
     (; dimension, xlims) = setup.grid
     L = xlims[1][2] - xlims[1][1]
     @assert (xlims[2][2] - xlims[2][1] == L) && (xlims[3][2] - xlims[3][1] == L)
     
     D = dimension()
     N = size(u_hat, 1)
-    q = zeros(length(QoIs))
+    q = zeros(to_setup.N_qois)
 
     E = sum(u_hat.*conj(u_hat),dims = 4)
     Z = sum(w_hat.*conj(w_hat),dims = 4)
-    for i in 1:length(QoIs)
-        if QoIs[i][1] == "E"
-            q[i] = sum(E.*masks[i])*(L^D*1/(2*N^(2*D)))
-        elseif QoIs[i][1] == "Z"
-            q[i] = sum(Z.*masks[i])*(L^D*1/(N^(2*D)))
+    for i in 1:to_setup.N_qois
+        if to_setup.qois[i][1] == "E"
+            q[i]= sum(E.*to_setup.masks[i])*(L^D*1/(2*N^(2*D)))
+        elseif to_setup.qois[i][1] == "Z"
+            q[i] = sum(Z.*to_setup.masks[i])*(L^D*1/(N^(2*D)))
         else
             error("QoI not recognized")
         end 
@@ -122,14 +131,14 @@ end
 """
 Create processor that stores the QoI values every `nupdate` time step.
 """
-qoisaver(; setup, QoIs, masks, nupdate = 1) =
+qoisaver(; setup, to_setup, nupdate = 1) =
     processor() do state
         qoi_hist = fill(zeros(0), 0)
         on(state) do state
             state.n % nupdate == 0 || return
             u_hat = get_u_hat(state.u, setup)
             w_hat = get_w_hat(state.u, setup)
-            q = compute_QoI(QoIs, masks, u_hat, w_hat, setup)
+            q = compute_QoI(u_hat, w_hat, to_setup,setup)
             push!(qoi_hist, q)
         end
         state[] = state[]

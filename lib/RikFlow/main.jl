@@ -29,9 +29,9 @@ ArrayType = Array
 
 ## TO parameters
 
-QoIs = [["E", 0, 5],["E",6,10], ["Z", 0, 5],["Z",6,10]]
-QoI_refs_folder = "C:/Users/rik/Documents/julia_code/IncompressibleNavierStokes.jl/lib/RikFlow/output/"
-TO_mode = "CREATE_REF" # "CREATE_REF" or "TRACK_REF"
+qois = [["E", 0, 5],["E",6,10], ["Z", 0, 5],["Z",6,10]]
+qoi_refs_folder = "C:/Users/rik/Documents/julia_code/IncompressibleNavierStokes.jl/lib/RikFlow/output/"
+to_mode = "CREATE_REF" # "CREATE_REF" or "TRACK_REF"
 
 # ## Setup
 
@@ -51,11 +51,14 @@ U(dim, x, y, z) =
     end
 ustart = velocityfield(setup, U, psolver);
 
+# initialize TO_setup
+to_setup = RikFlow.TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup)
+
 # test some stuff
 u_hat = RikFlow.get_u_hat(ustart, setup);
 w_hat = RikFlow.get_w_hat(ustart, setup);
-masks = RikFlow.get_masks(QoIs, setup, ArrayType);
-Q = RikFlow.compute_QoI(QoIs, masks, u_hat, w_hat, setup)
+
+Q = RikFlow.compute_QoI(u_hat, w_hat, to_setup, setup)
 
 
 
@@ -68,7 +71,7 @@ state, outputs = solve_unsteady(;
     Δt = T(1e-3),
     processors = (
         ## rtp = realtimeplotter(; setup, plot = fieldplot, nupdate = 10),
-        QoIhist = RikFlow.qoisaver(; setup, QoIs = QoIs, masks = masks, nupdate = 1),
+        qoihist = RikFlow.qoisaver(; setup, to_setup, nupdate = 1),
         #espec = realtimeplotter(; setup, plot = energy_spectrum_plot, nupdate = 10),
         ## anim = animator(; setup, path = "$outdir/solution.mkv", nupdate = 20),
         ## vtk = vtk_writer(; setup, nupdate = 10, dir = outdir, filename = "solution"),
@@ -78,12 +81,15 @@ state, outputs = solve_unsteady(;
 );
 
 # ## save QoI trajectories to file
-q = stack(outputs.QoIhist)
-if TO_mode == "CREATE_REF"
-    jldsave(QoI_refs_folder*"QoIhist.jld2"; q)
+q = stack(outputs.qoihist)
+if to_setup.to_mode == "CREATE_REF"
+    # put a sinewave in the QoI trajectory
+    s = sin.((1:1001) ./ (8 * π))*0.2*(maximum(q[1,:])-minimum(q[1,:]))
+    q[1,:]+=s
+    jldsave(to_setup.qoi_refs_folder*"QoIhist.jld2"; q)
 end
 
-
+lines(s)
 lines(q[1,:])
 
 
@@ -94,8 +100,3 @@ outputs.ehist
 
 # Energy spectrum
 outputs.espec
-
-
-
-
-jldsave("filename.jld2"; q, outputs.ehist)
