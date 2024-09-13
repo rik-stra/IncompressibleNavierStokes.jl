@@ -1,21 +1,62 @@
 module RikFlow
 #= Implementation of tau-orthogonal method
-The main functions in this module produce the Reduced tau ortogonal closure term:
-- "to_track()"    produces a closure term that tracks the reference QoI trajectories
-- "to_predict()"  online prediction of the closure term based on training data, obtained from tracking
+
 =#
 using IncompressibleNavierStokes
 using FFTW
 using Observables
+using JLD2
+using Infiltrator
+using TensorOperations
 
 """
 Create setup for Tau-orthogonal method (stored in a named tuple).
 """
 function TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup)
-    masks = get_masks(qois, setup, ArrayType)
+    masks, ∂ = get_masks(qois, setup, ArrayType)
     N_qois = length(qois)
-    to_setup = (; N_qois, qois, qoi_refs_folder, to_mode, masks)
+    
+    to_setup = (; N_qois, qois, qoi_refs_folder, to_mode, masks, ∂)
+    if to_mode == "TRACK_REF"
+        qoi_trajectories = load(qoi_refs_folder*"QoIhist.jld2")["q"]
+        time_index = ones(Int)
+        time_index[] = 1
+        V_i = get_vi_functions(to_setup)
+        cij_masks = get_cij_masks(to_setup)
+        to_setup = (; to_setup..., qoi_ref=(;qoi_trajectories,time_index), V_i, cij_masks)
+    end
     return to_setup
+end
+
+function get_cij_masks(to_setup)
+    mask_A = ones(Bool,(to_setup.N_qois, to_setup.N_qois, to_setup.N_qois))
+    mask_B = ones(Bool,(to_setup.N_qois, to_setup.N_qois))
+    for i in 1:to_setup.N_qois
+        mask_A[:,i,i] .= false
+        mask_A[i,:,i] .= false
+        mask_B[i,i] = false
+    end
+    return (A=mask_A, B=mask_B)
+end
+
+function get_vi_functions(to_setup)
+    vi = []
+    for i in 1:to_setup.N_qois
+        if to_setup.qois[i][1] == "E"
+            f = (u,w) -> to_setup.masks[i].*u
+        elseif to_setup.qois[i][1] == "Z"
+            f = (u,w) -> 2*curl(to_setup.masks[i].*w, to_setup)
+        end
+        push!(vi, f)
+    end
+    return vi
+end
+
+function curl(x, to_setup)
+    (; ∂) = to_setup
+    return stack((∂[2].*x[:,:,:,3] - ∂[3].*x[:,:,:,2],
+    ∂[3].*x[:,:,:,1] - ∂[1].*x[:,:,:,3],
+    ∂[1].*x[:,:,:,2] - ∂[2].*x[:,:,:,1]), dims = 4)
 end
 
 function get_masks(QoIs, setup, ArrayType)
@@ -34,25 +75,17 @@ function get_masks(QoIs, setup, ArrayType)
             end
         end
     end
-    return masks_list
+    ∂ = [2*pi/(setup.grid.x[1][2] - setup.grid.x[1][1]).*reshape(l,(:,1,1)),
+    2*pi/(setup.grid.x[2][2] - setup.grid.x[2][1]).*reshape(l,(1,:,1)),
+    2*pi/(setup.grid.x[3][2] - setup.grid.x[3][1]).*reshape(l,(1,1,:))]
+    return masks_list, ∂
 end
 
-function to_track(u)
-    (; grid) = setup
-    (; dimension, Np, Ip) = grid
-    D = dimension()
-    # compute QoI
-
-    # get QoI ref from file
-
-    # get base functions T_i (divergence free)
-
-    # get partial derivatives V_i
-
-    # get O_i
-
-    # compute closure term
-    pass
+function get_qoi_ref(to_setup)
+    (; qoi_trajectories, time_index) = to_setup.qoi_ref
+    q = qoi_trajectories[:,time_index[]]
+    time_index[] += 1
+    return q
 end
 
 function compute_QoI(u_hat, w_hat, to_setup, setup)
@@ -77,25 +110,6 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
     end
     return q
 
-end
-
-"""
-    apply_round_filter(u_hat::Array, bin::Tuple)
-set all Fourier coefficients outside the wavenumber bin to zero. Only for 3D!
-"""
-function apply_round_filter(u_hat::Array, bin::Tuple)
-    k = fftfreq(size(u_hat, 1),size(u_hat, 1))
-    l = fftfreq(size(u_hat, 2),size(u_hat, 2))
-    m = fftfreq(size(u_hat, 3),size(u_hat, 3))
-    for i in 1:size(u_hat, 1)
-        for j in 1:size(u_hat, 2)
-            for k in 1:size(u_hat, 3)
-                if (k[i]^2 + l[j]^2 + m[k]^2) > bin[2] || (k[i]^2 + l[j]^2 + m[k]^2) < bin[1]
-                    u_hat[i,j,k] = 0
-                end
-            end
-        end
-    end
 end
 
 
@@ -128,6 +142,10 @@ function get_w_hat(u::Tuple, setup)
     return w_hat
 end
 
+
+using IncompressibleNavierStokes: timestep!, create_stepper, get_state, default_psolver, 
+    ode_method_cache, AbstractODEMethod, AbstractRungeKuttaMethod, RKMethods, processor
+
 """
 Create processor that stores the QoI values every `nupdate` time step.
 """
@@ -144,5 +162,97 @@ qoisaver(; setup, to_setup, nupdate = 1) =
         state[] = state[]
         qoi_hist
     end
+
+struct TOMethod{T,R,TOS} <: AbstractODEMethod{T}
+    rk_method::R
+    to_setup::TOS
+    TOMethod(; rk_method = RKMethods.RK44(), to_setup) = new{eltype(rk_method.A),typeof(rk_method),typeof(to_setup)}(rk_method, to_setup)
+end
+
+export TOMethod
+
+IncompressibleNavierStokes.create_stepper(method::TOMethod; setup, psolver, u, temp, t, n = 0) =
+    create_stepper(method.rk_method; setup, psolver, u, temp, t, n)
+
+IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup, u, temp) =
+ ode_method_cache(method.rk_method, setup, u, temp)
+
+function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ = nothing, cache)
+    (; rk_method, to_setup) = method
+    (; setup) = stepper
+    stepper = timestep!(method.rk_method, stepper, Δt; θ, cache)
+
+    # to method
+    to_sgs_term(stepper.u, setup, to_setup)
+    #for a in 1:3
+    #    stepper.u[a] .+= sgs[a]
+    #end
+    #error()
+    stepper
+end
+
+function to_sgs_term(u, setup, to_setup)
+    N = setup.grid.Np[1]
+    D = setup.grid.dimension()
+    # get u_hat v_hat
+    u_hat = get_u_hat(u, setup);
+    w_hat = get_w_hat(u, setup);
+    # get dQ
+    q = compute_QoI(u_hat, w_hat, to_setup,setup)
+    q_ref = get_qoi_ref(to_setup)
+    dQ = q_ref-q
+    # get V_i
+    vi = [to_setup.V_i[i](u_hat, w_hat) for i in 1:to_setup.N_qois]
+    vi = stack(vi, dims=5)
+
+    println("vi1 max", maximum(abs.(vi[:,:,:,:,1])))
+    println("vi2 max", maximum(abs.(vi[:,:,:,:,2])))
+
+    # get T_i
+    ti = copy(vi)
+    # compute innerproducts
+    ip = innerpoducts(vi,ti,N,D)
+    # compute c_ij
+    cij = compute_cij(ip, to_setup)
+    # construct SGS term
+    @tensor P_hat[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
+    
+    src_Q = reshape(sum(-conj(cij).*ip, dims = 2),:)   # should this be real-valued?
+    println(src_Q)
+    tau = dQ./src_Q
+    println("tau ", tau)
+    @tensor sgs_hat[b,c,d,e] := tau[a] * P_hat[b,c,d,e,a]
+    sgs = ifft(sgs_hat, [1,2,3])
+    
+    u_new = u_hat+sgs_hat
+    w_new = curl(u_new, to_setup)
+    q_new = compute_QoI(u_new, w_new, to_setup,setup)
+    println("q_ref  = ", q_ref)
+    println("q      = ", q)
+    println("q_new  = ", q_new)
+
+    
+    # interpolate to velocity points
+    error("succes")
+end
+
+function innerpoducts(x,y,N,D)
+    ip = reshape(
+        sum(
+            x.*conj!(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end])))
+            , dims = (1,2,3,4))
+        ,(size(y)[end],size(y)[end]))./N^(2*D)
+end
+
+function compute_cij(ip, to_setup) 
+    N = to_setup.N_qois
+    cij = ones(ComplexF64, (N, N)).*-1
+    for i in N
+        A = reshape(ip[to_setup.cij_masks.A[:,:,i]], (N-1, N-1))
+        b = ip[:,i][to_setup.cij_masks.B[:,i]]
+        cij[to_setup.cij_masks.B[:,i],i] = A\b  # each column of cij is the solution of a linear system
+    end
+    return cij
+end
 
 end # module RikFlow

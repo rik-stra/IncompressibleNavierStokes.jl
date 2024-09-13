@@ -29,9 +29,9 @@ ArrayType = Array
 
 ## TO parameters
 
-qois = [["E", 0, 5],["E",6,10], ["Z", 0, 5],["Z",6,10]]
+qois = [["E", 0, 5], ["Z", 0, 5]]
 qoi_refs_folder = "C:/Users/rik/Documents/julia_code/IncompressibleNavierStokes.jl/lib/RikFlow/output/"
-to_mode = "CREATE_REF" # "CREATE_REF" or "TRACK_REF"
+to_mode = "TRACK_REF" # "CREATE_REF" or "TRACK_REF"
 
 # ## Setup
 
@@ -57,21 +57,30 @@ to_setup = RikFlow.TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup)
 # test some stuff
 u_hat = RikFlow.get_u_hat(ustart, setup);
 w_hat = RikFlow.get_w_hat(ustart, setup);
-
 Q = RikFlow.compute_QoI(u_hat, w_hat, to_setup, setup)
 
 
 
 # ## Solve unsteady problem
+if to_setup.to_mode == "CREATE_REF"
+    method = RKMethods.RK44()  ## selects the standard solver
+elseif to_setup.to_mode == "TRACK_REF"
+    method = TOMethod(; to_setup) ### selects the special TO solver
+    #method.rk_method
+    #method.to_setup
+end
 
+#reset counter for QoI trajectory
+if to_mode == "TRACK_REF" to_setup.qoi_ref.time_index[] = 1 end
 state, outputs = solve_unsteady(;
     setup,
     ustart,
+    method,
     tlims = (T(0), T(1.0)),
     Δt = T(1e-3),
     processors = (
         ## rtp = realtimeplotter(; setup, plot = fieldplot, nupdate = 10),
-        qoihist = RikFlow.qoisaver(; setup, to_setup, nupdate = 1),
+        qoihist = RikFlow.qoisaver(; setup, to_setup, nupdate = 1),                          # obtain QoI trajectories
         #espec = realtimeplotter(; setup, plot = energy_spectrum_plot, nupdate = 10),
         ## anim = animator(; setup, path = "$outdir/solution.mkv", nupdate = 20),
         ## vtk = vtk_writer(; setup, nupdate = 10, dir = outdir, filename = "solution"),
