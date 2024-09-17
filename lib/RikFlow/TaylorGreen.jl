@@ -29,7 +29,7 @@ ArrayType = Array
 
 ## TO parameters
 
-qois = [["E", 0, 5], ["Z", 0, 5]]
+qois = [["Z", 0, 10]] # energy and enstrophy
 qoi_refs_folder = "C:/Users/rik/Documents/julia_code/IncompressibleNavierStokes.jl/lib/RikFlow/output/"
 to_mode = "TRACK_REF" # "CREATE_REF" or "TRACK_REF"
 
@@ -57,6 +57,7 @@ to_setup = RikFlow.TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup)
 # test some stuff
 u_hat = RikFlow.get_u_hat(ustart, setup);
 w_hat = RikFlow.get_w_hat(ustart, setup);
+w_hat2 = RikFlow.get_w_hat_from_u_hat(u_hat, to_setup);
 Q = RikFlow.compute_QoI(u_hat, w_hat, to_setup, setup)
 
 
@@ -66,8 +67,6 @@ if to_setup.to_mode == "CREATE_REF"
     method = RKMethods.RK44()  ## selects the standard solver
 elseif to_setup.to_mode == "TRACK_REF"
     method = TOMethod(; to_setup) ### selects the special TO solver
-    #method.rk_method
-    #method.to_setup
 end
 
 #reset counter for QoI trajectory
@@ -76,7 +75,7 @@ state, outputs = solve_unsteady(;
     setup,
     ustart,
     method,
-    tlims = (T(0), T(1.0)),
+    tlims = (T(0), T(1)),
     Δt = T(1e-3),
     processors = (
         ## rtp = realtimeplotter(; setup, plot = fieldplot, nupdate = 10),
@@ -89,17 +88,26 @@ state, outputs = solve_unsteady(;
     psolver,
 );
 
+
+
+
 # ## save QoI trajectories to file
 q = stack(outputs.qoihist)
 if to_setup.to_mode == "CREATE_REF"
     # put a sinewave in the QoI trajectory
-    s = sin.((1:1001) ./ (8 * π))*0.2*(maximum(q[1,:])-minimum(q[1,:]))
-    q[1,:]+=s
+    for i in 1:1 #to_setup.N_qois
+        s = -sin.((1:1001) ./ (8*i * π))*0.05*(maximum(q[i,:])-minimum(q[i,:]))
+        q[i,:]+=s
+    end
     jldsave(to_setup.qoi_refs_folder*"QoIhist.jld2"; q)
 end
 
-lines(s)
-lines(q[1,:])
+f = Figure()
+axs = [Axis(f[1, i]) for i in 1:size(q, 1)]
+p1 = plot!(axs[1],q[1,:])
+p1 = plot!(axs[1],to_setup.qoi_ref.qoi_trajectories[1,:])
+p2 = plot!(axs[2],q[2,:])
+p2 = plot!(axs[2],to_setup.qoi_ref.qoi_trajectories[2,:])
 
 
 fieldplot(state; fieldname = 1, setup)

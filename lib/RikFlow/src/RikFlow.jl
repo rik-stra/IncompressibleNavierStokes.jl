@@ -46,6 +46,7 @@ function get_vi_functions(to_setup)
             f = (u,w) -> to_setup.masks[i].*u
         elseif to_setup.qois[i][1] == "Z"
             f = (u,w) -> 2*curl(to_setup.masks[i].*w, to_setup)
+            #f = (u,w) -> to_setup.masks[i].*w
         end
         push!(vi, f)
     end
@@ -61,6 +62,7 @@ end
 
 function get_masks(QoIs, setup, ArrayType)
     N = setup.grid.Np
+    xlims = setup.grid.xlims
     k = fftfreq(N[1], N[1])
     l = fftfreq(N[2], N[2])
     m = fftfreq(N[3], N[3])
@@ -75,9 +77,9 @@ function get_masks(QoIs, setup, ArrayType)
             end
         end
     end
-    ∂ = [2*pi/(setup.grid.x[1][2] - setup.grid.x[1][1]).*reshape(l,(:,1,1)),
-    2*pi/(setup.grid.x[2][2] - setup.grid.x[2][1]).*reshape(l,(1,:,1)),
-    2*pi/(setup.grid.x[3][2] - setup.grid.x[3][1]).*reshape(l,(1,1,:))]
+    ∂ = [2*pi/(xlims[1][2] - xlims[1][1]).*reshape(l,(:,1,1))*1im,
+    2*pi/(xlims[2][2] - xlims[2][1]).*reshape(l,(1,:,1))*1im,
+    2*pi/(xlims[3][2] - xlims[3][1]).*reshape(l,(1,1,:))*1im]
     return masks_list, ∂
 end
 
@@ -115,14 +117,15 @@ end
 
 """
     get_u_hat(u::Tuple, setup)
-Interpolate the velocity field to cell centers and compute the Fourier transform of the field. Returns an 4D array, velocity components stacked along last dimension.
+Compute the Fourier transform of the field. Returns an 4D array, velocity components stacked along last dimension.
 """
 function get_u_hat(u::Tuple, setup)
-    (; Ip) = setup.grid
+    (; dimension, Iu) = setup.grid
+    d = dimension()
     # interpolate u to cell centers
-    u_c = interpolate_u_p(u, setup)
-    u_c = stack(u_c, dims=4)[Ip,:]
-    u_hat = fft(u_c, [1,2,3])
+    #u_c = interpolate_u_p(u, setup)
+    u = stack([u[a][Iu[a]] for a=1:d], dims=4)
+    u_hat = fft(u, [1,2,3])
     return u_hat
 end
 
@@ -142,9 +145,15 @@ function get_w_hat(u::Tuple, setup)
     return w_hat
 end
 
+function get_w_hat_from_u_hat(u_hat, to_setup)
+    
+    # compute vorticity
+    w_hat = curl(u_hat, to_setup)
+    return w_hat
+end
 
 using IncompressibleNavierStokes: timestep!, create_stepper, get_state, default_psolver, 
-    ode_method_cache, AbstractODEMethod, AbstractRungeKuttaMethod, RKMethods, processor
+    ode_method_cache, AbstractODEMethod, AbstractRungeKuttaMethod, RKMethods, processor, apply_bc_u!
 
 """
 Create processor that stores the QoI values every `nupdate` time step.
@@ -155,7 +164,7 @@ qoisaver(; setup, to_setup, nupdate = 1) =
         on(state) do state
             state.n % nupdate == 0 || return
             u_hat = get_u_hat(state.u, setup)
-            w_hat = get_w_hat(state.u, setup)
+            w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
             q = compute_QoI(u_hat, w_hat, to_setup,setup)
             push!(qoi_hist, q)
         end
@@ -180,66 +189,72 @@ IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup, u, temp) =
 function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ = nothing, cache)
     (; rk_method, to_setup) = method
     (; setup) = stepper
+    (; dimension, Iu) = setup.grid
+    D = dimension()
+
     stepper = timestep!(method.rk_method, stepper, Δt; θ, cache)
 
     # to method
-    to_sgs_term(stepper.u, setup, to_setup)
-    #for a in 1:3
-    #    stepper.u[a] .+= sgs[a]
-    #end
-    #error()
+    sgs = to_sgs_term(stepper.u, setup, to_setup)
+    for a in 1:D
+        stepper.u[a][Iu[a]] .+= sgs[:,:,:,a]
+    end
+
+    apply_bc_u!(stepper.u, stepper.t, setup)
     stepper
 end
 
 function to_sgs_term(u, setup, to_setup)
     N = setup.grid.Np[1]
     D = setup.grid.dimension()
+
     # get u_hat v_hat
     u_hat = get_u_hat(u, setup);
-    w_hat = get_w_hat(u, setup);
+    w_hat = get_w_hat_from_u_hat(u_hat, to_setup);
+    #w_hat = get_w_hat(u, setup);
+    
     # get dQ
     q = compute_QoI(u_hat, w_hat, to_setup,setup)
     q_ref = get_qoi_ref(to_setup)
     dQ = q_ref-q
+    
     # get V_i
     vi = [to_setup.V_i[i](u_hat, w_hat) for i in 1:to_setup.N_qois]
     vi = stack(vi, dims=5)
-
-    println("vi1 max", maximum(abs.(vi[:,:,:,:,1])))
-    println("vi2 max", maximum(abs.(vi[:,:,:,:,2])))
 
     # get T_i
     ti = copy(vi)
     # compute innerproducts
     ip = innerpoducts(vi,ti,N,D)
+    
     # compute c_ij
     cij = compute_cij(ip, to_setup)
+    
     # construct SGS term
     @tensor P_hat[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
-    
-    src_Q = reshape(sum(-conj(cij).*ip, dims = 2),:)   # should this be real-valued?
-    println(src_Q)
+    src_Q = reshape(sum(-conj(cij).*ip, dims = 1),:)
+    #println("src_Q: ", src_Q)
     tau = dQ./src_Q
-    println("tau ", tau)
-    @tensor sgs_hat[b,c,d,e] := tau[a] * P_hat[b,c,d,e,a]
-    sgs = ifft(sgs_hat, [1,2,3])
+    #println("tau ", tau)
+    @tensor sgs_hat[b,c,d,e] := -tau[a] * P_hat[b,c,d,e,a]
+    sgs = real(ifft(sgs_hat, [1,2,3]))
     
-    u_new = u_hat+sgs_hat
-    w_new = curl(u_new, to_setup)
-    q_new = compute_QoI(u_new, w_new, to_setup,setup)
-    println("q_ref  = ", q_ref)
-    println("q      = ", q)
-    println("q_new  = ", q_new)
+#    u_new = u_hat+sgs_hat
+#    w_new = curl(u_new, to_setup)
+#    q_new = compute_QoI(u_new, w_new, to_setup,setup)
 
+#    println("q_ref  = ", q_ref)
+#    println("q      = ", q)
+#    println("q_new  = ", q_new)
     
-    # interpolate to velocity points
-    error("succes")
+
+    return sgs
 end
 
 function innerpoducts(x,y,N,D)
     ip = reshape(
         sum(
-            x.*conj!(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end])))
+            x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end])))
             , dims = (1,2,3,4))
         ,(size(y)[end],size(y)[end]))./N^(2*D)
 end
@@ -247,7 +262,7 @@ end
 function compute_cij(ip, to_setup) 
     N = to_setup.N_qois
     cij = ones(ComplexF64, (N, N)).*-1
-    for i in N
+    for i in 1:N
         A = reshape(ip[to_setup.cij_masks.A[:,:,i]], (N-1, N-1))
         b = ip[:,i][to_setup.cij_masks.B[:,i]]
         cij[to_setup.cij_masks.B[:,i],i] = A\b  # each column of cij is the solution of a linear system
