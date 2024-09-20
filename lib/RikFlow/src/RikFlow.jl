@@ -8,24 +8,44 @@ using Observables
 using JLD2
 using Infiltrator
 using TensorOperations
+import cuTENSOR
 
 """
 Create setup for Tau-orthogonal method (stored in a named tuple).
 """
-function TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup)
+function TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup, nstep)
     masks, ∂ = get_masks(qois, setup, ArrayType)
     N_qois = length(qois)
     
     to_setup = (; N_qois, qois, qoi_refs_folder, to_mode, masks, ∂)
+
     if to_mode == "TRACK_REF"
         qoi_trajectories = load(qoi_refs_folder*"QoIhist.jld2")["q"]
         time_index = ones(Int)
         time_index[] = 1
         V_i = get_vi_functions(to_setup)
         cij_masks = get_cij_masks(to_setup)
-        to_setup = (; to_setup..., qoi_ref=(;qoi_trajectories,time_index), V_i, cij_masks)
+        outputs = allocate_arrays_outputs(nstep, N_qois)
+        #P_hat, sgs_hat = allocate_arrays_to(to_setup, setup, ArrayType)
+
+        to_setup = (; to_setup..., qoi_ref=(;qoi_trajectories,time_index), V_i, cij_masks, outputs)
     end
     return to_setup
+end
+
+function allocate_arrays_outputs(nstep, N_qois)
+    dQ = Array{Float64}(undef, nstep, N_qois)
+    tau = Array{Float64}(undef, nstep, N_qois)
+    (; dQ, tau)
+end
+
+function allocate_arrays_to(to_setup, setup, ArrayType)
+    (; Nu) = setup.grid
+    (; N_qois) = to_setup
+    d = length(Nu)
+    P_hat = ArrayType{ComplexF64}(undef, Nu[1][1], Nu[1][2], Nu[1][3], d, N_qois)
+    sgs_hat = ArrayType{ComplexF64}(undef, Nu[1][1], Nu[1][2], Nu[1][3], d)
+    return P_hat, sgs_hat
 end
 
 function get_cij_masks(to_setup)
@@ -55,9 +75,14 @@ end
 
 function curl(x, to_setup)
     (; ∂) = to_setup
-    return stack((∂[2].*x[:,:,:,3] - ∂[3].*x[:,:,:,2],
-    ∂[3].*x[:,:,:,1] - ∂[1].*x[:,:,:,3],
-    ∂[1].*x[:,:,:,2] - ∂[2].*x[:,:,:,1]), dims = 4)
+    return stack(
+        (
+            ∂[2].*x[:,:,:,3] .- ∂[3].*x[:,:,:,2],
+            ∂[3].*x[:,:,:,1] .- ∂[1].*x[:,:,:,3],
+            ∂[1].*x[:,:,:,2] .- ∂[2].*x[:,:,:,1],
+        ),
+        dims = 4
+    )
 end
 
 function get_masks(QoIs, setup, ArrayType)
@@ -67,7 +92,8 @@ function get_masks(QoIs, setup, ArrayType)
     l = fftfreq(N[2], N[2])
     m = fftfreq(N[3], N[3])
     # create a list of bolean arrays
-    masks_list = [ArrayType{Bool, length(N)}(undef,N) for i in 1:length(QoIs)]
+    masks_list = [Array{Bool, length(N)}(undef,N) for i in 1:length(QoIs)]
+    #println("masks_list: ", typeof(masks_list))
     for q in 1:length(QoIs)
         for r in 1:N[3], j in 1:N[2], i in 1:N[1]
             if (k[i]^2 + l[j]^2 + m[r]^2) >= QoIs[q][2] && (k[i]^2 + l[j]^2 + m[r]^2) <= QoIs[q][3]
@@ -77,9 +103,11 @@ function get_masks(QoIs, setup, ArrayType)
             end
         end
     end
+    masks_list = ArrayType.(masks_list)
     ∂ = [2*pi/(xlims[1][2] - xlims[1][1]).*reshape(l,(:,1,1))*1im,
     2*pi/(xlims[2][2] - xlims[2][1]).*reshape(l,(1,:,1))*1im,
     2*pi/(xlims[3][2] - xlims[3][1]).*reshape(l,(1,1,:))*1im]
+    ∂ = ArrayType.(∂)
     return masks_list, ∂
 end
 
@@ -99,8 +127,10 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
     N = size(u_hat, 1)
     q = zeros(to_setup.N_qois)
 
-    E = sum(u_hat.*conj(u_hat),dims = 4)
-    Z = sum(w_hat.*conj(w_hat),dims = 4)
+    # E = real(sum(u_hat.*conj(u_hat),dims = 4))
+    # Z = real(sum(w_hat.*conj(w_hat),dims = 4))
+    E = sum(abs2, u_hat, dims = 4)
+    Z = sum(abs2, w_hat, dims = 4)
     for i in 1:to_setup.N_qois
         if to_setup.qois[i][1] == "E"
             q[i]= sum(E.*to_setup.masks[i])*(L^D*1/(2*N^(2*D)))
@@ -195,7 +225,8 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
     stepper = timestep!(method.rk_method, stepper, Δt; θ, cache)
 
     # to method
-    sgs = to_sgs_term(stepper.u, setup, to_setup)
+    sgs = to_sgs_term(stepper.u, setup, to_setup, stepper)
+    
     for a in 1:D
         stepper.u[a][Iu[a]] .+= sgs[:,:,:,a]
     end
@@ -204,10 +235,9 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
     stepper
 end
 
-function to_sgs_term(u, setup, to_setup)
+function to_sgs_term(u, setup, to_setup, stepper)
     N = setup.grid.Np[1]
     D = setup.grid.dimension()
-
     # get u_hat v_hat
     u_hat = get_u_hat(u, setup);
     w_hat = get_w_hat_from_u_hat(u_hat, to_setup);
@@ -217,6 +247,7 @@ function to_sgs_term(u, setup, to_setup)
     q = compute_QoI(u_hat, w_hat, to_setup,setup)
     q_ref = get_qoi_ref(to_setup)
     dQ = q_ref-q
+    to_setup.outputs.dQ[stepper.n,:] = dQ
     
     # get V_i
     vi = [to_setup.V_i[i](u_hat, w_hat) for i in 1:to_setup.N_qois]
@@ -230,12 +261,19 @@ function to_sgs_term(u, setup, to_setup)
     # compute c_ij
     cij = compute_cij(ip, to_setup)
     
-    # construct SGS term
-    @tensor P_hat[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
+   
     src_Q = reshape(sum(-conj(cij).*ip, dims = 1),:)
     #println("src_Q: ", src_Q)
     tau = dQ./src_Q
+    to_setup.outputs.tau[stepper.n,:] = real(tau)
     #println("tau ", tau)
+
+    # move to GPU
+    cij = setup.ArrayType(cij)
+    tau = setup.ArrayType(tau)
+    # construct SGS term
+    
+    @tensor P_hat[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
     @tensor sgs_hat[b,c,d,e] := -tau[a] * P_hat[b,c,d,e,a]
     sgs = real(ifft(sgs_hat, [1,2,3]))
     
@@ -254,9 +292,11 @@ end
 function innerpoducts(x,y,N,D)
     ip = reshape(
         sum(
-            x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end])))
-            , dims = (1,2,3,4))
-        ,(size(y)[end],size(y)[end]))./N^(2*D)
+            x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end]))),
+             dims = (1,2,3,4)
+        ),
+        (size(y)[end],size(y)[end]))./N^(2*D)
+    Array(ip)
 end
 
 function compute_cij(ip, to_setup) 
@@ -269,5 +309,7 @@ function compute_cij(ip, to_setup)
     end
     return cij
 end
+
+
 
 end # module RikFlow
