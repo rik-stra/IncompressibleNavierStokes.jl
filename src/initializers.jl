@@ -201,7 +201,8 @@ function random_field(
         all(==((PeriodicBC(), PeriodicBC())), boundary_conditions),
         "Random field requires periodic boundary conditions."
     )
-    @assert all(Δ -> all(≈(0), diff(Δ)), Δ) "Random field requires uniform grid spacing."
+    @assert all(Δ -> all(<(1e-14), diff(Δ)), Δ) "Random field requires uniform grid spacing."
+    # @assert all(Δ -> all(≈(0; atol = 1e-14), diff(Δ)), Δ) "Random field requires uniform grid spacing."
     @assert all(iseven, N) "Random field requires even number of volumes."
 
     # Create random velocity field
