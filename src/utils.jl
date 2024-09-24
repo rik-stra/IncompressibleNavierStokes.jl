@@ -68,7 +68,6 @@ function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) /
     T = eltype(xp[1])
     D = dimension()
     domain_length = [(2*pi)/(xlims[a][2] - xlims[a][1]) for a in 1:D]
-    print(domain_length)
     K = size(Ip) .÷ 2
     k = zeros(T, K)
     for α = 1:D

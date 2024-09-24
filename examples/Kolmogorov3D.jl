@@ -45,14 +45,9 @@ setup = Setup(;
 );
 ustart = random_field(setup, 0.0; A = 1e-1);
 
-using LinearAlgebra
-divergence(ustart, setup) |> norm
-
-
 # ## Plot body force
 #
 # Since the force is steady, it is just stored as a field.
-
 mean(setup.bodyforce[1],dims=3)[:,:] |> Array |> heatmap
 
 # ## Solve unsteady problem
@@ -68,7 +63,7 @@ vortplot(state; setup) = begin
     heatmap(ω; figure = (; size = (900, 350)), axis = (; aspect = DataAspect()))
 end
 
-vortplot(state; setup)
+#vortplot(state; setup)
 
 state, outputs = solve_unsteady(;
     setup,
@@ -89,15 +84,15 @@ state, outputs = solve_unsteady(;
             setup,
             plot = energy_spectrum_plot,
             nupdate = 10,
-            displayupdates = true,
-            displayfig = true,
+            displayupdates = false,
+            displayfig = false,
         ),
         vort = realtimeplotter(;
             setup,
             plot = vortplot,
             nupdate = 10,
-            displayupdates = false,
-            displayfig = false,
+            displayupdates = true,
+            displayfig = true,
         ),
         log = timelogger(; nupdate = 10),
     ),
@@ -106,16 +101,9 @@ state, outputs = solve_unsteady(;
 
 heatmap(Array(mean(state.u[1],dims=3)[:,:]))
 
-let 
-    vx = mean(state.u[1],dims=3)[1:end-1, :]
-    vy = mean(state.u[2],dims=3)[:, 1:end-1]
-    ω = -diff(vx; dims = 2) + diff(vy; dims = 1)
-    heatmap(ω; figure = (; size = (900, 350)), axis = (; aspect = DataAspect()))
-end
-
 
 # Field plot
-outputs.rtp
+outputs.vort
 
 # Energy history
 outputs.ehist
