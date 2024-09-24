@@ -64,16 +64,17 @@ end
 
 "Get utilities to compute energy spectrum."
 function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) / 2)
-    (; dimension, xp, Ip) = setup.grid
+    (; dimension, xp, Ip, xlims) = setup.grid
     T = eltype(xp[1])
     D = dimension()
-
+    domain_length = [(2*pi)/(xlims[a][2] - xlims[a][1]) for a in 1:D]
+    print(domain_length)
     K = size(Ip) .÷ 2
     k = zeros(T, K)
     for α = 1:D
         kα =
             reshape(0:K[α]-1, ntuple(Returns(1), α - 1)..., :, ntuple(Returns(1), D - α)...)
-        k .+= kα .^ 2
+        k .+= (kα.*domain_length[α]) .^ 2
     end
     k .= sqrt.(k)
     k = reshape(k, :)

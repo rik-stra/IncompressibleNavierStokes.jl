@@ -1,3 +1,7 @@
+if false
+    #include("src/RikFlow.jl")
+    include("../src/IncompressibleNavierStokes.jl")
+end
 # # Kolmogorov flow (3D)
 #
 # The Kolmogorov flow in a periodic box ``\Omega = [0, 3]x[0, 1]x[0, 1]`` is initiated
@@ -69,7 +73,7 @@ vortplot(state; setup)
 state, outputs = solve_unsteady(;
     setup,
     ustart = ustart,
-    tlims = (0.0, 100),
+    tlims = (0.0, 40),
     # Δt = 1e-2,
     # cfl = 0.4,
     processors = (
@@ -85,23 +89,22 @@ state, outputs = solve_unsteady(;
             setup,
             plot = energy_spectrum_plot,
             nupdate = 10,
-            displayupdates = false,
-            displayfig = false,
+            displayupdates = true,
+            displayfig = true,
         ),
         vort = realtimeplotter(;
             setup,
             plot = vortplot,
             nupdate = 10,
-            displayupdates = true,
-            displayfig = true,
+            displayupdates = false,
+            displayfig = false,
         ),
         log = timelogger(; nupdate = 10),
     ),
 );
 
-save_
 
-heatmap(mean(state.u[1],dims=3)[:,:])
+heatmap(Array(mean(state.u[1],dims=3)[:,:]))
 
 let 
     vx = mean(state.u[1],dims=3)[1:end-1, :]
