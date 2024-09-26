@@ -67,19 +67,19 @@ function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) /
     (; dimension, xp, Ip, xlims) = setup.grid
     T = eltype(xp[1])
     D = dimension()
-    domain_length = [(2*pi)/(xlims[a][2] - xlims[a][1]) for a in 1:D]
+    domain_length = [(xlims[a][2] - xlims[a][1]) for a in 1:D]
     K = size(Ip) .÷ 2
     k = zeros(T, K)
     for α = 1:D
         kα =
             reshape(0:K[α]-1, ntuple(Returns(1), α - 1)..., :, ntuple(Returns(1), D - α)...)
-        k .+= (kα.*domain_length[α]) .^ 2
+        k .+= (kα./domain_length[α]) .^ 2            # we define k as the number of wavelengths per unit distance
     end
     k .= sqrt.(k)
     k = reshape(k, :)
 
     # Sum or average wavenumbers between k and k+1
-    kmax = minimum(K) - 1
+    kmax = minimum([(K[a]-1)/domain_length[a] for a in 1:D]) 
     isort = sortperm(k)
     ksort = k[isort]
     ia = zeros(Int, 0)
