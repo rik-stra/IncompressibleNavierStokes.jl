@@ -35,15 +35,15 @@ using CUDA; ArrayType = CuArray
 Re = T(3_000)
 
 # A 3D grid is a Cartesian product of three vectors
-n = 32
-lims = T(0), T(1)
+n = 64
+lims = T(0), T(2)
 x = LinRange(lims..., n + 1), LinRange(lims..., n + 1), LinRange(lims..., n + 1)
 
 # Build setup and assemble operators
 setup = Setup(; x, Re, ArrayType);
 
 # Builed TO_setup
-qois = [["Z",0,4],["E", 0, 4],["Z",5,10],["E", 5, 10]] # energy and enstrophy
+qois = [["Z",0,4],["E", 0, 4], ["Z",5,10],["E", 5, 10]] # energy and enstrophy
 qoi_refs_folder = outdir
 to_mode = "TRACK_REF" # "CREATE_REF" or "TRACK_REF"
 
@@ -60,6 +60,7 @@ psolver = psolver_spectral(setup);
 
 # Initial conditions
 ustart = random_field(setup; psolver);
+
 
 # Solve unsteady problem
 if to_setup.to_mode == "CREATE_REF"
@@ -85,10 +86,11 @@ if to_mode == "TRACK_REF" to_setup.qoi_ref.time_index[] = 1 end #reset counter f
             plot = energy_history_plot,
             nupdate = 10,
             displayfig = false,
+            displayupdates = false,
         ),
-        espec = realtimeplotter(; setup, plot = energy_spectrum_plot,
-        displayupdates = true,
-        nupdate = 100),
+        #espec = realtimeplotter(; setup, plot = energy_spectrum_plot,
+        #displayupdates = false,
+        #nupdate = 100),
         ## anim = animator(; setup, path = "$outdir/solution.mkv", nupdate = 20),
         ## vtk = vtk_writer(; setup, nupdate = 10, dir = outdir, filename = "solution"),
         ## field = fieldsaver(; setup, nupdate = 10),
@@ -136,3 +138,33 @@ outputs.ehist
 
 # Energy spectrum
 outputs.espec
+
+
+
+
+
+# check enstrophy and energy calcs
+
+L=2
+ustart = velocityfield(setup,
+    (α, x, y, z) -> (α == 1) * sinpi(2*z),
+    doproject = false,
+)
+
+v = velocityfield(setup,
+(α, x, y, z) -> (α == 2) * 2*pi*cospi(2*z),
+doproject = false,
+)
+
+u_hat = RikFlow.get_u_hat(ustart, setup);
+w_hat = RikFlow.get_w_hat_from_u_hat(u_hat, to_setup);
+q = RikFlow.compute_QoI(u_hat, w_hat, to_setup, setup)
+q[2]
+E = total_kinetic_energy(ustart, setup, interpolate_first = false)
+w = vorticity(ustart,setup);
+Z = sum(sum(map(x->x[setup.grid.Ip].^2,w)))
+Z = Z*(L/n)^3
+q[1]
+
+Z2 = sum(sum(map(x->x[setup.grid.Ip].^2,v)))
+Z2 = Z2*(L/n)^3
