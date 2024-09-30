@@ -51,7 +51,7 @@ rng_DNS = Xoshiro(seeds.dns)
 # Parameters
 get_params(nlesscalar) = (;
     D = 3,
-    Re = T(2000),
+    Re = T(2_000),
     lims = ( (T(0) , T(3)) , (T(0) , T(1)), (T(0),T(1)) ),
     qois = [["Z",0,4],["E", 0, 4],["Z",5,10],["E", 5, 10]],
     tburn = T(20),
@@ -95,78 +95,88 @@ data_track = load("$outdir/data_track.jld2", "data_track");
 # plot tracking data
 
 # plot Qois
-f = Figure();
-axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.q, 1)-1]
-for i in 1:size(data_track.q, 1)
-    lines!(axs[i],qoi_ref'[:,i])
-    lines!(axs[i],data_track.q'[:,i],linestyle=:dash)
+let
+    f = Figure();
+    axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.q, 1)-1]
+    for i in 1:size(data_track.q, 1)
+        lines!(axs[i],qoi_ref'[:,i])
+        lines!(axs[i],data_track.q'[:,i],linestyle=:dash)
+    end
+    display(f)
 end
-display(f)
-
 # plot dQ
-f = Figure();
-axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.dQ, 1)-1]
-for i in 1:size(data_track.dQ, 1)
-    lines!(axs[i],data_track.dQ[i,:])
+let
+    f = Figure();
+    axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.dQ, 1)-1]
+    for i in 1:size(data_track.dQ, 1)
+        lines!(axs[i],data_track.dQ[i,:])
+    end
+    display(f)
 end
-display(f)
-
 
 # fit multi-variate normal distribution
-using Distributions
-d = fit(MvNormal, data_track.dQ)
-rng = Xoshiro(seeds.to)
-samples = zeros(4,10000)
-rand!(rng,d, samples)
+let
+    using Distributions
+    d = fit(MvNormal, data_track.dQ)
+    rng = Xoshiro(seeds.to)
+    samples = zeros(4,10000)
+    rand!(rng,d, samples)
 
-# plot distributions
-f = Figure();
-axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.dQ, 1)-1]
-for i in 1:size(data_track.dQ, 1)
-    hist!(axs[i],samples[i,:], normalization = :pdf)
-    hist!(axs[i],data_track.dQ[i,:], normalization = :pdf)
+    # plot distributions
+    f = Figure();
+    axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.dQ, 1)-1]
+    for i in 1:size(data_track.dQ, 1)
+        hist!(axs[i],samples[i,:], normalization = :pdf)
+        hist!(axs[i],data_track.dQ[i,:], normalization = :pdf)
+    end
+    display(f)
 end
-display(f)
-
 
 # online prediction
 rng_TO = Xoshiro(seeds.to)
 
 dQ_data = data_track.dQ
-outputs_online = online_sgs(; params_train..., ustart, dQ_data, sampling_method = :resample , tsim = T(40), rng = rng_TO);
+outputs_online = online_sgs(; params_train..., ustart, dQ_data, sampling_method = :mvg , tsim = T(20), rng = rng_TO);
 
 # plot Qois
-f = Figure();
-axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(outputs_online.q, 1)-1]
-for i in 1:size(outputs_online.q, 1)
-    lines!(axs[i],qoi_ref'[:,i])
-    lines!(axs[i],outputs_online.q'[:,i],linestyle=:dash)
+let
+    f = Figure();
+    axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(outputs_online.q, 1)-1]
+    for i in 1:size(outputs_online.q, 1)
+        lines!(axs[i],qoi_ref'[:,i])
+        lines!(axs[i],outputs_online.q'[:,i],linestyle=:dash)
+    end
+    display(f)
 end
-display(f)
 
 # plot dQ
-f = Figure();
-axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(outputs_online.dQ, 1)-1]
-for i in 1:size(outputs_online.dQ, 1)
-    lines!(axs[i],outputs_online.dQ[i,:])
+let
+    f = Figure();
+    axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(outputs_online.dQ, 1)-1]
+    for i in 1:size(outputs_online.dQ, 1)
+        lines!(axs[i],outputs_online.dQ[i,:])
+    end
+    display(f)
 end
-display(f)
-
 
 
 # plot distributions
-f = Figure();
-axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.dQ, 1)-1]
-for i in 1:size(outputs_online.dQ, 1)
-    hist!(axs[i],samples[i,:], normalization = :pdf)
-    hist!(axs[i],outputs_online.dQ[i,:], normalization = :pdf)
+let
+    f = Figure();
+    axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.dQ, 1)-1]
+    for i in 1:size(outputs_online.dQ, 1)
+        hist!(axs[i],samples[i,:], normalization = :pdf)
+        hist!(axs[i],outputs_online.dQ[i,:], normalization = :pdf)
+    end
+    display(f)
 end
-display(f)
 
-f = Figure();
-axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.q, 1)-1]
-for i in 1:size(outputs_online.q, 1)
-    hist!(axs[i],qoi_ref[i,:], normalization = :pdf)
-    hist!(axs[i],outputs_online.q[i,:], normalization = :pdf)
+let
+    f = Figure();
+    axs = [Axis(f[i ÷ 2, i%2]) for i in 0:size(data_track.q, 1)-1]
+    for i in 1:size(outputs_online.q, 1)
+        hist!(axs[i],qoi_ref[i,:], normalization = :pdf)
+        hist!(axs[i],outputs_online.q[i,:], normalization = :pdf)
+    end
+    display(f)
 end
-display(f)
