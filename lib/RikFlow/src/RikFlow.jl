@@ -9,6 +9,9 @@ using JLD2
 using Infiltrator
 using TensorOperations
 import cuTENSOR
+using KernelAbstractions
+using Statistics
+using Distributions
 
 """
 Create setup for Tau-orthogonal method (stored in a named tuple).
@@ -19,29 +22,59 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, qoi_refs_folder, to_mode, ArrayType, setup, nstep)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = :none, sampling_mode = :mvg ,dQ_data = :none, rng = :none)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
-    
-    to_setup = (; N_qois, qois, qoi_refs_folder, to_mode, masks, ∂)
+    time_index = ones(Int)
+    to_setup = (; N_qois, qois, qoi_refs_location, to_mode, masks, ∂, time_index, rng)
 
-    if to_mode == "TRACK_REF"
-        qoi_trajectories = load(qoi_refs_folder*"/QoIhist.jld2")["q"]
-        time_index = ones(Int)
-        time_index[] = 1
+    if to_mode in [:TRACK_REF, :ONLINE]
+        dQ_distribution = :none
+        if to_mode == :TRACK_REF
+            Q_dQ_array = load_qois(qoi_refs_location) # use reference trajectories
+            to_setup.time_index[] = 2
+            sampler = TO_Setup -> read_next_from_Q_dQ_array(TO_Setup)
+        elseif to_mode == :ONLINE
+            if sampling_mode == :mvg
+                Q_dQ_array = :none
+                dQ_distribution = fit(MvNormal, dQ_data)
+                sampler = TO_setup -> rand(TO_setup.rng, TO_setup.dQ_distribution)
+                
+            elseif sampling_mode == :resample
+                ind = rand(rng, 1:size(dQ_data,2), nstep)
+                Q_dQ_array = dQ_data[:,ind]                         # use resampled dQ data
+                to_setup.time_index[] = 1
+                sampler = read_next_from_Q_dQ_array(TO_Setup)
+            else
+                error("Sampling mode not recognized")
+            end
+
+        end
         V_i = get_vi_functions(to_setup)
         cij_masks = get_cij_masks(to_setup)
         outputs = allocate_arrays_outputs(nstep, N_qois)
-        #P_hat, sgs_hat = allocate_arrays_to(to_setup, setup, ArrayType)
-
-        to_setup = (; to_setup..., qoi_ref=(;qoi_trajectories,time_index), V_i, cij_masks, outputs)
+        to_setup = (; to_setup..., Q_dQ_array, dQ_distribution, sampler, V_i, cij_masks, outputs)
     end
     return to_setup
 end
 
+function read_next_from_Q_dQ_array(to_setup)
+    q = to_setup.Q_dQ_array[:,to_setup.time_index[]]
+    to_setup.time_index[] += 1
+    return q
+end
+
+function load_qois(qoi_refs_location::String)
+    load(qoi_refs_location*"/QoIhist.jld2")["q"]
+end
+
+function load_qois(qoi_refs_location::VecOrMat)
+    qoi_refs_location
+end
+
 function allocate_arrays_outputs(nstep, N_qois)
-    dQ = Array{Float64}(undef, nstep, N_qois)
-    tau = Array{Float64}(undef, nstep, N_qois)
+    dQ = Array{Float64}(undef, N_qois, nstep)
+    tau = Array{Float64}(undef, N_qois, nstep)
     (; dQ, tau)
 end
 
@@ -106,15 +139,7 @@ function get_masks_and_partials(QoIs, setup, ArrayType)
     return masks_list, ∂
 end
 
-"""
-    Read the QoI reference trajectories from file
-"""
-function get_qoi_ref(to_setup)
-    (; qoi_trajectories, time_index) = to_setup.qoi_ref
-    q = qoi_trajectories[:,time_index[]]
-    time_index[] += 1
-    return q
-end
+
 
 """
     compute the curl of a 3D flow field in Fourier space
@@ -225,10 +250,14 @@ function to_sgs_term(u, setup, to_setup, stepper)
     w_hat = get_w_hat_from_u_hat(u_hat, to_setup);
     
     # get dQ
-    q = compute_QoI(u_hat, w_hat, to_setup,setup)
-    q_ref = get_qoi_ref(to_setup)
-    dQ = q_ref-q
-    to_setup.outputs.dQ[stepper.n,:] = dQ
+    if to_setup.to_mode == :TRACK_REF
+        q = compute_QoI(u_hat, w_hat, to_setup,setup)
+        q_ref = to_setup.sampler(to_setup)
+        dQ = q_ref-q
+    elseif to_setup.to_mode == :ONLINE
+        dQ = to_setup.sampler(to_setup)
+    end
+    to_setup.outputs.dQ[:,stepper.n] = dQ
     
     # get V_i
     vi = [to_setup.V_i[i](u_hat, w_hat) for i in 1:to_setup.N_qois]
@@ -242,7 +271,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
     cij = compute_cij(ip, to_setup)
     src_Q = reshape(sum(-conj(cij).*ip, dims = 1),:)
     tau = dQ./src_Q
-    to_setup.outputs.tau[stepper.n,:] = real(tau)
+    to_setup.outputs.tau[:,stepper.n] = real(tau)
  
     # move to GPU
     cij = setup.ArrayType(cij)
@@ -318,5 +347,15 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
     apply_bc_u!(stepper.u, stepper.t, setup)
     stepper
 end
+
+include("filter.jl")
+export FaceAverage, VolumeAverage
+
+include("create_ref_data.jl")
+export create_ref_data
+
+include("LFsims.jl")
+export track_ref
+export online_sgs
 
 end # module RikFlow
