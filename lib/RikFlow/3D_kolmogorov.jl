@@ -88,7 +88,7 @@ if to_setup.to_mode == "CREATE_REF"
 elseif to_setup.to_mode == "TRACK_REF"
     method = TOMethod(; to_setup) ### selects the special TO solver
 end
-if to_mode == "TRACK_REF" to_setup.qoi_ref.time_index[] = 1 end #reset counter for QoI trajectory
+if to_mode == "TRACK_REF" to_setup.qoi_ref.time_index[] = 2 end #reset counter for QoI trajectory
 state, outputs = solve_unsteady(;
     setup,
     method,
