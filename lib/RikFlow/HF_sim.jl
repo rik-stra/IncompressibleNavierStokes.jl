@@ -1,12 +1,23 @@
 # perfom a HF simulation
 println("Loading modules...")
 t0 = time()
+using LoggingExtras
 using Random
 using CairoMakie
 using JLD2
 using RikFlow
 using IncompressibleNavierStokes
 t1 = time()
+
+# Write output to file, as the default SLURM file is not updated often enough
+jobid = ENV["SLURM_JOB_ID"]
+taskid = ENV["SLURM_ARRAY_TASK_ID"]
+logfile = joinpath(@__DIR__, "log_$(jobid)_$(taskid).out")
+filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+logger = TeeLogger(global_logger(), filelogger)
+global_logger(logger)
+
+
 println("Modules loaded. Time: $(t1-t0) s")
 
 n_dns = parse(Int,ARGS[1])
