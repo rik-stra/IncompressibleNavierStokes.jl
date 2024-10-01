@@ -13,7 +13,7 @@ simdir = $pwd
 mkdir $TMPDIR/output
 cd $TMPDIR
 
-julia --project $simdir 64 128 5000
+julia --project $simdir HF_sim.jl 64 128 5000
 
 mkdir $simdir/output
 cp -r $TMPDIR/output/* $simdir/output/.
