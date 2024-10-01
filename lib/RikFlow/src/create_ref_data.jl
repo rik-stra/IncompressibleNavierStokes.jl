@@ -124,7 +124,7 @@ function create_ref_data(;
     to_setup_les = [
         RikFlow.TO_Setup(; qois, 
         qoi_refs_location= "none", 
-        to_mode = "CREATE_REF", 
+        to_mode = :CREATE_REF, 
         ArrayType, 
         setup = les[i], 
         nstep=nt) for i in 1:length(nles)]
@@ -190,13 +190,13 @@ function create_ref_data(;
                 to_setup_les;
                 nupdate = savefreq,
             ),
-            vort = realtimeplotter(;
-                setup = _dns,
-                plot = vortplot,
-                nupdate = 10,
-                displayupdates = true,
-                displayfig = true,
-            ),
+            #vort = realtimeplotter(;
+            #    setup = _dns,
+            #    plot = vortplot,
+            #    nupdate = 10,
+            #    displayupdates = true,
+            #    displayfig = true,
+            #),
             log = timelogger(; nupdate = 10),
         ),
         psolver,
