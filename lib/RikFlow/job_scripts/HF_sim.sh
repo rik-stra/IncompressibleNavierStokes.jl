@@ -10,4 +10,4 @@
 module load 2023
 module load Julia/1.10.4-linux-x86_64
 
-julia --project HF_sim.jl 64 128 5000
+julia --project HF_sim.jl 128 64 5000
