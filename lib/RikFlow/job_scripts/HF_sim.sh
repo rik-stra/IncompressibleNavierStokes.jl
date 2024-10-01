@@ -9,7 +9,7 @@
 
 module load 2023
 module load Julia/1.10.4-linux-x86_64
-simdir = $pwd
+simdir=$pwd
 mkdir $TMPDIR/output
 cd $TMPDIR
 
