@@ -9,11 +9,5 @@
 
 module load 2023
 module load Julia/1.10.4-linux-x86_64
-simdir=$pwd
-mkdir $TMPDIR/output
-cd $TMPDIR
 
-julia --project $simdir $simdir/HF_sim.jl 64 128 5000
-
-mkdir $simdir/output
-cp -r $TMPDIR/output/* $simdir/output/.
+julia --project HF_sim.jl 64 128 5000
