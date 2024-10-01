@@ -36,8 +36,8 @@ get_params(nlesscalar) = (;
     Re,
     lims = ( (T(0) , T(3)) , (T(0) , T(1)), (T(0),T(1)) ),
     qois = [["Z",0,4],["E", 0, 4],["Z",5,10],["E", 5, 10]],
-    tburn = T(10),
-    tsim = T(10),
+    tburn = T(1),
+    tsim = T(0.01),
     Δt = T(5e-3),
     nles = map(n -> (3*n, n, n), nlesscalar), # LES resolutions
     ndns = (n -> (3*n, n, n))(n_dns), # DNS resolution
