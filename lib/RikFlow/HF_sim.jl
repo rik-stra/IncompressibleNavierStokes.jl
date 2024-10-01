@@ -52,5 +52,5 @@ params_train = (; get_params([n_les])..., savefreq = 100);
 data_train = create_ref_data(; params_train..., rng = rng_DNS);
 
 # Save filtered DNS data
-filename = "$outdir/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"
+filename = "$outdir/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(params_train.tsim).jld2"
 jldsave(filename; data_train)
