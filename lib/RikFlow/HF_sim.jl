@@ -7,6 +7,7 @@ using CairoMakie
 using JLD2
 using RikFlow
 using IncompressibleNavierStokes
+using CUDA
 t1 = time()
 
 # Write output to file, as the default SLURM file is not updated often enough
@@ -33,7 +34,7 @@ seeds = (;
 )
 
 # For running on a CUDA compatible GPU
-using CUDA
+
 T = Float32
 ArrayType = CuArray
 #device = x -> adapt(CuArray, x)
