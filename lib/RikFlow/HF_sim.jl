@@ -32,8 +32,8 @@ get_params(nlesscalar) = (;
     Re,
     lims = ( (T(0) , T(3)) , (T(0) , T(1)), (T(0),T(1)) ),
     qois = [["Z",0,4],["E", 0, 4],["Z",5,10],["E", 5, 10]],
-    tburn = T(20),
-    tsim = T(40),
+    tburn = T(10),
+    tsim = T(10),
     Δt = T(5e-3),
     nles = map(n -> (3*n, n, n), nlesscalar), # LES resolutions
     ndns = (n -> (3*n, n, n))(n_dns), # DNS resolution
@@ -48,5 +48,5 @@ params_train = (; get_params([n_les])..., savefreq = 100);
 data_train = create_ref_data(; params_train..., rng = rng_DNS);
 
 # Save filtered DNS data
-filename = "$outdir/data_train_$(n_dns)_$(n_les)_$Re.jld2"
+filename = "$outdir/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"
 jldsave(filename; data_train)
