@@ -1,10 +1,14 @@
 # perfom a HF simulation
+println("Loading modules...")
+t0 = time()
 using Random
 using CairoMakie
 using JLD2
 using RikFlow
 using IncompressibleNavierStokes
-
+t1 = time()
+println("Modules loaded. Time: $(t1-t0) s")
+error()
 n_dns = parse(Int,ARGS[1])
 n_les = parse(Int,ARGS[2])
 Re = parse(Float32,ARGS[3])
