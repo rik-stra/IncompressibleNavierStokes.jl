@@ -353,6 +353,7 @@ export FaceAverage, VolumeAverage
 
 include("create_ref_data.jl")
 export create_ref_data
+export spinnup
 
 include("LFsims.jl")
 export track_ref

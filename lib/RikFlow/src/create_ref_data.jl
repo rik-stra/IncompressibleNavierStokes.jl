@@ -161,13 +161,13 @@ function create_ref_data(;
     
     @info "Solving burn-in DNS"
     (; u, t), outputs =
-        solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn),
+        solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn), Δt,
         processors = (;
             log = timelogger(; nupdate = 10),
             vort = realtimeplotter(;
             setup = _dns,
             plot = vortplot,
-            nupdate = 10,
+            nupdate = 100,
             displayupdates = true,
             displayfig = true,
         ),
@@ -206,3 +206,64 @@ function create_ref_data(;
     outputs.f
 end
 
+function spinnup(;
+    D = 3,
+    Re = 1e3,
+    lims = ntuple(α -> (typeof(Re)(0), typeof(Re)(1)), D),
+    qois = [["Z", 0, 4], ["E", 0, 4], ["Z", 5, 10], ["E", 5, 10]],
+    nles = [ntuple(α -> 32, D)],
+    ndns = ntuple(α -> 64, D),
+    tburn = typeof(Re)(0.1),
+    Δt = typeof(Re)(1e-4),
+    create_psolver = psolver_spectral,
+    savefreq = 1,
+    ArrayType = Array,
+    icfunc = (setup, psolver, rng) -> random_field(setup, typeof(Re)(0); psolver, rng),
+    bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
+    rng,
+    kwargs...,
+)
+    T = typeof(Re)
+
+
+    # Build setup and assemble operators
+    dns = Setup(;
+        x = ntuple(α -> LinRange(lims[α]..., ndns[α] + 1), D),
+        Re,
+        ArrayType,
+        bodyforce,
+        kwargs...,
+    )
+
+    # Since the grid is uniform and identical for x and y, we may use a specialized
+    # spectral pressure solver
+    psolver = create_psolver(dns)
+
+    ustart = icfunc(dns, psolver, rng)
+    any(u -> any(isnan, u), ustart) && @warn "Initial conditions contain NaNs"
+
+
+    _dns = dns
+
+    # Solve burn-in DNS
+    
+    @info "Solving burn-in DNS"
+    (; u, t), outputs =
+        solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn), Δt,
+        processors = (;
+            log = timelogger(; nupdate = 10),
+            states = fieldsaver(setup = _dns, nupdate = savefreq),
+            vort = realtimeplotter(;
+            setup = _dns,
+            plot = vortplot,
+            nupdate = savefreq,
+            displayupdates = true,
+            displayfig = true,
+        ),
+        ),
+        psolver)
+
+
+    # Store result for current IC
+    outputs
+end
