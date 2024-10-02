@@ -11,7 +11,7 @@ end
 # perfom a HF simulation
 println("Loading modules...")
 t0 = time()
-#using LoggingExtras
+using LoggingExtras
 using Random
 using CairoMakie
 using JLD2
@@ -22,8 +22,8 @@ t1 = time()
 
 # Write output to file, as the default SLURM file is not updated often enough
 jobid = ENV["SLURM_JOB_ID"]
-taskid = ENV["SLURM_ARRAY_TASK_ID"]
-logfile = joinpath(@__DIR__, "log_$(jobid)_$(taskid).out")
+#taskid = ENV["SLURM_ARRAY_TASK_ID"]
+logfile = joinpath(@__DIR__, "log_$(jobid).out")
 filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
 logger = TeeLogger(global_logger(), filelogger)
 global_logger(logger)
@@ -61,7 +61,7 @@ get_params(nlesscalar) = (;
     D = 3,
     Re,
     lims = ( (T(0) , T(3)) , (T(0) , T(1)), (T(0),T(1)) ),
-    tburn = T(20),
+    tburn = T(0.1),
     Δt = T(1e-4),
     ndns = (n -> (3*n, n, n))(n_dns), # DNS resolution
     ArrayType,

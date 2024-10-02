@@ -249,17 +249,17 @@ function spinnup(;
     
     @info "Solving burn-in DNS"
     (; u, t), outputs =
-        solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn), Δt,
+        solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn),
         processors = (;
             log = timelogger(; nupdate = 10),
             states = fieldsaver(setup = _dns, nupdate = savefreq),
-            vort = realtimeplotter(;
-            setup = _dns,
-            plot = vortplot,
-            nupdate = savefreq,
-            displayupdates = true,
-            displayfig = true,
-        ),
+            #vort = realtimeplotter(;
+            #setup = _dns,
+            #plot = vortplot,
+            #nupdate = savefreq,
+            #displayupdates = true,
+            #displayfig = true,
+        #),
         ),
         psolver)
 
