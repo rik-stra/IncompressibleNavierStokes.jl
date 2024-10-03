@@ -9,7 +9,7 @@ function lesdatagen(dnsobs, Φ, les, compression, to_setup, nupdate)
     FΦ = zero.(Φu)
     c = zero.(Φu)
     #results = (; u = fill(Array.(dnsobs[].u), 0), c = fill(Array.(dnsobs[].u), 0))
-    results = (; u = fill(Array.(dnsobs[].u), 0), qoi_hist = fill(zeros(0), 0))
+    results = (; u = fill(Array.(dnsobs[].u), 0), qoi_hist = fill(zeros(typeof(les.Re),0), 0))
     temp = nothing
     on(dnsobs) do (; u, t, n)
         Φ(Φu, u, les, compression)
@@ -79,12 +79,13 @@ function create_ref_data(;
     nles = [ntuple(α -> 32, D)],
     ndns = ntuple(α -> 64, D),
     filters = (FaceAverage(),),
-    tburn = typeof(Re)(0.1),
+    tburn = nothing,
     tsim = typeof(Re)(0.1),
     Δt = typeof(Re)(1e-4),
     create_psolver = psolver_spectral,
     savefreq = 1,
     ArrayType = Array,
+    ustart = nothing,
     icfunc = (setup, psolver, rng) -> random_field(setup, typeof(Re)(0); psolver, rng),
     bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
     rng,
@@ -150,7 +151,9 @@ function create_ref_data(;
     datasize = datasize_fields + datasize_QoIs
     @info "Generating $datasize Mb of filtered DNS data"
     # Initial conditions
-    ustart = icfunc(dns, psolver, rng)
+    if ustart === nothing
+        ustart = icfunc(dns, psolver, rng)
+    end
     any(u -> any(isnan, u), ustart) && @warn "Initial conditions contain NaNs"
 
 
@@ -159,21 +162,24 @@ function create_ref_data(;
 
     # Solve burn-in DNS
     
-    @info "Solving burn-in DNS"
-    (; u, t), outputs =
-        solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn), Δt,
-        processors = (;
-            log = timelogger(; nupdate = 10),
-            vort = realtimeplotter(;
-            setup = _dns,
-            plot = vortplot,
-            nupdate = 100,
-            displayupdates = true,
-            displayfig = true,
-        ),
-        ),
-        psolver)
-
+    if tburn !== nothing
+        @info "Solving burn-in DNS"
+        (; u, t), outputs =
+            solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn), Δt,
+            processors = (;
+                log = timelogger(; nupdate = 100),
+                vort = realtimeplotter(;
+                setup = _dns,
+                plot = vortplot,
+                nupdate = 100,
+                displayupdates = true,
+                displayfig = true,
+            ),
+            ),
+            psolver)
+    else
+        u = ustart
+    end
     @info "Solving DNS"
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
@@ -197,7 +203,7 @@ function create_ref_data(;
             #    displayupdates = true,
             #    displayfig = true,
             #),
-            log = timelogger(; nupdate = 10),
+            log = timelogger(; nupdate = 100),
         ),
         psolver,
     )
