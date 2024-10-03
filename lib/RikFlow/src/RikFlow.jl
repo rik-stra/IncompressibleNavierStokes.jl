@@ -165,7 +165,7 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
     N = size(u_hat)
-    q = zeros(to_setup.N_qois)
+    q = zeros(typeof(setup.Re),to_setup.N_qois)
 
     E = sum(abs2, u_hat, dims = 4)
     Z = sum(abs2, w_hat, dims = 4)
