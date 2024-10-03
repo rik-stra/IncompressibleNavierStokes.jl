@@ -88,7 +88,7 @@ function create_ref_data(;
     ustart = nothing,
     icfunc = (setup, psolver, rng) -> random_field(setup, typeof(Re)(0); psolver, rng),
     bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
-    rng,
+    rng = nothing,
     kwargs...,
 )
     T = typeof(Re)

@@ -70,7 +70,7 @@ get_params(nlesscalar) = (;
 
 params_train = (; get_params([n_les])..., savefreq = 1000);
 t3 = time()
-data_train = create_ref_data(; params_train..., rng = rng_DNS);
+data_train = create_ref_data(; params_train...);
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data
