@@ -216,7 +216,7 @@ function spinnup(;
     tburn = typeof(Re)(0.1),
     Δt = typeof(Re)(1e-4),
     create_psolver = psolver_spectral,
-    savefreq = 1,
+    savefreq = 100,
     ArrayType = Array,
     icfunc = (setup, psolver, rng) -> random_field(setup, typeof(Re)(0); psolver, rng),
     bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
@@ -251,8 +251,15 @@ function spinnup(;
     (; u, t), outputs =
         solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn),
         processors = (;
-            log = timelogger(; nupdate = 10),
-            states = fieldsaver(setup = _dns, nupdate = savefreq),
+            log = timelogger(; nupdate = 100),
+            ehist = realtimeplotter(;
+                setup = _dns,
+                plot = energy_history_plot,
+                nupdate = 100,
+                displayupdates = false,
+                displayfig = false,
+            ),
+            #states = fieldsaver(setup = _dns, nupdate = savefreq),
             #vort = realtimeplotter(;
             #setup = _dns,
             #plot = vortplot,
@@ -265,5 +272,5 @@ function spinnup(;
 
 
     # Store result for current IC
-    outputs
+    u, outputs.ehist
 end

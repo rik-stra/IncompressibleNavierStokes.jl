@@ -38,6 +38,7 @@ println("Modules loaded. Time: $(t1-t0) s")
 n_dns = Int(256)
 n_les = Int(64)
 Re = Float32(3000)
+tburn = Float32(20)
 
 outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
@@ -61,7 +62,7 @@ get_params(nlesscalar) = (;
     D = 3,
     Re,
     lims = ( (T(0) , T(3)) , (T(0) , T(1)), (T(0),T(1)) ),
-    tburn = T(0.1),
+    tburn,
     Δt = T(1e-4),
     ndns = (n -> (3*n, n, n))(n_dns), # DNS resolution
     ArrayType,
@@ -70,11 +71,16 @@ get_params(nlesscalar) = (;
     bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y)
 )
 
-params_train = (; get_params([n_les])..., savefreq = 100);
+params_train = (; get_params([n_les])...);
 t3 = time()
-data_train = spinnup(; params_train..., rng = rng_DNS)
+u_start, ehist = spinnup(; params_train..., rng = rng_DNS);
+u_start = Array.(u_start);
+
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data
-filename = "$outdir/spinnup_dns$(n_dns)_Re$(Re)_tsim$(params_train.tburn).jld2"
-jldsave(filename; data_train.states)
+filename = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_tsim$(params_train.tburn).jld2"
+jldsave(filename; u_start)
+
+# Plot
+save(outdir*"/ehist_$(n_dns)_Re$(Re)_tsim$(params_train.tburn).png",ehist)
