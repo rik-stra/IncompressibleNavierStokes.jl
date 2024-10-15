@@ -75,4 +75,4 @@ t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data
 filename = "$outdir/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(params_train.tsim).jld2"
-jldsave(filename; data_train)
+jldsave(filename; data_train, params_train)

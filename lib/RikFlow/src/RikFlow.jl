@@ -22,7 +22,7 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = :none, sampling_mode = :mvg ,dQ_data = :none, rng = :none)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = :none, sampling_method = :mvg ,dQ_data = :none, rng = :none)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
     time_index = ones(Int)
@@ -35,12 +35,12 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = 
             to_setup.time_index[] = 2
             sampler = TO_Setup -> read_next_from_Q_dQ_array(TO_Setup)
         elseif to_mode == :ONLINE
-            if sampling_mode == :mvg
+            if sampling_method == :mvg
                 Q_dQ_array = :none
                 dQ_distribution = fit(MvNormal, dQ_data)
                 sampler = TO_setup -> rand(TO_setup.rng, TO_setup.dQ_distribution)
                 
-            elseif sampling_mode == :resample
+            elseif sampling_method == :resample
                 ind = rand(rng, 1:size(dQ_data,2), nstep)
                 Q_dQ_array = dQ_data[:,ind]                         # use resampled dQ data
                 to_setup.time_index[] = 1

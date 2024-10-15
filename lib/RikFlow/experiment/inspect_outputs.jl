@@ -30,3 +30,47 @@ end
 
 u_lf = ref_data.data[1].u
 heatmap(u_lf[1][1][1, :, :]) # initial coarse field
+
+### Track ref ####
+# We now run track_ref.jl to track the reference trajectories of the qois
+fname = @__DIR__()*"/output/data_track_dns256_les64_Re3000.0_tsim20.0.jld2"
+track_data = load(fname, "data_track")
+# plot dQ data
+let 
+    g = Figure()
+    axs = [Axis(g[i ÷ 2, i%2], 
+           title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        for i in 0:size(track_data.dQ, 1)-1]
+    for i in 1:size(track_data.dQ, 1)
+        plot!(axs[i], track_data.dQ[i, :])
+    end
+    display(g)
+end
+
+### Online SGS ###
+fname = @__DIR__()*"/output/data_online_samplingmvg_dns256_les64_Re3000.0_tsim20.0.jld2"
+online_data = load(fname, "data_online")
+# plot dQ data
+let 
+    g = Figure()
+    axs = [Axis(g[i ÷ 2, i%2], 
+           title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        for i in 0:size(online_data.dQ, 1)-1]
+    for i in 1:size(online_data.dQ, 1)
+        plot!(axs[i], online_data.dQ[i, :])
+    end
+    display(g)
+end
+# plot q data
+let 
+    g = Figure()
+    axs = [Axis(g[i ÷ 2, i%2], 
+           title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        for i in 0:size(online_data.dQ, 1)-1]
+    for i in 1:size(online_data.q, 1)
+        plot!(axs[i], q_ref[i, :], label = "ref")
+        plot!(axs[i], online_data.q[i, :], label = "online")
+        axislegend(axs[i], position = :lb)
+    end
+    display(g)
+end

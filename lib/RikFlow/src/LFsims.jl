@@ -49,26 +49,27 @@ psolver = create_psolver(setup)
         Δt,
         processors = (;
             log = timelogger(; nupdate = 10),
+            fields = fieldsaver(; setup, nupdate = savefreq), # by calling this BEFORE qoisaver, we also save the field at t=0!
             qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
             vort = realtimeplotter(;
-            setup,
-            plot = vortplot,
-            nupdate = 10,
-            displayupdates = true,
-            displayfig = true,
-        ),
+                setup,
+                plot = vortplot,
+                nupdate = 10,
+                displayupdates = true,
+                displayfig = true,
+            ),
         ),
         psolver)
 q = stack(outputs.qoihist)
 dQ = to_setup_les.outputs.dQ
 tau = to_setup_les.outputs.tau
-return (;dQ, tau, q)
+return (;dQ, tau, q, outputs.fields)
 end
 
 
 function online_sgs(;
-    ustart,
     dQ_data,
+    ustart,
     sampling_method = :mvg,
     D = 3,
     Re = 1e3,
@@ -104,7 +105,8 @@ to_setup_les = RikFlow.TO_Setup(;
         qoi_refs_location= "none", 
         rng,
         dQ_data,
-        to_mode = :ONLINE, 
+        to_mode = :ONLINE,
+        sampling_method,
         ArrayType, 
         setup, 
         nstep=nt)
@@ -121,14 +123,15 @@ psolver = create_psolver(setup)
         Δt,
         processors = (;
             log = timelogger(; nupdate = 10),
+            fields = fieldsaver(; setup, nupdate = savefreq),  # by calling this BEFORE qoisaver, we also save the field at t=0!
             qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
             vort = realtimeplotter(;
-            setup,
-            plot = vortplot,
-            nupdate = 10,
-            displayupdates = true,
-            displayfig = true,
-        ),
+                setup,
+                plot = vortplot,
+                nupdate = 10,
+                displayupdates = true,
+                displayfig = true,
+            ),
         ),
         psolver)
 q = stack(outputs.qoihist)
