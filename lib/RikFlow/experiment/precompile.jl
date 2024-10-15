@@ -21,12 +21,12 @@ using CUDA
 t1 = time()
 
 # Write output to file, as the default SLURM file is not updated often enough
-jobid = ENV["SLURM_JOB_ID"]
+#jobid = ENV["SLURM_JOB_ID"]
 #taskid = ENV["SLURM_ARRAY_TASK_ID"]
-logfile = joinpath(@__DIR__, "log_$(jobid).out")
-filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
-logger = TeeLogger(global_logger(), filelogger)
-global_logger(logger)
+#logfile = joinpath(@__DIR__, "log_$(jobid).out")
+#filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+#logger = TeeLogger(global_logger(), filelogger)
+#global_logger(logger)
 
 
 println("Modules loaded. Time: $(t1-t0) s")
@@ -35,11 +35,11 @@ println("Modules loaded. Time: $(t1-t0) s")
 #n_les = parse(Int,ARGS[2])
 #Re = parse(Float32,ARGS[3])
 
-n_dns = Int(8)
-n_les = Int(2)
-Re = Float32(1)
+n_dns = Int(256)
+n_les = Int(64)
+Re = Float32(3000)
 Δt = Float32(1.5e-3)
-tsim = Float32(0.01)
+tsim = Float32(9e-3)
 
 outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
