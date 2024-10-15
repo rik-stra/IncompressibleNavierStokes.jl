@@ -3,6 +3,12 @@ uuid = "07f19e49-00df-4880-aa48-bf317467130b"
 authors = ["Rik <rik.hoekstra@xs4all.nl>"]
 version = "0.1.0"
 
+[sources.IncompressibleNavierStokes] 
+path = "../.."
+
+[sources.NeuralClosure] 
+path = "../NeuralClosure"
+
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
