@@ -8,5 +8,5 @@ vortplot(state; setup) = begin
         ω = -diff(vx; dims = 2) + diff(vy; dims = 1)
         Array(ω)
     end
-    heatmap(ω; figure = (; size = (900, 350)), axis = (; aspect = DataAspect()))
+    heatmap(ω; figure = (; size = (350, 350)), axis = (; aspect = DataAspect()))
 end

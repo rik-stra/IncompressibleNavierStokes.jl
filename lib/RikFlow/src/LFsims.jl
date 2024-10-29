@@ -63,7 +63,8 @@ psolver = create_psolver(setup)
 q = stack(outputs.qoihist)
 dQ = to_setup_les.outputs.dQ
 tau = to_setup_les.outputs.tau
-return (;dQ, tau, q, outputs.fields)
+fields = outputs.fields
+return (;dQ, tau, q, fields)
 end
 
 
@@ -114,7 +115,7 @@ to_setup_les = RikFlow.TO_Setup(;
 psolver = create_psolver(setup)
 
 # Solve
-@info "Solving LF sim (track ref)"
+@info "Solving LF sim (online SGS)"
 (; u, t), outputs =
         solve_unsteady(; setup, 
         ustart,
@@ -137,5 +138,6 @@ psolver = create_psolver(setup)
 q = stack(outputs.qoihist)
 dQ = to_setup_les.outputs.dQ
 tau = to_setup_les.outputs.tau
-return (;dQ, tau, q)
+fields = outputs.fields
+return (;dQ, tau, q, fields)
 end
