@@ -39,7 +39,7 @@ n_dns = Int(256)
 n_les = Int(64)
 Re = Float32(3000)
 Δt = Float32(1.5e-3)
-tsim = Float32(100)
+tsim = Float32(100)  # 2.5 h A100 -> 70 
 
 outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)

@@ -18,7 +18,7 @@ n_dns = Int(256)
 n_les = Int(64)
 Re = Float32(3000)
 Δt = Float32(1.5e-3)
-tsim = Float32(20)
+tsim = Float32(100)
 sampling_method = :mvg
 
 seeds = (;

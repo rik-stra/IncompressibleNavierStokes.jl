@@ -265,14 +265,21 @@ function spinnup(;
                 displayupdates = false,
                 displayfig = false,
             ),
+            espec = realtimeplotter(;
+                setup= _dns,
+                plot = energy_spectrum_plot,
+                nupdate = 10,
+                displayupdates = true,
+                displayfig = true,
+            ),
             #states = fieldsaver(setup = _dns, nupdate = savefreq),
-            #vort = realtimeplotter(;
-            #setup = _dns,
-            #plot = vortplot,
-            #nupdate = savefreq,
-            #displayupdates = true,
-            #displayfig = true,
-        #),
+        #     vort = realtimeplotter(;
+        #     setup = _dns,
+        #     plot = vortplot,
+        #     nupdate = savefreq,
+        #     displayupdates = true,
+        #     displayfig = true,
+        # ),
         ),
         psolver)
 

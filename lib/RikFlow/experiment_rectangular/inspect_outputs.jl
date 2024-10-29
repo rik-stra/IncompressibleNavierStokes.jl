@@ -7,7 +7,7 @@ using CairoMakie
 filename =  @__DIR__()*"/output/u_start_spinnup_256_Re3000.0_tsim20.0.jld2"
 u_start = load(filename, "u_start");
 
-heatmap(u_start[1][1, :, :])
+heatmap(u_start[1][:, :, 1])
 
 # Using HF_ref.jl, we collect the reference trajectories of the qois
 # load reference data
@@ -47,8 +47,28 @@ let
     display(g)
 end
 
+### no SGS ###
+fname = @__DIR__()*"/output/data_no_sgs_dns256_les64_Re3000.0_tsim40.0.jld2"
+no_sgs_data = load(fname, "data_online")
+
+let 
+    g = Figure()
+    axs = [Axis(g[i ÷ 2, i%2], 
+           title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        for i in 0:size(no_sgs_data.q, 1)-1]
+    for i in 1:size(no_sgs_data.q, 1)
+        plot!(axs[i], q_ref[i, :], label = "ref")
+        plot!(axs[i], no_sgs_data.q[i, :], label = "no sgs")
+        axislegend(axs[i], position = :rt)
+    end
+    display(g)
+end
+
+## plot final field
+heatmap(no_sgs_data.fields[end].u[1][1,:,:])
+
 ### Online SGS ###
-fname = @__DIR__()*"/output/data_online_samplingmvg_dns256_les64_Re3000.0_tsim20.0.jld2"
+fname = @__DIR__()*"/output/data_online_samplingmvg_dns256_les64_Re3000.0_tsim100.0.jld2"
 online_data = load(fname, "data_online")
 # plot dQ data
 let 
@@ -68,9 +88,12 @@ let
            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(online_data.dQ, 1)-1]
     for i in 1:size(online_data.q, 1)
-        plot!(axs[i], q_ref[i, :], label = "ref")
-        plot!(axs[i], online_data.q[i, :], label = "online")
-        axislegend(axs[i], position = :lb)
+        
+        lines!(axs[i], no_sgs_data.q[i, :], label = "no sgs")
+        lines!(axs[i], online_data.q[i, :], label = "online")
+        lines!(axs[i], q_ref[i, :], label = "ref", color = :black)
+        if i==1 axislegend(axs[i], position = :rt) end
     end
     display(g)
 end
+heatmap(online_data.fields[end].u[1][1,:,:])
