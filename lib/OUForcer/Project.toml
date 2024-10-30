@@ -1,0 +1,29 @@
+name = "OUForcer"
+uuid = "06b4da0c-1cf1-4ee5-91bc-a3528e79cff2"
+authors = ["Rik <rik.hoekstra@xs4all.nl>"]
+version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+IncompressibleNavierStokes = "5e318141-6589-402b-868d-77d7df8c442e"
+Infiltrator = "5903a43b-9cc3-4c30-8d17-598619ec4e9b"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+NeuralClosure = "099dac27-d7f2-4047-93d5-0baee36b9c25"
+Observables = "510215fc-4207-5dde-b226-833fc4488ee2"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
+cuTENSOR = "011b41b2-24ef-40a8-b3eb-fa098493e9e1"
+
+[sources]
+IncompressibleNavierStokes = {path = "../.."}
+NeuralClosure = {path = "../NeuralClosure"}
+
+[compat]
+Random = "1.11.0"
