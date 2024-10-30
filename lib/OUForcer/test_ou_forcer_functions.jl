@@ -55,5 +55,3 @@ mean_force = mean(forces, dims=3)
 fig, ax, hm = heatmap(real.(mean_force[:,:,1]))
 Colorbar(fig[:,end+1], hm, label="Mean Force")
 fig
-
-mean_force[:,:,:]

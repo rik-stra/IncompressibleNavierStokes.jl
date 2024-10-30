@@ -1,14 +1,10 @@
-module OUForcer
+
 #= Implementation of random forcing using Ornstein-Uhlenbeck processes as in (Eswaran and Pope, 1988) also see (Chouippe and Uhlmann, 2015)
 References:
 Chouippe, A., & Uhlmann, M. (2015). Forcing homogeneous turbulence in direct numerical simulation of particulate flow with interface resolution and gravity. Physics of Fluids, 27, 123301.
 Eswaran, V., & Pope, S. B. (1988). An examination of forcing in direct numerical simulations of turbulence. Computers & Fluids, 16(3), 257-278.
 =#
-using IncompressibleNavierStokes: apply_bc_u!
-using Infiltrator
-using TensorOperations
-import cuTENSOR
-using Random
+
 
 """
 Create setup for OU forcing. The forcing is specified by
@@ -98,7 +94,7 @@ function OU_forcing_step!(; ou_setup, Δt)
         f_hat[d][mask] .= ou_setup.state[:,d]
         f_hat[d][:,:,end÷2+2:end] .= conj.(reverse(f_hat[d][:,:,1:end÷2], dims=3)) # fill the positive frequencies in the 1st dimension
     end
-
+    
     for d in 1:num_dims
         @tensor ou_setup.f[d][a,b,c] = E[i,a]*E[j,b]*E[k,c]*f_hat[d][k,j,i]
     end
@@ -108,7 +104,7 @@ function OU_get_force!(ou_setup, t, setup)
     (;Iu, dimension) = setup.grid
     D = dimension()
     for d in 1:D
-        setup.bodyforce[d][Iu] = real(ou_setup.f)
+        setup.bodyforce[d][Iu[d]] = real(ou_setup.f[d])
     end
     apply_bc_u!(setup.bodyforce, t, setup)
 end
@@ -116,4 +112,3 @@ end
 
 
 export OU_setup, OU_forcing_step!, OU_get_force!
-end # module

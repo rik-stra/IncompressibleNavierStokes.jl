@@ -3,6 +3,7 @@ function Setup(;
     x,
     boundary_conditions = ntuple(d -> (PeriodicBC(), PeriodicBC()), length(x)),
     bodyforce = nothing,
+    ou_bodyforce = nothing,  # to use OU forcing pass named tuple (T_L, e_star, k_f)
     issteadybodyforce = true,
     closure_model = nothing,
     projectorder = :last,
@@ -17,6 +18,7 @@ function Setup(;
         Re,
         bodyforce,
         issteadybodyforce = false,
+        ou_bodyforce,
         closure_model,
         projectorder,
         ArrayType,
@@ -24,13 +26,19 @@ function Setup(;
         workgroupsize,
         temperature,
     )
-    if !isnothing(bodyforce) && issteadybodyforce
-        (; dimension, x, N) = setup.grid
-        T = eltype(x[1])
-        u = vectorfield(setup)
-        F = vectorfield(setup)
-        bodyforce = applybodyforce!(F, u, T(0), setup)
-        setup = (; setup..., issteadybodyforce = true, bodyforce)
+    if !isnothing(ou_bodyforce)  # Calculate OU body force
+        ou_setup = OU_setup(; ou_bodyforce... , setup)
+        bodyforce = vectorfield(setup)
+        setup = (; setup..., ou_setup, bodyforce, issteadybodyforce = true)
+    else
+        if !isnothing(bodyforce) && issteadybodyforce  # Calculate steady body force
+            (; dimension, x, N) = setup.grid
+            T = eltype(x[1])
+            u = vectorfield(setup)
+            F = vectorfield(setup)
+            bodyforce = applybodyforce!(F, u, T(0), setup)
+            setup = (; setup..., issteadybodyforce = true, bodyforce)
+        end
     end
     setup
 end

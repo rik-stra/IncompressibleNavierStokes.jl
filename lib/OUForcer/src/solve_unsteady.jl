@@ -1,20 +1,5 @@
-"""
-Solve unsteady problem using `method`.
-
-If `Δt` is a real number, it is rounded such that `(t_end - t_start) / Δt` is
-an integer.
-If `Δt = nothing`, the time step is chosen every `n_adapt_Δt` iteration with
-CFL-number `cfl` .
-
-The `processors` are called after every time step.
-
-Note that the `state` observable passed to the `processor.initialize` function
-contains vector living on the device, and you may have to move them back to
-the host using `Array(u)` in the processor.
-
-Return `(; u, t), outputs`, where `outputs` is a  named tuple with the
-outputs of `processors` with the same field names.
-"""
+using IncompressibleNavierStokes: timestep!, create_stepper, get_state, default_psolver, 
+    ode_method_cache, AbstractODEMethod, AbstractRungeKuttaMethod, RKMethods, processor
 function solve_unsteady(;
     setup,
     tlims,
@@ -60,7 +45,7 @@ function solve_unsteady(;
             # Make sure not to step past `t_end`
             Δt = min(Δt, tend - stepper.t)
             # update forcing
-            if !isnothing(setup.ou_bodyforce)
+            if !isnothing(ou_bodyforce)
                 OU_forcing_step!(; setup.ou_setup, Δt=Δt)
                 OU_get_force!(setup.ou_setup, stepper.t, setup)
             end
@@ -75,7 +60,7 @@ function solve_unsteady(;
         Δt = (tend - tstart) / nstep
         for it = 1:nstep
             # update forcing
-            if !isnothing(setup.ou_bodyforce)
+            if !isnothing(ou_bodyforce)
                 OU_forcing_step!(; setup.ou_setup, Δt=Δt)
                 OU_get_force!(setup.ou_setup, stepper.t, setup)
             end
@@ -99,35 +84,47 @@ function solve_unsteady(;
     (; u, temp, t), outputs
 end
 
-"Get state `(; u, temp, t, n)` from stepper."
-function get_state(stepper)
-    (; u, temp, t, n) = stepper
-    (; u, temp, t, n)
-end
-
-"Get proposed maximum time step for convection and diffusion terms."
-function get_cfl_timestep!(buf, u, setup)
-    (; Re, grid) = setup
-    (; dimension, Δ, Δu, Iu) = grid
-    D = dimension()
-
-    # Initial maximum step size
-    Δt = eltype(u[1])(Inf)
-
-    # Check maximum step size in each dimension
-    for α = 1:D
-        # Diffusion
-        Δαmin = minimum(view(Δu[α], Iu[α].indices[α]))
-        Δt_diff = Re * Δαmin^2 / 2
-
-        # Convection
-        Δα = reshape(Δu[α], ntuple(Returns(1), α - 1)..., :)
-        @. buf = Δα / abs(u[α])
-        Δt_conv = minimum(view(buf, Iu[α]))
-
-        # Update time step
-        Δt = min(Δt, Δt_diff, Δt_conv)
+"Create problem setup (stored in a named tuple)."
+function Setup(;
+    x,
+    boundary_conditions = ntuple(d -> (PeriodicBC(), PeriodicBC()), length(x)),
+    bodyforce = nothing,
+    ou_bodyforce = nothing,  # to use OU forcing pass named tuple (T_L, e_star, k_f)
+    issteadybodyforce = true,
+    closure_model = nothing,
+    projectorder = :last,
+    ArrayType = Array,
+    workgroupsize = 64,
+    temperature = nothing,
+    Re = isnothing(temperature) ? convert(eltype(x[1]), 1_000) : 1 / temperature.α1,
+)
+    setup = (;
+        grid = Grid(x, boundary_conditions; ArrayType),
+        boundary_conditions,
+        Re,
+        bodyforce,
+        issteadybodyforce = false,
+        closure_model,
+        projectorder,
+        ArrayType,
+        T = eltype(x[1]),
+        workgroupsize,
+        temperature,
+    )
+    if !isnothing(ou_bodyforce)  # Calculate OU body force
+        (;T_L, e_star, k_f) = ou_bodyforce
+        ou_setup = OU_setup(; T_L, e_star, k_f, setup)
+        bodyforce = vectorfield(setup)
+        setup = (; setup..., ou_setup, bodyforce, issteadybodyforce = true)
+    else
+        if !isnothing(bodyforce) && issteadybodyforce  # Calculate steady body force
+            (; dimension, x, N) = setup.grid
+            T = eltype(x[1])
+            u = vectorfield(setup)
+            F = vectorfield(setup)
+            bodyforce = applybodyforce!(F, u, T(0), setup)
+            setup = (; setup..., issteadybodyforce = true, bodyforce)
+        end
     end
-
-    Δt
+    setup
 end

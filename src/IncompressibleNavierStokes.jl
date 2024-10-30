@@ -25,6 +25,8 @@ using SparseArrays
 using StaticArrays
 using Statistics
 using WriteVTK: CollectionFile, paraview_collection, vtk_grid, vtk_save
+using TensorOperations
+import cuTENSOR
 
 # Docstring templates
 @template MODULES = """
@@ -64,8 +66,10 @@ include("operators.jl")
 include("matrices.jl")
 include("initializers.jl")
 include("processors.jl")
+include("ouforcer.jl")
 include("solver.jl")
 include("utils.jl")
+
 
 # Time steppers
 include("time_steppers/methods.jl")
