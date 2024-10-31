@@ -96,7 +96,7 @@ function OU_forcing_step!(; ou_setup, Δt)
     end
     
     for d in 1:num_dims
-        @tensor ou_setup.f[d][a,b,c] = E[i,a]*E[j,b]*E[k,c]*f_hat[d][k,j,i]
+        @tensor ou_setup.f[d][a,b,c] = E[i,a]*E[j,b]*E[k,c]*f_hat[d][k,j,i] # this is slow! (but computational cost is also high: O(N_f^3*N^3))
     end
 end
 
