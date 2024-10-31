@@ -6,8 +6,6 @@ version = "0.1.0"
 [sources.IncompressibleNavierStokes] 
 path = "../.."
 
-[sources.NeuralClosure] 
-path = "../NeuralClosure"
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
