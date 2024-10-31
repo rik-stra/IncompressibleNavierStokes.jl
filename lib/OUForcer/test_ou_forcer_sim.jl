@@ -40,7 +40,7 @@ tlims = (T(0), T(0.05))
 #ustart = random_field(setup, 0.0; A = 0.1);
 ustart = vectorfield(setup);
 
-@profview state, outputs = solve_unsteady(;
+state, outputs = solve_unsteady(;
     setup,
     ustart = ustart,
     tlims = tlims,
@@ -67,3 +67,56 @@ ustart = vectorfield(setup);
 
 # plot a z-slice of the velocity field
 heatmap(Array(state.u[1])[ 25,:, :])
+
+######
+## Test 2D
+######
+
+n = 128
+axis = range(0.0, 1., n + 1)
+setup = Setup(;
+    x = (axis, axis),
+    Re = 2e3,
+    ou_bodyforce = (; T_L = 0.05, e_star = 0.005, k_f = 2*sqrt(2), rng = Xoshiro(25)),
+    ArrayType = ArrayType,
+);
+
+
+tlims = (T(0), T(10))
+Δt = T(1e-3)
+
+#ustart = random_field(setup, 0.0; A = 0.1);
+ustart = vectorfield(setup);
+
+state, outputs = solve_unsteady(;
+    setup,
+    ustart = ustart,
+    tlims = tlims,
+    #Δt = Δt,
+    processors = (
+        #ehist = realtimeplotter(;
+        #    setup,
+        #    plot = energy_history_plot,
+        #    nupdate = 10,
+        #    displayupdates = false,
+        #    displayfig = false,
+        #),
+        flow = realtimeplotter(;
+            setup,
+            plot = fieldplot,
+            nupdate = 10,
+            displayupdates = true,
+            displayfig = true,
+        ),
+        espec = realtimeplotter(;
+            setup,
+            plot = energy_spectrum_plot,
+           nupdate = 100,
+           displayupdates = false,
+            displayfig = false,
+        ),
+        log = timelogger(; nupdate = 10),
+    ),
+);
+
+outputs.espec

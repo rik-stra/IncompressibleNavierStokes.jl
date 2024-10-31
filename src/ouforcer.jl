@@ -35,34 +35,51 @@ k_f_int = floor(Int, k_f)
 k = -k_f_int:k_f_int
 N_f = 0 # Number of forced wavenumbers
 N_d = 0 # forcing degrees of freedom
-mask = Array{Bool}(undef, 2*k_f_int+1, 2*k_f_int+1, 2*k_f_int+1)
-mask[:,:,:] .= false
-for k1 = k, k2 = k, k3 = k
-    k_ = sqrt(k1^2 + k2^2 + k3^2)
-    if (k_ <= k_f) & (k_ > 0)
-        N_f += 1
-        if k3 <= 0
-            N_d += 1
-            mask[k1+k_f_int+1, k2+k_f_int+1, k3+k_f_int+1] = true
+forced_range = repeat([2*k_f_int+1], num_dims)
+mask = Array{Bool, num_dims}(undef, forced_range...)
+mask[:] .= false
+
+if num_dims == 2
+    for k1 = k, k2 = k
+        k_ = sqrt(k1^2 + k2^2)
+        if (k_ <= k_f) & (k_ > 0)
+            N_f += 1
+            if k2 <= 0
+                N_d += 1
+                mask[k1+k_f_int+1, k2+k_f_int+1] = true
+            end
         end
     end
+elseif num_dims == 3
+    for k1 = k, k2 = k, k3 = k
+        k_ = sqrt(k1^2 + k2^2 + k3^2)
+        if (k_ <= k_f) & (k_ > 0)
+            N_f += 1
+            if k3 <= 0
+                N_d += 1
+                mask[k1+k_f_int+1, k2+k_f_int+1, k3+k_f_int+1] = true
+            end
+        end
+    end
+else
+    error("Number of dimensions must be 2 or 3. Got $num_dims")
 end
 
 state = ArrayType{ComplexF32, 2}(undef, N_d, num_dims) # contains the state of the OU process
 state[:,:] .= 0
-f_hat = [ArrayType{ComplexF32, 3}(undef, 2*k_f_int+1, 2*k_f_int+1, 2*k_f_int+1) for a = 1:num_dims] # contains the Fourier coefficients of the forcing
+f_hat = [ArrayType{ComplexF32, num_dims}(undef, forced_range...) for a = 1:num_dims] # contains the Fourier coefficients of the forcing
 for d in 1:num_dims
-    f_hat[d][:,:,:] .= 0
+    f_hat[d][:] .= 0
 end
 
-f = [ArrayType{ComplexF32, 3}(undef, setup.grid.Nu[a][1], setup.grid.Nu[a][2], setup.grid.Nu[a][3]) for a = 1:num_dims] # contains the forcing in physical space
+f = [ArrayType{ComplexF32, num_dims}(undef, setup.grid.Nu[a]...) for a = 1:num_dims] # contains the forcing in physical space
 
 # create partial IFFT matrix
 E = Array{ComplexF32,2}(undef, 2*k_f_int+1, N)
 for j = 1:N, i = -k_f_int:k_f_int
     E[i+k_f_int+1, j] = exp(pi*2im*(i)*(j-1)/N)
 end
-z = ArrayType{T, 2}(undef, N_d, 6)
+z = ArrayType{T, 2}(undef, N_d, num_dims*2)
 E = ArrayType(E)
 mask = ArrayType(mask)
 
@@ -88,15 +105,21 @@ function OU_forcing_step!(; ou_setup, Δt)
     # Generate random numbers
     randn!(rng, z)
     # Update the state  shape: N_d x num_dims
-    ou_setup.state[:,:] .= ou_setup.state[:,:] .*(1-Δt/T_L) .+ sqrt(2 * Var * Δt/T_L) .* z[:,1:3] .+ 1im * sqrt(2 * Var * Δt/T_L) .* z[:, 4:6]
+    ou_setup.state[:,:] .= ou_setup.state[:,:] .*(1-Δt/T_L) .+ sqrt(2 * Var * Δt/T_L) .* z[:,1:num_dims] .+ 1im * sqrt(2 * Var * Δt/T_L) .* z[:, num_dims+1:2*num_dims]
 
-    for d in 1:num_dims
-        f_hat[d][mask] .= ou_setup.state[:,d]
-        f_hat[d][:,:,end÷2+2:end] .= conj.(reverse(f_hat[d][:,:,1:end÷2], dims=3)) # fill the positive frequencies in the 1st dimension
-    end
-    
-    for d in 1:num_dims
-        @tensor ou_setup.f[d][a,b,c] = E[i,a]*E[j,b]*E[k,c]*f_hat[d][k,j,i] # this is slow! (but computational cost is also high: O(N_f^3*N^3))
+        
+    if num_dims ==2
+        for d in 1:num_dims
+            f_hat[d][mask] .= ou_setup.state[:,d]
+            f_hat[d][:,end÷2+2:end] .= conj.(reverse(f_hat[d][:,1:end÷2], dims=2)) # fill the positive frequencies in the last dimension
+            @tensor ou_setup.f[d][b,c] = E[j,b]*E[k,c]*f_hat[d][k,j]
+        end
+    elseif num_dims == 3
+        for d in 1:num_dims
+            f_hat[d][mask] .= ou_setup.state[:,d]
+            f_hat[d][:,:,end÷2+2:end] .= conj.(reverse(f_hat[d][:,:,1:end÷2], dims=3)) # fill the positive frequencies in the last dimension
+            @tensor ou_setup.f[d][a,b,c] = E[i,a]*E[j,b]*E[k,c]*f_hat[d][k,j,i] # this is slow! (but computational cost is also high: O(N_f^3*N^3))
+        end
     end
 end
 
