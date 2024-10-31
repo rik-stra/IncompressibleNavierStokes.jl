@@ -8,4 +8,4 @@
 module load 2023
 module load Julia/1.10.4-linux-x86_64
 
-julia --project exp_square_HIT/spinnup.jl
+julia --project exp_square_HIT/precompile.jl

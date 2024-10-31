@@ -1,13 +1,3 @@
-if false                                               #src
-    include("../src/RikFlow.jl")                  #src
-    #include("../NeuralClosure/src/NeuralClosure.jl")   #src
-    include("../../../src/IncompressibleNavierStokes.jl") #src
-    using .SymmetryClosure                             #src
-    #using .NeuralClosure                               #src
-    using .IncompressibleNavierStokes                  #src
-end     
-
-
 # perfom a HF simulation
 println("Loading modules...")
 t0 = time()
@@ -31,10 +21,10 @@ global_logger(logger)
 
 println("Modules loaded. Time: $(t1-t0) s")
 
-n_dns = Int(1024)
+n_dns = Int(64)
 n_les = Int(32)
-Re = Float32(2_000)
-tburn = Float32(1)
+Re = Float32(200)
+tburn = Float32(10)
 # forcing
 T_L = 0.005  # correlation time of the forcing
 e_star = 0.1 # energy injection rate

@@ -216,17 +216,12 @@ function spinnup(;
     D = 3,
     Re = 1e3,
     lims = ntuple(α -> (typeof(Re)(0), typeof(Re)(1)), D),
-    qois = [["Z", 0, 4], ["E", 0, 4], ["Z", 5, 10], ["E", 5, 10]],
-    nles = [ntuple(α -> 32, D)],
     ndns = ntuple(α -> 64, D),
     tburn = typeof(Re)(0.1),
-    Δt = typeof(Re)(1e-4),
     create_psolver = psolver_spectral,
     savefreq = 100,
     ArrayType = Array,
-    icfunc = (setup, psolver, rng) -> random_field(setup, typeof(Re)(0); psolver, rng),
-    bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
-    rng,
+    ou_bodyforce = nothing,
     kwargs...,
 )
     T = typeof(Re)
@@ -237,7 +232,7 @@ function spinnup(;
         x = ntuple(α -> LinRange(lims[α]..., ndns[α] + 1), D),
         Re,
         ArrayType,
-        bodyforce,
+        ou_bodyforce,
         kwargs...,
     )
 
@@ -245,9 +240,8 @@ function spinnup(;
     # spectral pressure solver
     psolver = create_psolver(dns)
 
-    ustart = icfunc(dns, psolver, rng)
+    ustart = vectorfield(dns);
     any(u -> any(isnan, u), ustart) && @warn "Initial conditions contain NaNs"
-
 
     _dns = dns
 
@@ -261,16 +255,16 @@ function spinnup(;
             ehist = realtimeplotter(;
                 setup = _dns,
                 plot = energy_history_plot,
-                nupdate = 100,
+                nupdate = 200,
                 displayupdates = false,
                 displayfig = false,
             ),
             espec = realtimeplotter(;
                 setup= _dns,
                 plot = energy_spectrum_plot,
-                nupdate = 10,
-                displayupdates = true,
-                displayfig = true,
+                nupdate = 200,
+                displayupdates = false,
+                displayfig = false,
             ),
             #states = fieldsaver(setup = _dns, nupdate = savefreq),
         #     vort = realtimeplotter(;
@@ -285,5 +279,5 @@ function spinnup(;
 
 
     # Store result for current IC
-    u, outputs.ehist
+    u, outputs.ehist, outputs.espec
 end

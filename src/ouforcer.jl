@@ -17,10 +17,11 @@ function OU_setup(; T_L,
                     e_star, 
                     k_f,
                     setup, 
-                    rng = Xoshiro(42),
+                    rng_seed = 42,
                     )
 
 T = typeof(setup.Re)
+rng = Xoshiro(rng_seed)
 ArrayType = setup.ArrayType
 num_dims = setup.grid.dimension()
 Var = e_star/T_L
