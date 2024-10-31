@@ -62,7 +62,7 @@ function solve_unsteady(;
             # update forcing
             if !isnothing(setup.ou_bodyforce)
                 OU_forcing_step!(; setup.ou_setup, Δt=Δt)
-                OU_get_force!(setup.ou_setup, stepper.t, setup)
+                OU_get_force!(setup.ou_setup, setup)
             end
             # Perform a single time step with the time integration method
             stepper = timestep!(method, stepper, Δt; θ, cache)
@@ -77,7 +77,7 @@ function solve_unsteady(;
             # update forcing
             if !isnothing(setup.ou_bodyforce)
                 OU_forcing_step!(; setup.ou_setup, Δt=Δt)
-                OU_get_force!(setup.ou_setup, stepper.t, setup)
+                OU_get_force!(setup.ou_setup, setup)
             end
             # Perform a single time step with the time integration method
             stepper = timestep!(method, stepper, Δt; θ, cache)

@@ -5,8 +5,8 @@ end
 #using OUForcer
 using IncompressibleNavierStokes
 using CairoMakie
-#using CUDA; ArrayType = CuArray
-ArrayType = Array
+using CUDA; ArrayType = CuArray
+#ArrayType = Array
 using Random
 
 T = Float32
@@ -18,7 +18,7 @@ ispath(outdir) || mkpath(outdir)
 #
 # Define a uniform grid with a steady body force field.
 
-n = 64
+n = 128
 axis = range(0.0, 1., n + 1)
 setup = Setup(;
     x = (axis, axis, axis),
@@ -34,55 +34,7 @@ setup = Setup(;
     ArrayType = ArrayType,
 );
 
-tlims = (T(0), T(0.05))
-Δt = T(1e-3)
-
-#ustart = random_field(setup, 0.0; A = 0.1);
-ustart = vectorfield(setup);
-
-state, outputs = solve_unsteady(;
-    setup,
-    ustart = ustart,
-    tlims = tlims,
-    Δt = Δt,
-    processors = (
-        #ehist = realtimeplotter(;
-        #    setup,
-        #    plot = energy_history_plot,
-        #    nupdate = 10,
-        #    displayupdates = false,
-        #    displayfig = false,
-        #),
-        #espec = realtimeplotter(;
-        #    setup,
-        #    plot = energy_spectrum_plot,
-        #    nupdate = 10,
-        #    displayupdates = true,
-        #    displayfig = true,
-        #),
-        log = timelogger(; nupdate = 10),
-    ),
-);
-
-
-# plot a z-slice of the velocity field
-heatmap(Array(state.u[1])[ 25,:, :])
-
-######
-## Test 2D
-######
-
-n = 128
-axis = range(0.0, 1., n + 1)
-setup = Setup(;
-    x = (axis, axis),
-    Re = 2e3,
-    ou_bodyforce = (; T_L = 0.05, e_star = 0.005, k_f = 2*sqrt(2), rng = Xoshiro(25)),
-    ArrayType = ArrayType,
-);
-
-
-tlims = (T(0), T(10))
+tlims = (T(0), T(2))
 Δt = T(1e-3)
 
 #ustart = random_field(setup, 0.0; A = 0.1);
@@ -101,13 +53,61 @@ state, outputs = solve_unsteady(;
         #    displayupdates = false,
         #    displayfig = false,
         #),
-        flow = realtimeplotter(;
+        espec = realtimeplotter(;
             setup,
-            plot = fieldplot,
+            plot = energy_spectrum_plot,
             nupdate = 10,
             displayupdates = true,
             displayfig = true,
         ),
+        log = timelogger(; nupdate = 10),
+    ),
+);
+
+
+# plot a z-slice of the velocity field
+heatmap(Array(state.u[1])[ :,30, :])
+
+######
+## Test 2D
+######
+
+n = 512
+axis = range(0.0, 1., n + 1)
+setup = Setup(;
+    x = (axis, axis),
+    Re = 7e3,
+    ou_bodyforce = (; T_L = 0.02, e_star = 0.01, k_f = 2*sqrt(2), rng = Xoshiro(25)),
+    ArrayType = ArrayType,
+);
+
+
+tlims = (T(0), T(7))
+Δt = T(1e-3)
+
+#ustart = random_field(setup, 0.0; A = 0.1);
+ustart = vectorfield(setup);
+
+state, outputs = solve_unsteady(;
+    setup,
+    ustart = ustart,
+    tlims = tlims,
+    Δt = Δt,
+    processors = (
+        #ehist = realtimeplotter(;
+        #    setup,
+        #    plot = energy_history_plot,
+        #    nupdate = 10,
+        #    displayupdates = false,
+        #    displayfig = false,
+        #),
+        flow = realtimeplotter(;
+            setup,
+             plot = fieldplot,
+             nupdate = 10,
+             displayupdates = true,
+             displayfig = true,
+         ),
         espec = realtimeplotter(;
             setup,
             plot = energy_spectrum_plot,
@@ -119,4 +119,5 @@ state, outputs = solve_unsteady(;
     ),
 );
 
+heatmap(Array(state.u[1]))
 outputs.espec
