@@ -282,5 +282,5 @@ function spinnup(;
 
 
     # Store result for current IC
-    u, outputs.ehist, outputs.espec
+    u, outputs.ehist
 end
