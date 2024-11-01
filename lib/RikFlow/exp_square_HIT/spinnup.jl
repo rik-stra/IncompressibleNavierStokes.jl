@@ -67,7 +67,7 @@ get_params(nlesscalar) = (;
 
 params_train = (; get_params([n_les])...);
 t3 = time()
-u_start, ehist, espec = spinnup(; params_train...);
+u_start, ehist = spinnup(; params_train...);
 u_start = Array.(u_start);
 
 t4 = time()
@@ -78,4 +78,4 @@ jldsave(filename; u_start)
 
 # Plot
 save(outdir*"/ehist2_$(n_dns)_Re$(Re)_tsim$(params_train.tburn).png",ehist)
-save(outdir*"/espec_$(n_dns)_Re$(Re)_tsim$(params_train.tburn).png",espec)
+#save(outdir*"/espec_$(n_dns)_Re$(Re)_tsim$(params_train.tburn).png",espec)
