@@ -249,7 +249,10 @@ function spinnup(;
     
     @info "Solving burn-in DNS"
     (; u, t), outputs =
-        solve_unsteady(; setup = _dns, ustart, tlims = (T(0), tburn),
+        solve_unsteady(;
+        #method = RKMethods.Wray3(),
+        setup = _dns, ustart, tlims = (T(0), tburn),
+        docopy = false,
         processors = (;
             log = timelogger(; nupdate = 100),
             ehist = realtimeplotter(;
@@ -259,13 +262,13 @@ function spinnup(;
                 displayupdates = false,
                 displayfig = false,
             ),
-            espec = realtimeplotter(;
-                setup= _dns,
-                plot = energy_spectrum_plot,
-                nupdate = 200,
-                displayupdates = false,
-                displayfig = false,
-            ),
+            # espec = realtimeplotter(;
+            #     setup= _dns,
+            #     plot = energy_spectrum_plot,
+            #     nupdate = 200,
+            #     displayupdates = false,
+            #     displayfig = false,
+            # ),
             #states = fieldsaver(setup = _dns, nupdate = savefreq),
         #     vort = realtimeplotter(;
         #     setup = _dns,

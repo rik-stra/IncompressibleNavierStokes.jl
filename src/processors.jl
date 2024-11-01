@@ -529,7 +529,7 @@ function energy_history_plot(state; setup)
     points = lift(state) do (; u, t)
         kinetic_energy!(e, u, setup)
         scalewithvolume!(e, setup)
-        E = sum(e[Ip])
+        E = sum(view(e, Ip))
         push!(_points, Point2f(t, E))
     end
     fig = lines(points; axis = (; xlabel = "t", ylabel = "Kinetic energy"))
