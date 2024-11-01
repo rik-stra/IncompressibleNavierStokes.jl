@@ -7,7 +7,7 @@
 mkdir -p /scratch-shared/$USER
 
 module load 2023
-module load juliaup/1.14.5-GCCcore-12.3.0
+module --ignore_cache load juliaup/1.14.5-GCCcore-12.3.0
 
 export JULIA_DEPOT_PATH=/scratch-shared/$USER/.julia_h100:
 
