@@ -36,10 +36,10 @@ println("Modules loaded. Time: $(t1-t0) s")
 #Re = parse(Float32,ARGS[3])
 
 n_dns = Int(512)
-n_les = Int(32)
+n_les = Int(64)
 Re = Float32(2_000)
 Δt = Float32(2.7e-4)
-tsim = Float32(0.1)
+tsim = Float32(10)
 # forcing
 T_L = 0.005  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -78,7 +78,7 @@ get_params(nlesscalar) = (;
     ou_bodyforce = (;T_L, e_star, k_f, rng_seed = seeds.ou ),
 )
 
-params_train = (; get_params([n_les])..., savefreq = 10, plotfreq = 100);
+params_train = (; get_params([n_les])..., savefreq = 10, plotfreq = 1000);
 t3 = time()
 data_train = create_ref_data(; params_train...);
 t4 = time()

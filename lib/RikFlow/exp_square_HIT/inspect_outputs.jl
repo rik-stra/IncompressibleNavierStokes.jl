@@ -20,7 +20,7 @@ energy_spectrum_plot(state; setup, npoint = 100)
 
 # Using HF_ref.jl, we collect the reference trajectories of the qois
 # load reference data
-filename = @__DIR__()*"/output/data_train_dns256_les64_Re3000.0_tsim20.0.jld2"
+filename = @__DIR__()*"/output/data_train_dns512_les32_Re2000.0_tsim0.1.jld2"
 ref_data = load(filename, "data_train");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 keys(ref_data.data[1])
