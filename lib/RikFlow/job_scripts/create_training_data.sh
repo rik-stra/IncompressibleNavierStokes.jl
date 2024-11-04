@@ -1,11 +1,8 @@
 #!/bin/bash
 #SBATCH -J HF_sim
-#SBATCH -t 150:00
-#SBATCH -p gpu
-#SBATCH --partition=gpu
+#SBATCH -t 100:00
+#SBATCH --partition=gpu_h100
 #SBATCH --gpus=1
 
-module load 2023
-module load Julia/1.10.4-linux-x86_64
-
-julia --project experiment/HF_ref.jl
+export JULIA_DEPOT_PATH=/scratch-shared/$USER/.julia_h100:
+julia --project exp_square_HIT/HF_ref.jl

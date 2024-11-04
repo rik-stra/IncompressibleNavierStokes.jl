@@ -1,7 +1,7 @@
 if false                                               #src
-    include("src/RikFlow.jl")                  #src
+    include("../src/RikFlow.jl")                  #src
     #include("../NeuralClosure/src/NeuralClosure.jl")   #src
-    include("../../src/IncompressibleNavierStokes.jl") #src
+    include("../../../src/IncompressibleNavierStokes.jl") #src
     using .SymmetryClosure                             #src
     #using .NeuralClosure                               #src
     using .IncompressibleNavierStokes                  #src
@@ -35,11 +35,21 @@ println("Modules loaded. Time: $(t1-t0) s")
 #n_les = parse(Int,ARGS[2])
 #Re = parse(Float32,ARGS[3])
 
-n_dns = Int(64)
-n_les = Int(16)
-Re = Float32(1000)
-Δt = Float32(1.5e-3)
-tsim = Float32(100)  # 2.5 h A100 -> 70 
+n_dns = Int(512)
+n_les = Int(32)
+Re = Float32(2_000)
+Δt = Float32(2.7e-4)
+tsim = Float32(0.1)
+# forcing
+T_L = 0.005  # correlation time of the forcing
+e_star = 0.1 # energy injection rate
+k_f = sqrt(2) # forcing wavenumber  
+
+seeds = (;
+    dns = 123, # DNS initial condition
+    ou = 333, # OU process
+    to = 234, # TO method online sampling
+)
 
 outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
@@ -49,26 +59,26 @@ ispath(outdir) || mkpath(outdir)
 T = Float32
 ArrayType = CuArray
 #device = x -> adapt(CuArray, x)
-tburn = Float32(20)
+tburn = Float32(4)
 ustart = ArrayType.(load(outdir*"/u_start_spinnup_$(n_dns)_Re$(Re)_tsim$(tburn).jld2", "u_start"));
 
 # Parameters
 get_params(nlesscalar) = (;
     D = 3,
     Re,
-    lims = ( (T(0) , T(3)) , (T(0) , T(1)), (T(0),T(1)) ),
-    qois = [["Z",0,15],["E", 0, 15],["Z",16,31],["E", 16, 31]],
+    lims = ( (T(0) , T(1)) , (T(0) , T(1)), (T(0),T(1)) ),
+    qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]],
     tsim,
     Δt,
-    nles = map(n -> (3*n, n, n), nlesscalar), # LES resolutions
-    ndns = (n -> (3*n, n, n))(n_dns), # DNS resolution
+    nles = map(n -> (n, n, n), nlesscalar), # LES resolutions
+    ndns = (n -> (n, n, n))(n_dns), # DNS resolution
     filters = (FaceAverage(),),
     ArrayType,
     ustart,
-    bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y)
+    ou_bodyforce = (;T_L, e_star, k_f, rng_seed = seeds.ou ),
 )
 
-params_train = (; get_params([n_les])..., savefreq = 1000);
+params_train = (; get_params([n_les])..., savefreq = 10, plotfreq = 100);
 t3 = time()
 data_train = create_ref_data(; params_train...);
 t4 = time()

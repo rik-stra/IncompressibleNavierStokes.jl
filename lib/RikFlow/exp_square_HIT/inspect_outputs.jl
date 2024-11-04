@@ -5,7 +5,7 @@ using IncompressibleNavierStokes
 # We first run spinnup.jl to generate an initial condition for the DNS simulation.
 
 # load initial field
-filename =  @__DIR__()*"/output/u_start_spinnup_512_Re2000.0_tsim1.0.jld2"
+filename =  @__DIR__()*"/output/u_start_spinnup_512_Re2000.0_tsim4.0.jld2"
 u_start = load(filename, "u_start");
 
 heatmap(u_start[1][:, :, 1])
@@ -22,7 +22,7 @@ energy_spectrum_plot(state; setup, npoint = 100)
 # load reference data
 filename = @__DIR__()*"/output/data_train_dns256_les64_Re3000.0_tsim20.0.jld2"
 ref_data = load(filename, "data_train");
-qois = [["Z",0,15],["E", 0, 15],["Z",16,31],["E", 16, 31]]
+qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 keys(ref_data.data[1])
 q_ref = stack(ref_data.data[1].qoi_hist)
 

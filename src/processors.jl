@@ -584,7 +584,7 @@ function energy_spectrum_plot(
     # krange = LinRange(1, kmax, 100)
     # krange = collect(1, kmax)
     # krange = [cbrt(T(kmax)), T(kmax)]
-    krange = [kmax^T(0.3), kmax^(T(0.8))]
+    krange = [kmax^T(0.1), kmax^(T(0.5))]
     # krange = [T(kmax)^(T(2) / 3), T(kmax)]
     slope, slopelabel = D == 2 ? (-T(3), L"$k^{-3}$") : (-T(5 / 3), L"$k^{-5/3}$")
     inertia = lift(ehat) do ehat
