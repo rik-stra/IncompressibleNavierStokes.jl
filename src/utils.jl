@@ -67,7 +67,7 @@ function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) /
     (; dimension, xp, Ip, xlims) = setup.grid
     T = eltype(xp[1])
     D = dimension()
-    domain_length = [(xlims[a][2] - xlims[a][1]) for a in 1:D]
+    domain_length = [(xlims[d][2] - xlims[d][1]) for d in 1:D]
     K = size(Ip) .÷ 2
     k = zeros(T, K)
     for α = 1:D
@@ -79,7 +79,7 @@ function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) /
     k = reshape(k, :)
 
     # Sum or average wavenumbers between k and k+1
-    kmax = minimum([(K[a]-1)/domain_length[a] for a in 1:D]) 
+    kmax = minimum([(K[d]-1)/domain_length[d] for d in 1:D]) 
     isort = sortperm(k)
     ksort = k[isort]
     ia = zeros(Int, 0)
