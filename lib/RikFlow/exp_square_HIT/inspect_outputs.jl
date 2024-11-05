@@ -20,7 +20,7 @@ energy_spectrum_plot(state; setup, npoint = 100)
 
 # Using HF_ref.jl, we collect the reference trajectories of the qois
 # load reference data
-filename = @__DIR__()*"/output/data_train_dns512_les32_Re2000.0_tsim0.1.jld2"
+filename = @__DIR__()*"/output/data_train_dns512_les64_Re2000.0_tsim10.0.jld2"
 ref_data = load(filename, "data_train");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 keys(ref_data.data[1])
@@ -37,8 +37,8 @@ let # plot reference data
     display(g)
 end
 
-u_lf = ref_data.data[1].u
-heatmap(u_lf[1][1][1, :, :]) # initial coarse field
+u_lf = ref_data.data[1].u;
+heatmap(u_lf[5][1][11, :, :]) # initial coarse field
 
 ### Track ref ####
 # We now run track_ref.jl to track the reference trajectories of the qois

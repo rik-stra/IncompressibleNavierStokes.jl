@@ -38,8 +38,10 @@ println("Modules loaded. Time: $(t1-t0) s")
 n_dns = Int(512)
 n_les = Int(64)
 Re = Float32(2_000)
+############################
 Δt = Float32(2.7e-4)
 tsim = Float32(10)
+#### -> 4,5 hours
 # forcing
 T_L = 0.005  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
