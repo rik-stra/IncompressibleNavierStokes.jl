@@ -5,7 +5,7 @@ using IncompressibleNavierStokes
 # We first run spinnup.jl to generate an initial condition for the DNS simulation.
 
 # load initial field
-filename =  @__DIR__()*"/output/u_start_spinnup_512_Re2000.0_tsim4.0.jld2"
+filename =  @__DIR__()*"/output/u_start_spinnup_512_Re2000.0_freeze_10_tsim4.0.jld2"
 u_start = load(filename, "u_start");
 
 heatmap(u_start[1][:, :, 1])

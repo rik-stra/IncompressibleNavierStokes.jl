@@ -39,13 +39,14 @@ n_dns = Int(512)
 n_les = Int(64)
 Re = Float32(2_000)
 ############################
-Δt = Float32(2.7e-4)
+Δt = Float32(2.5e-4)
 tsim = Float32(10)
 #### -> 4,5 hours
 # forcing
-T_L = 0.005  # correlation time of the forcing
+T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
 k_f = sqrt(2) # forcing wavenumber  
+freeze = 10 # number of time steps to freeze the forcing
 
 seeds = (;
     dns = 123, # DNS initial condition
@@ -62,7 +63,7 @@ T = Float32
 ArrayType = CuArray
 #device = x -> adapt(CuArray, x)
 tburn = Float32(4)
-ustart = ArrayType.(load(outdir*"/u_start_spinnup_$(n_dns)_Re$(Re)_tsim$(tburn).jld2", "u_start"));
+ustart = ArrayType.(load(outdir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start"));
 
 # Parameters
 get_params(nlesscalar) = (;
@@ -77,7 +78,7 @@ get_params(nlesscalar) = (;
     filters = (FaceAverage(),),
     ArrayType,
     ustart,
-    ou_bodyforce = (;T_L, e_star, k_f, rng_seed = seeds.ou ),
+    ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou ),
 )
 
 params_train = (; get_params([n_les])..., savefreq = 10, plotfreq = 1000);
@@ -86,5 +87,5 @@ data_train = create_ref_data(; params_train...);
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data
-filename = "$outdir/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(params_train.tsim).jld2"
+filename = "$outdir/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tsim).jld2"
 jldsave(filename; data_train, params_train)
