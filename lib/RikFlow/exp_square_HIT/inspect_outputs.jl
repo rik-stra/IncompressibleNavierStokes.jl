@@ -32,7 +32,7 @@ let # plot reference data
            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(q_ref, 1)-1]
     for i in 1:size(q_ref, 1)
-        plot!(axs[i], q_ref[i, :])
+        lines!(axs[i], q_ref[i, :])
     end
     display(g)
 end
@@ -42,8 +42,8 @@ heatmap(u_lf[5][1][11, :, :]) # initial coarse field
 
 ### Track ref ####
 # We now run track_ref.jl to track the reference trajectories of the qois
-fname = @__DIR__()*"/output/data_track_dns256_les64_Re3000.0_tsim20.0.jld2"
-track_data = load(fname, "data_track")
+fname = @__DIR__()*"/output/data_track_dns512_les64_Re2000.0_tsim9.0.jld2"
+track_data = load(fname, "data_track");
 # plot dQ data
 let 
     g = Figure()
@@ -51,13 +51,13 @@ let
            title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(track_data.dQ, 1)-1]
     for i in 1:size(track_data.dQ, 1)
-        plot!(axs[i], track_data.dQ[i, :])
+        lines!(axs[i], track_data.dQ[i, :])
     end
     display(g)
 end
 
 ### no SGS ###
-fname = @__DIR__()*"/output/data_no_sgs_dns256_les64_Re3000.0_tsim40.0.jld2"
+fname = @__DIR__()*"/output/data_no_sgs_dns512_les64_Re2000.0_tsim9.0.jld2"
 no_sgs_data = load(fname, "data_online")
 
 let 
@@ -66,8 +66,8 @@ let
            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(no_sgs_data.q, 1)-1]
     for i in 1:size(no_sgs_data.q, 1)
-        plot!(axs[i], q_ref[i, :], label = "ref")
-        plot!(axs[i], no_sgs_data.q[i, :], label = "no sgs")
+        lines!(axs[i], q_ref[i, :], label = "ref")
+        lines!(axs[i], no_sgs_data.q[i, :], label = "no sgs")
         axislegend(axs[i], position = :rt)
     end
     display(g)

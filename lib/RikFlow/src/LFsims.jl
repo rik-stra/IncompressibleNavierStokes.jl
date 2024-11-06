@@ -11,7 +11,7 @@ function track_ref(;
     create_psolver = psolver_spectral,
     savefreq = 1,
     ArrayType = Array,
-    bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
+    ou_bodyforce = none,
     kwargs...,
 )
 T = typeof(Re)
@@ -23,7 +23,7 @@ Setup(;
     x = ntuple(α -> LinRange(lims[α]..., nles[1][α] + 1), D),
     Re,
     ArrayType,
-    bodyforce,
+    ou_bodyforce,
 )
 
 # Number of time steps to save
@@ -41,6 +41,7 @@ psolver = create_psolver(setup)
 
 # Solve
 @info "Solving LF sim (track ref)"
+println("setup.ou ", setup.ou_bodyforce)
 (; u, t), outputs =
         solve_unsteady(; setup, 
         ustart,
@@ -48,16 +49,16 @@ psolver = create_psolver(setup)
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 10),
+            log = timelogger(; nupdate = 100),
             fields = fieldsaver(; setup, nupdate = savefreq), # by calling this BEFORE qoisaver, we also save the field at t=0!
             qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
-            vort = realtimeplotter(;
-                setup,
-                plot = vortplot,
-                nupdate = 10,
-                displayupdates = true,
-                displayfig = true,
-            ),
+            #vort = realtimeplotter(;
+            #    setup,
+            #    plot = vortplot,
+            #    nupdate = 10,
+            #    displayupdates = true,
+            #    displayfig = true,
+            #),
         ),
         psolver)
 q = stack(outputs.qoihist)

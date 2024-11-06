@@ -18,6 +18,7 @@ function OU_setup(; T_L,
                     k_f,
                     setup, 
                     rng_seed = 42,
+                    freeze = 1
                     )
 
 T = typeof(setup.Re)
@@ -96,7 +97,8 @@ ou_setup = (;
     E,
     mask,
     num_dims,
-    z
+    z,
+    freeze
 )
 end
 

@@ -50,6 +50,7 @@ function solve_unsteady(;
     initialized = (; (k => v.initialize(state) for (k, v) in pairs(processors))...)
 
     if isadaptive
+        @assert setup.ou_bodyforce.freeze ==1 "Can't freeze the bodyforce over multiple adaptive time steps"
         while stepper.t < tend
             if stepper.n % n_adapt_Δt == 0
                 # Change timestep based on operators
@@ -75,8 +76,8 @@ function solve_unsteady(;
         Δt = (tend - tstart) / nstep
         for it = 1:nstep
             # update forcing
-            if !isnothing(setup.ou_bodyforce)
-                OU_forcing_step!(; setup.ou_setup, Δt=Δt)
+            if !isnothing(setup.ou_bodyforce) && mod(stepper.n, setup.ou_bodyforce.freeze) == 0
+                OU_forcing_step!(; setup.ou_setup, Δt=Δt*setup.ou_bodyforce.freeze)
                 OU_get_force!(setup.ou_setup, setup)
             end
             # Perform a single time step with the time integration method

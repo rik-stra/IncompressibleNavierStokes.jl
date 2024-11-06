@@ -210,7 +210,6 @@ function spinnup(;
         Re,
         ArrayType,
         ou_bodyforce,
-        kwargs...,
     )
 
     # Since the grid is uniform and identical for x and y, we may use a specialized
@@ -230,6 +229,7 @@ function spinnup(;
         #method = RKMethods.Wray3(),
         setup = _dns, ustart, tlims = (T(0), tburn),
         docopy = false,
+        kwargs...,
         processors = (;
             log = timelogger(; nupdate = 100),
             ehist = realtimeplotter(;
