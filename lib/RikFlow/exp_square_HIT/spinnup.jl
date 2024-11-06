@@ -73,7 +73,7 @@ get_params(nlesscalar) = (;
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou_spin ),
 )
 
-params_train = (; get_params([n_les])...);
+params_train = (; get_params([n_les])..., Δt);
 t3 = time()
 u_start, ehist = spinnup(; params_train...);
 u_start = Array.(u_start);
