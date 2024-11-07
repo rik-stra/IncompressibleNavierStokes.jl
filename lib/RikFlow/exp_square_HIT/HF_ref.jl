@@ -41,7 +41,7 @@ Re = Float32(2_000)
 ############################
 Δt = Float32(2.5e-4)
 tsim = Float32(10)
-#### -> 4,5 hours
+#### -> 2,5 hours
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate

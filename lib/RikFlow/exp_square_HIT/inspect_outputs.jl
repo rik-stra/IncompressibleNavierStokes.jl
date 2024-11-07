@@ -10,6 +10,7 @@ u_start = load(filename, "u_start");
 
 heatmap(u_start[1][:, :, 1])
 # plot spectrum
+let
 n = 512
 axis_x = range(0.0, 1., n + 1)
 setup = Setup(;
@@ -17,10 +18,10 @@ setup = Setup(;
     Re = Float32(2e3),);
 state = (;u = u_start, t=0.);
 energy_spectrum_plot(state; setup, npoint = 100)
-
+end
 # Using HF_ref.jl, we collect the reference trajectories of the qois
 # load reference data
-filename = @__DIR__()*"/output/data_train_dns512_les64_Re2000.0_tsim10.0.jld2"
+filename = @__DIR__()*"/output/data_train_dns512_les64_Re2000.0_freeze_10_tsim10.0.jld2"
 ref_data = load(filename, "data_train");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 keys(ref_data.data[1])
@@ -38,7 +39,17 @@ let # plot reference data
 end
 
 u_lf = ref_data.data[1].u;
-heatmap(u_lf[5][1][11, :, :]) # initial coarse field
+heatmap(u_lf[1][1][11, :, :]) # initial coarse field
+## plot specrum of filtered field
+let
+n = 64
+axis_x = range(0.0, 1., n + 1)
+setup = Setup(;
+    x = (axis_x, axis_x, axis_x),
+    Re = Float32(2e3),);
+state = (;u = u_lf[1], t=0.);
+energy_spectrum_plot(state; setup, npoint = 100)
+end
 
 ### Track ref ####
 # We now run track_ref.jl to track the reference trajectories of the qois

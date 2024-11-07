@@ -13,14 +13,25 @@ using JLD2
 using RikFlow
 using IncompressibleNavierStokes
 using CUDA
+ArrayType = Array
 
 n_dns = Int(512)
 n_les = Int(64)
-Re = Float32(2000)
-Δt = Float32(2.7e-4)*10
-tsim = Float32(0.006)
+Re = Float32(2_000)
+############################
+Δt = Float32(2.5e-3)
+tsim = Float32(10)
+# forcing
+T_L = 0.01  # correlation time of the forcing
+e_star = 0.1 # energy injection rate
+k_f = sqrt(2) # forcing wavenumber  
+freeze = 1 # number of time steps to freeze the forcing
 
-
+seeds = (;
+    dns = 123, # DNS initial condition
+    ou = 333, # OU process
+    to = 234, # TO method online sampling
+)
 
 outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
@@ -28,11 +39,11 @@ ispath(outdir) || mkpath(outdir)
 # For running on a CUDA compatible GPU
 
 T = Float32
-ArrayType = CuArray
+
 
 
 # load reference data
-ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim10.0.jld2"
+ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim10.0.jld2"
 data_train = load(ref_file, "data_train");
 params_train = load(ref_file, "params_train");
 # get initial condition
@@ -46,7 +57,8 @@ params_track = (;
     Δt,
     ArrayType,
     ustart, 
-    qoi_ref, 
+    qoi_ref,
+    ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 100);
 
 data_track = track_ref(; params_track...);
