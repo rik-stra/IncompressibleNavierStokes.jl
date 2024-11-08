@@ -49,6 +49,18 @@ function solve_unsteady(;
     state = Observable(get_state(stepper))
     initialized = (; (k => v.initialize(state) for (k, v) in pairs(processors))...)
 
+    # print one random forcing field to check if the same random seed is used ect.
+    if !isnothing(setup.ou_bodyforce)
+        OU_forcing_step!(; setup.ou_setup, Δt=Δt*setup.ou_bodyforce.freeze)
+        OU_get_force!(setup.ou_setup, setup)
+        @info "ou random state 1: $(setup.ou_setup.state[1:2])", typeof(setup.ou_setup.state)
+        @info "ou force corner $(Array(setup.bodyforce[1])[end-1,end-1,end-1])"
+        @info "ou force 1 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-2,end-2])"
+        @info "ou force 2 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-3,end-3])"
+        @info "ou force 4 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-5,end-5])"
+        @info "ou force 8 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-9,end-9])"
+    end
+
     if isadaptive
         @assert setup.ou_bodyforce.freeze ==1 "Can't freeze the bodyforce over multiple adaptive time steps"
         while stepper.t < tend

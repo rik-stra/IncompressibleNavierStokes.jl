@@ -41,7 +41,7 @@ T = Float32
 ArrayType = CuArray
 
 # load reference data
-track_file = outdir*"/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim9.0.jld2"
+track_file = outdir*"/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim10.0.jld2"
 data_track = load(track_file, "data_track");
 params_track = load(track_file, "params_track");
 # get initial condition
@@ -54,7 +54,7 @@ params = (;
     Δt,
     ArrayType,
     ustart, 
-    ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
+    #ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 100);
 
 # Build setup and assemble operators
@@ -74,9 +74,9 @@ to_setup_les = RikFlow.TO_Setup(;
          to_mode = :CREATE_REF,
          params.ArrayType, 
          setup,
-         nstep=nt)
+         nstep=nt);
 
-psolver = psolver_spectral(setup)
+psolver = psolver_spectral(setup);
 
 # Solve
 @info "Solving LF sim (no SGS)"
@@ -84,14 +84,14 @@ psolver = psolver_spectral(setup)
         solve_unsteady(; setup, 
         params.ustart, 
         tlims = (T(0), params.tsim),
-        #params.Δt,
+        params.Δt,
         processors = (;
             log = timelogger(; nupdate = 10),
             fields = fieldsaver(; setup, nupdate = params.savefreq),  # by calling this BEFORE qoisaver, we also save the field at t=0!
             qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
         ),
-        psolver)
-q = stack(outputs.qoihist)
-data_online = (;q, fields = outputs.fields)
+        psolver);
+q = stack(outputs.qoihist);
+data_online = (;q, fields = outputs.fields);
 # Save tracking data
 jldsave("$outdir/data_no_sgs_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);

@@ -108,6 +108,10 @@ function create_ref_data(;
         kwargs...,
     )
 
+    if isnothing(ustart)
+        ustart = vectorfield(dns)
+    end
+
     les = [
         Setup(;
             x = ntuple(α -> LinRange(lims[α]..., nles[α] + 1), D),

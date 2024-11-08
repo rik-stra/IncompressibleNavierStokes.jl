@@ -79,7 +79,7 @@ f = [ArrayType{ComplexF32, num_dims}(undef, setup.grid.Nu[a]...) for a = 1:num_d
 # create partial IFFT matrix
 E = Array{ComplexF32,2}(undef, 2*k_f_int+1, N)
 for j = 1:N, i = -k_f_int:k_f_int
-    E[i+k_f_int+1, j] = exp(pi*2im*(i)*(j-1)/N)
+    E[i+k_f_int+1, j] = exp(pi*2im*(i)*(j)/N)
 end
 z = ArrayType{T, 2}(undef, N_d, num_dims*2)
 E = ArrayType(E)

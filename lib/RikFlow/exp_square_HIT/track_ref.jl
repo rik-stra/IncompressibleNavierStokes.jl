@@ -13,7 +13,7 @@ using JLD2
 using RikFlow
 using IncompressibleNavierStokes
 using CUDA
-ArrayType = Array
+ArrayType = CuArray
 
 n_dns = Int(512)
 n_les = Int(64)
