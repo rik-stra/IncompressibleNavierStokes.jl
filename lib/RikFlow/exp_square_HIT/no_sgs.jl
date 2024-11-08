@@ -32,7 +32,7 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-outdir = @__DIR__() *"/output"
+outdir = @__DIR__() *"/output_new"
 ispath(outdir) || mkpath(outdir)
 
 # For running on a CUDA compatible GPU
@@ -86,7 +86,7 @@ psolver = psolver_spectral(setup);
         tlims = (T(0), params.tsim),
         params.Δt,
         processors = (;
-            log = timelogger(; nupdate = 10),
+            log = timelogger(; nupdate = 100),
             fields = fieldsaver(; setup, nupdate = params.savefreq),  # by calling this BEFORE qoisaver, we also save the field at t=0!
             qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
         ),

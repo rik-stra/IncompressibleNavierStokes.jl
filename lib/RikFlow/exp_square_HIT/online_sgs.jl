@@ -14,20 +14,28 @@ using RikFlow
 using IncompressibleNavierStokes
 using CUDA
 
-n_dns = Int(256)
-n_les = Int(64)
-Re = Float32(3000)
-Δt = Float32(1.5e-3)
-tsim = Float32(100)
 sampling_method = :mvg
+n_dns = Int(512)
+n_les = Int(64)
+Re = Float32(2_000)
+############################
+Δt = Float32(2.5e-3)
+tsim = Float32(10)
+# forcing
+T_L = 0.01  # correlation time of the forcing
+e_star = 0.1 # energy injection rate
+k_f = sqrt(2) # forcing wavenumber  
+freeze = 1 # number of time steps to freeze the forcing
 
 seeds = (;
-    dns = 123, # Initial conditions
-    to = 234 # TO method online sampling
+    dns = 123, # DNS initial condition
+    ou = 333, # OU process
+    to = 234, # TO method online sampling
 )
+
 rng_TO = Xoshiro(seeds.to)
 
-outdir = @__DIR__() *"/output"
+outdir = @__DIR__() *"/output_new"
 ispath(outdir) || mkpath(outdir)
 
 # For running on a CUDA compatible GPU
@@ -37,29 +45,25 @@ ArrayType = CuArray
 
 
 # load reference data
-track_file = outdir*"/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim20.0.jld2"
+track_file = outdir*"/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim10.0.jld2"
 data_track = load(track_file, "data_track");
+params_track = load(track_file, "params_track");
 # get initial condition
 ustart = ArrayType.(data_track.fields[1].u);
 # get ref trajectories
 dQ_data = data_track.dQ;
 
-get_params(nlesscalar) = (;
-    D = 3,
-    Re,
-    lims = ( (T(0) , T(3)) , (T(0) , T(1)), (T(0),T(1)) ),
-    qois = [["Z",0,15],["E", 0, 15],["Z",16,31],["E", 16, 31]],
+params = (;
+    params_track...,
     tsim,
     Δt,
-    nles = map(n -> (3*n, n, n), nlesscalar), # LES resolutions
-    ndns = (n -> (3*n, n, n))(n_dns), # DNS resolution
-    filters = (FaceAverage(),),
     ArrayType,
-    ustart,
-    bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y)
-)
-
-params = (; get_params([n_les])..., dQ_data, sampling_method = sampling_method, savefreq = 1000, rng = rng_TO);
+    ustart, 
+    #ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
+    savefreq = 100,
+    dQ_data,
+    sampling_method = sampling_method,
+    rng = rng_TO);
 
 data_online = online_sgs(; params...);
 

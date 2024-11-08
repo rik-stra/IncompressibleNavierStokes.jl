@@ -8,20 +8,31 @@ using IncompressibleNavierStokes
 filename =  @__DIR__()*"/output/u_start_spinnup_512_Re2000.0_freeze_10_tsim4.0.jld2"
 u_start = load(filename, "u_start");
 
-heatmap(u_start[1][:, :, 1])
-# plot spectrum
+heatmap(u_start[1][end-1, :, :])
+# plot energy spectrum
 let
-n = 512
-axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
-    x = (axis_x, axis_x, axis_x),
-    Re = Float32(2e3),);
-state = (;u = u_start, t=0.);
-energy_spectrum_plot(state; setup, npoint = 100)
+    n = 512
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+        x = (axis_x, axis_x, axis_x),
+        Re = Float32(2e3),);
+    state = (;u = u_start, t=0.);
+    energy_spectrum_plot(state; setup, npoint = 100)
 end
+# plot enstrophy spectrum
+let
+    n = 512
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+        x = (axis_x, axis_x, axis_x),
+        Re = Float32(2e3),);
+    state = (;u = u_start, t=0.);
+    enstrophy_spectrum_plot(state; setup, npoint = 100)
+end
+
 # Using HF_ref.jl, we collect the reference trajectories of the qois
 # load reference data
-filename = @__DIR__()*"/output/data_train_dns512_les64_Re2000.0_freeze_10_tsim10.0.jld2"
+filename = @__DIR__()*"/output_new/data_train_dns512_les64_Re2000.0_freeze_10_tsim10.0.jld2"
 ref_data = load(filename, "data_train");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 keys(ref_data.data[1])
@@ -33,13 +44,13 @@ let # plot reference data
            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(q_ref, 1)-1]
     for i in 1:size(q_ref, 1)
-        lines!(axs[i], q_ref[i, :])
+        lines!(axs[i], q_ref[i,:])
     end
     display(g)
 end
 
 u_lf = ref_data.data[1].u;
-heatmap(u_lf[1][1][11, :, :]) # initial coarse field
+heatmap(u_lf[1][1][end-1, :, :]) # initial coarse field
 ## plot specrum of filtered field
 let
 n = 64
@@ -53,7 +64,7 @@ end
 
 ### Track ref ####
 # We now run track_ref.jl to track the reference trajectories of the qois
-fname = @__DIR__()*"/output/data_track_dns512_les64_Re2000.0_tsim9.0.jld2"
+fname = @__DIR__()*"/output_new/data_track_dns512_les64_Re2000.0_tsim10.0.jld2"
 track_data = load(fname, "data_track");
 # plot dQ data
 let 
@@ -63,12 +74,25 @@ let
         for i in 0:size(track_data.dQ, 1)-1]
     for i in 1:size(track_data.dQ, 1)
         lines!(axs[i], track_data.dQ[i, :])
+        lines!(axs[i], q_ref[i,:])
+    end
+    display(g)
+end
+
+let 
+    g = Figure()
+    axs = [Axis(g[i ÷ 2, i%2], 
+           title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        for i in 0:size(track_data.q, 1)-1]
+    for i in 1:size(track_data.q, 1)
+        lines!(axs[i], q_ref[i, 1:40], label = "ref")
+        lines!(axs[i], track_data.q[i, 1:40])
     end
     display(g)
 end
 
 ### no SGS ###
-fname = @__DIR__()*"/output/data_no_sgs_dns512_les64_Re2000.0_tsim9.0.jld2"
+fname = @__DIR__()*"/output_new/data_no_sgs_dns512_les64_Re2000.0_tsim10.0.jld2"
 no_sgs_data = load(fname, "data_online")
 
 let 
@@ -79,7 +103,7 @@ let
     for i in 1:size(no_sgs_data.q, 1)
         lines!(axs[i], q_ref[i, :], label = "ref")
         lines!(axs[i], no_sgs_data.q[i, :], label = "no sgs")
-        axislegend(axs[i], position = :rt)
+        if i == size(no_sgs_data.q, 1) axislegend(axs[i], position = :rt) end
     end
     display(g)
 end
@@ -88,7 +112,7 @@ end
 heatmap(no_sgs_data.fields[end].u[1][1,:,:])
 
 ### Online SGS ###
-fname = @__DIR__()*"/output/data_online_samplingmvg_dns256_les64_Re3000.0_tsim100.0.jld2"
+fname = @__DIR__()*"/output_new/data_online_samplingmvg_dns512_les64_Re2000.0_tsim10.0.jld2"
 online_data = load(fname, "data_online")
 # plot dQ data
 let 
@@ -103,7 +127,7 @@ let
 end
 # plot q data
 let 
-    g = Figure()
+    g = Figure(resolution = (1200, 800))
     axs = [Axis(g[i ÷ 2, i%2], 
            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(online_data.dQ, 1)-1]
