@@ -54,7 +54,8 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-outdir = @__DIR__() *"/output"
+outdir = @__DIR__() *"/output_new"
+indir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
 
 # For running on a CUDA compatible GPU
@@ -63,7 +64,7 @@ T = Float32
 ArrayType = CuArray
 #device = x -> adapt(CuArray, x)
 tburn = Float32(4)
-ustart = ArrayType.(load(outdir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start"));
+ustart = ArrayType.(load(indir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start"));
 
 # Parameters
 get_params(nlesscalar) = (;
