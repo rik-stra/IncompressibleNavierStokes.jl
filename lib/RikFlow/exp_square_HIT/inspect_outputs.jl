@@ -32,7 +32,7 @@ end
 
 # Using HF_ref.jl, we collect the reference trajectories of the qois
 # load reference data
-filename = @__DIR__()*"/output_new/data_train_dns512_les64_Re2000.0_freeze_10_tsim10.0.jld2"
+filename = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim10.0.jld2"
 ref_data = load(filename, "data_train");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 keys(ref_data.data[1])
@@ -64,7 +64,7 @@ end
 
 ### Track ref ####
 # We now run track_ref.jl to track the reference trajectories of the qois
-fname = @__DIR__()*"/output_new/data_track_dns512_les64_Re2000.0_tsim10.0.jld2"
+fname = @__DIR__()*"/output/new/data_track_dns512_les64_Re2000.0_tsim10.0.jld2"
 track_data = load(fname, "data_track");
 # plot dQ data
 let 
@@ -92,7 +92,7 @@ let
 end
 
 ### no SGS ###
-fname = @__DIR__()*"/output_new/data_no_sgs_dns512_les64_Re2000.0_tsim10.0.jld2"
+fname = @__DIR__()*"/output/new/data_no_sgs_dns512_les64_Re2000.0_tsim10.0.jld2"
 no_sgs_data = load(fname, "data_online")
 
 let 
@@ -112,7 +112,7 @@ end
 heatmap(no_sgs_data.fields[end].u[1][1,:,:])
 
 ### Online SGS ###
-fname = @__DIR__()*"/output_new/data_online_samplingmvg_dns512_les64_Re2000.0_tsim10.0.jld2"
+fname = @__DIR__()*"/output/new/data_online_samplingmvg_dns512_les64_Re2000.0_tsim10.0.jld2"
 online_data = load(fname, "data_online")
 # plot dQ data
 let 

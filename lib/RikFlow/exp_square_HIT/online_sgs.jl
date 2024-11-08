@@ -35,7 +35,7 @@ seeds = (;
 
 rng_TO = Xoshiro(seeds.to)
 
-outdir = @__DIR__() *"/output_new"
+outdir = @__DIR__() *"/output/new"
 ispath(outdir) || mkpath(outdir)
 
 # For running on a CUDA compatible GPU

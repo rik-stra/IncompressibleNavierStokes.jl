@@ -32,7 +32,7 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-outdir = @__DIR__() *"/output_new"
+outdir = @__DIR__() *"/output/new"
 ispath(outdir) || mkpath(outdir)
 
 # For running on a CUDA compatible GPU

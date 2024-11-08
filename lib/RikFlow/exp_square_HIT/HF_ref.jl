@@ -54,7 +54,7 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-outdir = @__DIR__() *"/output_new"
+outdir = @__DIR__() *"/output/new"
 indir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
 
