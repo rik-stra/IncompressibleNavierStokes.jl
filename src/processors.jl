@@ -615,6 +615,101 @@ function energy_spectrum_plot(
     fig
 end
 
+function enstrophy_spectrum_plot(
+    state;
+    setup,
+    npoint = 100,
+    a = typeof(setup.Re)(1 + sqrt(5)) / 2,
+)
+    state isa Observable || (state = Observable(state))
+
+    (; dimension, xp, Ip) = setup.grid
+    T = eltype(xp[1])
+    D = dimension()
+
+    (; A, κ, K) = spectral_stuff(setup; npoint, a)
+    # (; masks, κ, K) = get_spectrum(setup; npoint, a) # Mask
+    kmax = maximum(κ)
+
+    # Energy
+    # up = interpolate_u_p(state[].u, setup)
+    ehat = lift(state) do (; u, t)
+        # interpolate_u_p!(up, u, setup)
+        up = u
+        e = sum(up) do u
+            u = u[Ip]
+            uhat = fft(u)[ntuple(α -> 1:K[α], D)...]
+            # uhat = fft(u)[ntuple(α -> 1:K, D)...] # Mask
+            abs2.(uhat) ./ (2 * prod(size(uhat))^2)
+        end
+        e = A * reshape(e, :)
+        # e = [sum(e[m]) for m in masks] # Mask
+        e = max.(e, eps(T)) # Avoid log(0)
+        Array(e)
+    end
+
+    # Enstrophy
+    # up = interpolate_u_p(state[].u, setup)
+    what = lift(state) do (; u, t)
+        # interpolate_u_p!(up, u, setup)
+        w = vorticity(u, setup)
+        up = w
+        e = sum(up) do w
+            w = w[Ip]
+            what = fft(w)[ntuple(α -> 1:K[α], D)...]
+            # uhat = fft(u)[ntuple(α -> 1:K, D)...] # Mask
+            abs2.(what) ./ (2 * prod(size(what))^2)
+        end
+        e = A * reshape(e, :)
+        # e = [sum(e[m]) for m in masks] # Mask
+        e = max.(e, eps(T)) # Avoid log(0)
+        Array(e)
+    end
+
+    # Build inertial slope above energy
+    # krange = LinRange(1, kmax, 100)
+    # krange = collect(1, kmax)
+    # krange = [cbrt(T(kmax)), T(kmax)]
+    krange = [kmax^T(0.1), kmax^(T(0.5))]
+    # krange = [T(kmax)^(T(2) / 3), T(kmax)]
+
+    slope, slopelabel = D == 2 ? (-T(3), L"$k^{-3}$") : (-T(5 / 3), L"$k^{-5/3}$")
+    inertia = lift(ehat) do ehat
+        slopeconst = maximum(ehat ./ κ .^ slope)
+        2 .* slopeconst .* krange .^ slope
+    end
+
+    slopeZ, slopelabelZ = D == 2 ? (-T(3), L"$k^{-3}$") : (T(1 / 3), L"$k^{1/3}$")
+    inertiaZ = lift(what) do what
+        slopeconst = maximum(what ./ κ .^ slopeZ)
+        2 .* slopeconst .* krange .^ slopeZ
+    end
+
+    # Nice ticks
+    logmax = round(Int, log2(kmax + 1))
+    xticks = T(2) .^ (0:logmax)
+
+    fig = Figure()
+    ax = Axis(
+        fig[1, 1];
+        xticks,
+        xlabel = "k",
+        # ylabel = "E(k)",
+        xscale = log10,
+        yscale = log10,
+        limits = (1, kmax, T(1e-8), T(1)),
+    )
+    lines!(ax, κ, ehat; label = "Kinetic energy")
+    lines!(ax, κ, what; label = "Enstrophy")
+    lines!(ax, krange, inertia; label = slopelabel, linestyle = :dash)
+    lines!(ax, krange, inertiaZ; label = slopelabelZ, linestyle = :dash)
+    axislegend(ax)
+    # autolimits!(ax)
+    on(e -> autolimits!(ax), ehat)
+    autolimits!(ax)
+    fig
+end
+
 # # Make sure the figure is fully rendered before allowing code to continue
 # if displayfig
 #     render = display(espec)

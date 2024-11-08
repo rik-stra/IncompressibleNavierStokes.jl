@@ -87,7 +87,7 @@ export PeriodicBC, DirichletBC, SymmetricBC, PressureBC
 
 # Processors
 export processor, timelogger, vtk_writer, fieldsaver, realtimeplotter, animator
-export fieldplot, energy_history_plot, energy_spectrum_plot
+export fieldplot, energy_history_plot, energy_spectrum_plot, enstrophy_spectrum_plot
 
 # Setup
 export Setup, temperature_equation, scalarfield, vectorfield
