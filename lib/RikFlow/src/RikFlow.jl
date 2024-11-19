@@ -23,6 +23,7 @@ The tuple stores
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
 function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = :none, sampling_method = :mvg ,dQ_data = :none, rng = :none)
+    T = typeof(setup.Re)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
     time_index = ones(Int)
@@ -52,7 +53,7 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = 
         end
         V_i = get_vi_functions(to_setup)
         cij_masks = get_cij_masks(to_setup)
-        outputs = allocate_arrays_outputs(nstep, N_qois)
+        outputs = allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
         to_setup = (; to_setup..., Q_dQ_array, dQ_distribution, sampler, V_i, cij_masks, outputs)
     end
     return to_setup
@@ -72,10 +73,15 @@ function load_qois(qoi_refs_location::VecOrMat)
     qoi_refs_location
 end
 
-function allocate_arrays_outputs(nstep, N_qois)
-    dQ = Array{Float64}(undef, N_qois, nstep)
-    tau = Array{Float64}(undef, N_qois, nstep)
-    (; dQ, tau)
+function allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
+    dQ = Array{T}(undef, N_qois, nstep)
+    tau = Array{T}(undef, N_qois, nstep)
+    dic = (;)
+    if to_mode == :TRACK_REF
+        q_star = Array{T}(undef, N_qois, nstep)
+        dic = (; q_star)
+    end
+    (; dQ, tau, dic...)
 end
 
 function allocate_arrays_to(to_setup, setup, ArrayType) # not in use
@@ -235,7 +241,7 @@ qoisaver(; setup, to_setup, nupdate = 1) =
             q = compute_QoI(u_hat, w_hat, to_setup,setup)
             push!(qoi_hist, q)
         end
-        state[] = state[]
+        state[] = state[]  # invokes all processors on initial state!
         qoi_hist
     end
 
@@ -251,9 +257,10 @@ function to_sgs_term(u, setup, to_setup, stepper)
     
     # get dQ
     if to_setup.to_mode == :TRACK_REF
-        q = compute_QoI(u_hat, w_hat, to_setup,setup)
+        q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
+        to_setup.outputs.q_star[:,stepper.n] = q_star
         q_ref = to_setup.sampler(to_setup)
-        dQ = q_ref-q
+        dQ = q_ref-q_star
     elseif to_setup.to_mode == :ONLINE
         dQ = to_setup.sampler(to_setup)
     end
@@ -297,9 +304,10 @@ function innerpoducts(x,y,setup)
     Array(ip).*(prod(L)/(prod(N)^2))
 end
 
-function compute_cij(ip, to_setup) 
+function compute_cij(ip, to_setup)
+    T = typeof(ip[1,1]) 
     N = to_setup.N_qois
-    cij = ones(ComplexF64, (N, N)).*-1
+    cij = ones(T, (N, N)).*-1
     for i in 1:N
         A = reshape(ip[to_setup.cij_masks.A[:,:,i]], (N-1, N-1))
         b = ip[:,i][to_setup.cij_masks.B[:,i]]
