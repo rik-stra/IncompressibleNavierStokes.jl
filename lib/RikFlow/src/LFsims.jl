@@ -64,8 +64,9 @@ println("setup.ou ", setup.ou_bodyforce)
 q = stack(outputs.qoihist)
 dQ = to_setup_les.outputs.dQ
 tau = to_setup_les.outputs.tau
+q_star = to_setup_les.outputs.q_star
 fields = outputs.fields
-return (;dQ, tau, q, fields)
+return (;dQ, tau, q, q_star, fields)
 end
 
 
