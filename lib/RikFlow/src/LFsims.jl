@@ -1,6 +1,6 @@
 function track_ref(;
     ustart,
-    qoi_ref,
+    ref_reader,
     D = 3,
     Re = 1e3,
     lims = ntuple(α -> (typeof(Re)(0), typeof(Re)(1)), D),
@@ -31,11 +31,11 @@ nt = round(Int, tsim / Δt)
 
 to_setup_les = RikFlow.TO_Setup(; 
         qois, 
-        qoi_refs_location= qoi_ref, 
         to_mode = :TRACK_REF, 
         ArrayType, 
         setup, 
-        nstep=nt)
+        nstep=nt,
+        time_series_method = ref_reader,)
 
 psolver = create_psolver(setup)
 
@@ -71,9 +71,8 @@ end
 
 
 function online_sgs(;
-    dQ_data,
     ustart,
-    sampling_method = :mvg,
+    time_series_method,
     D = 3,
     Re = 1e3,
     lims = ntuple(α -> (typeof(Re)(0), typeof(Re)(1)), D),
@@ -85,7 +84,6 @@ function online_sgs(;
     savefreq = 1,
     ArrayType = Array,
     ou_bodyforce = none,
-    rng = Xoshiro(234),
     kwargs...,
 )
 T = typeof(Re)
@@ -104,12 +102,9 @@ Setup(;
 nt = round(Int, tsim / Δt)
 
 to_setup_les = RikFlow.TO_Setup(; 
-        qois, 
-        qoi_refs_location= "none", 
-        rng,
-        dQ_data,
+        qois,
         to_mode = :ONLINE,
-        sampling_method,
+        time_series_method,
         ArrayType, 
         setup, 
         nstep=nt)

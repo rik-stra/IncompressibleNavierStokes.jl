@@ -12,7 +12,9 @@ import cuTENSOR
 using KernelAbstractions
 using Statistics
 using Distributions
+using Random
 
+include("time_series_methods.jl")
 """
 Create setup for Tau-orthogonal method (stored in a named tuple).
 The tuple stores
@@ -22,7 +24,23 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = :none, sampling_method = :mvg ,dQ_data = :none, rng = :none)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method = nothing)
+    T = typeof(setup.Re)
+    masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
+    N_qois = length(qois)
+    to_setup = (; N_qois, qois, to_mode, masks, ∂, time_series_method)
+
+    if to_mode in [:TRACK_REF, :ONLINE]
+        V_i = get_vi_functions(to_setup)
+        cij_masks = get_cij_masks(to_setup)
+        outputs = allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
+        to_setup = (; to_setup..., V_i, cij_masks, outputs)
+    end
+    return to_setup
+end
+
+
+function TO_Setup_old(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = :none, sampling_method = :mvg ,dQ_data = :none, rng = :none)
     T = typeof(setup.Re)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
@@ -259,10 +277,16 @@ function to_sgs_term(u, setup, to_setup, stepper)
     if to_setup.to_mode == :TRACK_REF
         q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
         to_setup.outputs.q_star[:,stepper.n] = q_star
-        q_ref = to_setup.sampler(to_setup)
+        q_ref = get_next_item_timeseries(to_setup.time_series_method)
         dQ = q_ref-q_star
     elseif to_setup.to_mode == :ONLINE
-        dQ = to_setup.sampler(to_setup)
+        if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]
+            dQ = get_next_item_timeseries(to_setup.time_series_method)
+        #elseif typeof(to_setup.time_series_method) == ANN_predictor
+        #    q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
+        #    inputs = (; q_star)
+        end
+        
     end
     to_setup.outputs.dQ[:,stepper.n] = dQ
     
@@ -355,6 +379,8 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
     apply_bc_u!(stepper.u, stepper.t, setup)
     stepper
 end
+
+
 
 include("filter.jl")
 export FaceAverage, VolumeAverage

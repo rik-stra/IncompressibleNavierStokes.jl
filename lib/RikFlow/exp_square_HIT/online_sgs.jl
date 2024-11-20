@@ -14,7 +14,7 @@ using RikFlow
 using IncompressibleNavierStokes
 using CUDA
 
-sampling_method = :mvg
+
 n_dns = Int(512)
 n_les = Int(64)
 Re = Float32(2_000)
@@ -52,6 +52,7 @@ params_track = load(track_file, "params_track");
 ustart = ArrayType.(data_track.fields[1].u);
 # get ref trajectories
 dQ_data = data_track.dQ;
+time_series_sampler = RikFlow.MVG_sampler(dQ_data, rng_TO, ArrayType, T);
 
 params = (;
     params_track...,
@@ -61,12 +62,10 @@ params = (;
     ustart, 
     #ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 100,
-    dQ_data,
-    sampling_method = sampling_method,
-    rng = rng_TO);
+    time_series_method = time_series_sampler);
 
 data_online = online_sgs(; params...);
 
 
 # Save tracking data
-jldsave("$outdir/data_online_sampling$(sampling_method)_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+jldsave("$outdir/data_online_sampling$(typeof(time_series_sampler))_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
