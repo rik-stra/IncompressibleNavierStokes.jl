@@ -14,6 +14,12 @@ using Statistics
 using Distributions
 using Random
 
+using MLUtils
+using Lux, LuxCUDA
+using Optimisers, Zygote
+const dev = gpu_device()
+const cpu = cpu_device()
+
 include("time_series_methods.jl")
 """
 Create setup for Tau-orthogonal method (stored in a named tuple).
@@ -186,10 +192,11 @@ end
 """
 function compute_QoI(u_hat, w_hat, to_setup, setup)
     (; dimension, xlims) = setup.grid
+    ArrayType = setup.ArrayType
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
     N = size(u_hat)
-    q = zeros(typeof(setup.Re),to_setup.N_qois)
+    q = Array{typeof(setup.Re)}(undef, to_setup.N_qois)  # if slow make this into a CuArray
 
     E = sum(abs2, u_hat, dims = 4)
     Z = sum(abs2, w_hat, dims = 4)
@@ -202,6 +209,7 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
             error("QoI not recognized")
         end 
     end
+    q=ArrayType(q)
     return q
 end
 
@@ -282,12 +290,14 @@ function to_sgs_term(u, setup, to_setup, stepper)
     elseif to_setup.to_mode == :ONLINE
         if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]
             dQ = get_next_item_timeseries(to_setup.time_series_method)
-        #elseif typeof(to_setup.time_series_method) == ANN_predictor
-        #    q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
-        #    inputs = (; q_star)
+        elseif typeof(to_setup.time_series_method) == ANN
+            q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
+            dQ = get_next_item_timeseries(to_setup.time_series_method, q_star)
         end
         
     end
+    dQ = Array(dQ)
+    #println("dQ: ", dQ)
     to_setup.outputs.dQ[:,stepper.n] = dQ
     
     # get V_i
@@ -392,5 +402,7 @@ export spinnup
 include("LFsims.jl")
 export track_ref
 export online_sgs
+
+include("ANN.jl")
 
 end # module RikFlow

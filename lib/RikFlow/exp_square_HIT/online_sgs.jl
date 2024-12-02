@@ -33,7 +33,6 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-rng_TO = Xoshiro(seeds.to)
 
 outdir = @__DIR__() *"/output/new"
 ispath(outdir) || mkpath(outdir)
@@ -52,20 +51,29 @@ params_track = load(track_file, "params_track");
 ustart = ArrayType.(data_track.fields[1].u);
 # get ref trajectories
 dQ_data = data_track.dQ;
-time_series_sampler = RikFlow.MVG_sampler(dQ_data, rng_TO, ArrayType, T);
+
 
 params = (;
     params_track...,
     tsim,
     Δt,
     ArrayType,
-    ustart, 
-    #ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
-    savefreq = 100,
-    time_series_method = time_series_sampler);
+    ustart,
+    savefreq = 100);
 
-data_online = online_sgs(; params...);
-
-
+# Run 10 replicas
+for i in 1:10
+    time_series_sampler = RikFlow.Resampler(dQ_data, Xoshiro(seeds.to+i));
+    #time_series_sampler = RikFlow.MVG_sampler(dQ_data, Xoshiro(seeds.to+i));
+    #ANN_file_name = @__DIR__()*"/../deep_learning/output/trained_models/ANN_tanh_regularized_hist3.jld2"
+    #q_hist = ArrayType(zeros(T, 6, 3))
+    #time_series_sampler = RikFlow.ANN(ANN_file_name, q_hist = q_hist);
+# run the sim
+    @info "Running sim $i out of 10"
+    data_online = online_sgs(; params..., time_series_method=time_series_sampler);
 # Save tracking data
-jldsave("$outdir/data_online_sampling$(typeof(time_series_sampler))_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+    # make dir if not exist
+    folder = "$outdir/$(typeof(time_series_sampler))"
+    ispath(folder) || mkpath(folder)
+    jldsave("$folder/data_online_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim)_replica$(i).jld2"; data_online, params);
+end
