@@ -39,4 +39,33 @@ function get_next_item_timeseries(time_series_method::Resampler)
     return time_series_method.vals[:,index]
 end
 
-export get_next_item_timeseries, Reference_reader, MVG_sampler, Resampler
+struct ANN
+    model
+    ps
+    st
+    scaling
+    q_hist  # history of q values, newest first
+    function ANN(file_name; q_hist = nothing)
+        model, ps, st, scaling = load_ANN(file_name)
+        new(model, ps, st, scaling, q_hist)
+    end
+end
+
+function get_next_item_timeseries(time_series_method::ANN, q_star)
+    if isnothing(time_series_method.q_hist)
+        input = q_star
+    else
+        input = vcat(q_star, time_series_method.q_hist[:])
+    end
+    data = scale_input(input, time_series_method.scaling.in_scaling)
+    pred = Lux.apply(time_series_method.model, data, time_series_method.ps, time_series_method.st)[1]
+    dQ = scale_output(pred, time_series_method.scaling.out_scaling)
+    if !isnothing(time_series_method.q_hist)
+        time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1]
+        time_series_method.q_hist[:,1] .= q_star + dQ
+    end
+    return dQ
+end
+
+
+export get_next_item_timeseries, Reference_reader, MVG_sampler, Resampler, ANN
