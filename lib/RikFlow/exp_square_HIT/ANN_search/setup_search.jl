@@ -1,7 +1,7 @@
 using JLD2
 using DataFrames
 
-fixed_parameters = (track_file = @__DIR__()*"/data_track.jld2",
+fixed_parameters = (track_file = "/data_track.jld2",
                     hist_len = 5,
                     lr = 0.1f0,
                     lambda = 0.1f0,

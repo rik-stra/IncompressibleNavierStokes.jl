@@ -45,8 +45,8 @@ T = Float32
 ArrayType = CuArray
 
 # load reference data
-data_track = load(track_file, "data_track");
-params_track = load(track_file, "params_track");
+data_track = load(@__DIR__()*track_file, "data_track");
+params_track = load(@__DIR__()*track_file, "params_track");
 # get initial condition
 ustart = ArrayType.(data_track.fields[1].u);
 # get ref trajectories

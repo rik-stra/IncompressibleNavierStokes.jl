@@ -36,7 +36,7 @@ else
     save(out_dir*"parameters.jld2", "parameters", (; name, track_file, hist_len, lr, lambda, n_replicas, hidden_size, n_layers, batchsize, normalization))
 end
 
-data = load(track_file, "data_track");
+data = load(@__DIR__()*track_file, "data_track");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 
 loss_function = Lux.MSELoss()
