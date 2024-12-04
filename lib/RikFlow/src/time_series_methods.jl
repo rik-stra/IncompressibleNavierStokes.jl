@@ -45,24 +45,32 @@ struct ANN
     st
     scaling
     q_hist  # history of q values, newest first
+    counter
     function ANN(file_name; q_hist = nothing)
         model, ps, st, scaling = load_ANN(file_name)
-        new(model, ps, st, scaling, q_hist)
+        counter = zeros(Int)
+        new(model, ps, st, scaling, q_hist, counter)
     end
 end
 
 function get_next_item_timeseries(time_series_method::ANN, q_star)
-    if isnothing(time_series_method.q_hist)
+    if !isnothing(time_series_method.q_hist)  # if the NN uses history
+        if time_series_method.counter[] < size(time_series_method.q_hist, 2) # for the first few steps, directly read dQ
+            time_series_method.counter[] += 1
+            dQ = time_series_method.q_hist[:,end]
+        else    # after that, predict dQ  (we now have enough history)
+            input = vcat(q_star, time_series_method.q_hist[:]) 
+            data = scale_input(input, time_series_method.scaling.in_scaling)
+            pred = Lux.apply(time_series_method.model, data, time_series_method.ps, time_series_method.st)[1]
+            dQ = scale_output(pred, time_series_method.scaling.out_scaling)
+        end
+        time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1] # shift history
+        time_series_method.q_hist[:,1] .= q_star + dQ                             # add new q to history
+    else    # if the NN does not use history, predict dQ directly from q_star
         input = q_star
-    else
-        input = vcat(q_star, time_series_method.q_hist[:])
-    end
-    data = scale_input(input, time_series_method.scaling.in_scaling)
-    pred = Lux.apply(time_series_method.model, data, time_series_method.ps, time_series_method.st)[1]
-    dQ = scale_output(pred, time_series_method.scaling.out_scaling)
-    if !isnothing(time_series_method.q_hist)
-        time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1]
-        time_series_method.q_hist[:,1] .= q_star + dQ
+        data = scale_input(input, time_series_method.scaling.in_scaling)
+        pred = Lux.apply(time_series_method.model, data, time_series_method.ps, time_series_method.st)[1]
+        dQ = scale_output(pred, time_series_method.scaling.out_scaling)
     end
     return dQ
 end

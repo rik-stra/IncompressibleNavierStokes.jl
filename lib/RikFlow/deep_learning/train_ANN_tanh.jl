@@ -39,39 +39,49 @@ function create_history(hist_len, q_star, q, dQ)
 end
 
 
-rng = Random.Xoshiro(13)
+
 ## Load data
 filename = @__DIR__()*"/../exp_square_HIT/output/new/data_track_qstar2_dns512_les64_Re2000.0_tsim10.0.jld2"
 data = load(filename, "data_track");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
-
-hist_len = 3
-inputs,outputs = create_history(hist_len, data.q_star[:,1:3000], data.q[:,1:3000], data.dQ[:,1:3000])
-
-
-data_loaders, scaling=create_dataloader(inputs, outputs, 64, rng, normalization =:minmax);
-model, ps, st, model_dict = setup_ANN(6, hist_len, 6, 64, 3, rng, activation_function = tanh);
-model
-
-lr = 0.005f0
+lr = 0.1f0
+lambda = 0.1f0
 loss_function = Lux.MSELoss()
-tstate = Lux.Training.TrainState(model, ps, st, AdamW(eta=lr, lambda=0.1))
-tstate = train_model(tstate, data_loaders, loss_function, 3000);
+hist_len = 10
+inputs,outputs = create_history(hist_len, data.q_star[:,1:3000], data.q[:,1:3000], data.dQ[:,1:3000])
+n_replicas = 1
 
+for k in 1:n_replicas
+    k= 5
+    rng = Random.Xoshiro(13+k)
+    data_loaders, scaling=create_dataloader(inputs, outputs, 64, rng, normalization =:minmax);
+    model, ps, st, model_dict = setup_ANN(6, hist_len, 6, 64, 5, rng, activation_function = tanh);
+    @info model
+
+    tstate = Lux.Training.TrainState(model, ps, st, AdamW(; eta=lr, lambda))
+    tstate, losses = train_model(tstate, data_loaders, loss_function, 3000);
+
+    fname = @__DIR__()*"/output/trained_models/ANN_tanh_5layer_regularized$(lambda)_hist$(hist_len)_repl$(k).jld2"
+    save(fname, "model_dict", model_dict, "parameters", tstate.parameters |> cpu, "states", tstate.states|> cpu, "scaling", scaling, "losses", losses)
+end
+
+
+exit()
 
 ## Plot data
 plot_time_series(data.q_star, qois, "q*")
 plot_time_series(data.dQ, qois, "dQ")
-
+#load model
+k=5 ; lambda = 0.1f0; hist_len = 3
+fname = @__DIR__()*"/output/trained_models/ANN_tanh_5layer_regularized$(lambda)_hist$(hist_len)_repl$(k).jld2"
+model, ps, st, scaling = load_ANN(fname)
 ## Predict
 inputs,outputs = create_history(hist_len, data.q_star[:,:], data.q[:,1:end-1], data.dQ[:,:])
-x = scale_input(inputs, scaling.in_scaling)
-st_ = Lux.testmode(tstate.states)
-y_pred = Lux.apply(tstate.model, dev(x), tstate.parameters, st_)[1]
-y_pred = scale_output(Array(y_pred), scaling.out_scaling)
+x = scale_input(inputs |> dev, scaling.in_scaling)
+st_ = Lux.testmode(st)
+y_pred = Lux.apply(model, x, ps, st_)[1]
+y_pred = scale_output(y_pred, scaling.out_scaling)
 plot_time_series(Array(y_pred), qois, "Predicted dQ", ref = data.dQ)
 
-## Save model
-filename = @__DIR__()*"/output/trained_models/ANN_tanh_regularized_hist3.jld2"
-save(filename, "model_dict", model_dict, "parameters", tstate.parameters |> cpu, "states", tstate.states|> cpu, "scaling", scaling)
+
 

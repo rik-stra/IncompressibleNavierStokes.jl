@@ -85,7 +85,8 @@ function create_dataloader(data_in, data_out , batchsize, rng; normalization = :
 end
 
 function train_model(tstate::Training.TrainState, dataloaders, loss_function, epochs, vjp = AutoZygote())
-    
+    eta = tstate.optimizer.eta
+    losses = (train=[], val=[])
     for epoch in 1:epochs
         test_loss = 0
         i=0
@@ -95,6 +96,7 @@ function train_model(tstate::Training.TrainState, dataloaders, loss_function, ep
             i+=1
         end
         test_loss /= i
+        push!(losses.train, test_loss)
         if epoch % 100 ==1 || epoch == epochs
             st_ = Lux.testmode(tstate.states)
             val_loss = 0
@@ -105,9 +107,17 @@ function train_model(tstate::Training.TrainState, dataloaders, loss_function, ep
                 i+=1
             end
             val_loss /= i
+            push!(losses.val, val_loss)
             @info epoch test_loss val_loss
         end
+        if epoch % 100 == 0
+            if losses.train[end] > losses.train[end-99] && losses.val[end] > losses.val[end-1]
+                eta *= 0.1
+                @info "Reducing learning rate to $eta"
+                Optimisers.adjust!(tstate.optimizer_state; eta)
+            end
+        end
     end
-    return tstate
+    return tstate, losses
 end
 export scale_input, scale_output, setup_ANN, load_ANN, create_dataloader, train_model
