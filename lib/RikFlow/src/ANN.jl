@@ -110,7 +110,7 @@ function train_model(tstate::Training.TrainState, dataloaders, loss_function, ep
             push!(losses.val, val_loss)
             @info epoch test_loss val_loss
         end
-        if epoch % 100 == 0
+        if epoch % 100 == 0 && epoch >= 200
             if losses.train[end] > losses.train[end-99] && losses.val[end] > losses.val[end-1]
                 eta *= 0.1
                 @info "Reducing learning rate to $eta"
