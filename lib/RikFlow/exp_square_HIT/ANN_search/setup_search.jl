@@ -26,3 +26,7 @@ for l in varying_parameters.lambda
 end
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
+
+# read inputs
+inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
+inputs_df = DataFrame(inputs)
