@@ -36,6 +36,9 @@ push!(inputs, (name = "ANN$i", fixed_parameters..., lambda = 0.06f0, hist_len = 
 i += 1
 push!(inputs, (name = "ANN$i", fixed_parameters..., lambda = 0.06f0, hist_len = 50, lr = 0.05f0, n_replicas = 2, hist_var = :q_star))
 
+i += 1
+push!(inputs, (name = "ANN$i", fixed_parameters..., lambda = 0.1f0, hist_len = 20, lr = 0.1f0, n_replicas = 10, hist_var = :q_star))
+
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 
