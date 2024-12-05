@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_name = "ANN1"
+ANN_names = ["ANN1", "ANN2", "ANN3", "ANN4", "ANN5", "ANN6", "ANN8", "ANN9"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -20,6 +20,7 @@ filename = @__DIR__()*"/../output/new/data_no_sgs_dns512_les64_Re2000.0_tsim10.0
 no_sgs_data = stack(load(filename, "data_online").q);
 
 # load replica simulations
+for ANN_name in ANN_names
 n_replicas = 10
 q_rep = stack([load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim10.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas])
 ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
@@ -85,7 +86,7 @@ end
 
 
 # plot dQ trajectories
-dQ_rep = stack([load(@__DIR__()*"/output/ANN1/data_online_dns512_les64_Re2000.0_tsim10.0_replica$(i).jld2", "data_online").dQ for i in 1:n_replicas])
+dQ_rep = stack([load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim10.0_replica$(i).jld2", "data_online").dQ for i in 1:n_replicas])
 filename = @__DIR__()*"/data_track.jld2"
 ref_data = load(filename, "data_track");
 dQ_ref = stack(ref_data.dQ)
@@ -119,7 +120,7 @@ let
 # plot Training loss
 n_replicas = 10
 let
-    losses = [load(@__DIR__()*"/output/ANN1/ANN_repl$(i).jld2", "losses") for i in 1:n_replicas]
+    losses = [load(@__DIR__()*"/output/$(ANN_name)/ANN_repl$(i).jld2", "losses") for i in 1:n_replicas]
     g = Figure(size=(800, 600))
     ax = Axis(g[1,1], xlabel = "Epoch", ylabel = "Loss")
     l1,l2,lb1,lb2 = nothing, nothing, nothing, nothing
@@ -138,4 +139,5 @@ let
     Label(g[0, :], text = "ANN tanh \n hist = $(ANN_parameters.hist_len), lamda_reg = $(ANN_parameters.lambda)", fontsize = 20)
     display(g)
     save(figsfolder*"/training_loss_$(ANN_name)_hist$(ANN_parameters.hist_len)_lamb$(ANN_parameters.lambda).png", g)
+end
 end
