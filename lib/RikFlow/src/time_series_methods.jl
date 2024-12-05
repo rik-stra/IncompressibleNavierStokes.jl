@@ -46,10 +46,11 @@ struct ANN
     scaling
     q_hist  # history of q values, newest first
     counter
+    hist_var
     function ANN(file_name; q_hist = nothing)
-        model, ps, st, scaling = load_ANN(file_name)
+        model, ps, st, scaling, hist_var = load_ANN(file_name)
         counter = zeros(Int)
-        new(model, ps, st, scaling, q_hist, counter)
+        new(model, ps, st, scaling, q_hist, counter, hist_var)
     end
 end
 
@@ -65,7 +66,11 @@ function get_next_item_timeseries(time_series_method::ANN, q_star)
             dQ = scale_output(pred, time_series_method.scaling.out_scaling)
         end
         time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1] # shift history
-        time_series_method.q_hist[:,1] .= q_star + dQ                             # add new q to history
+        if time_series_method.hist_var == :q
+            time_series_method.q_hist[:,1] .= q_star + dQ                             # add new q to history
+        elseif time_series_method.hist_var == :q_star
+            time_series_method.q_hist[:,1] .= q_star
+        end
     else    # if the NN does not use history, predict dQ directly from q_star
         input = q_star
         data = scale_input(input, time_series_method.scaling.in_scaling)

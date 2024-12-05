@@ -40,8 +40,8 @@ function scale_output(x::AbstractArray, scaling)
     return x .* scaling.sigma .+ scaling.mu
 end
 
-function setup_ANN(n_qois, hist_len, out_size, hidden_size, n_layers, rng; activation_function = leakyrelu)
-    model_dict = (; n_qois, hist_len, out_size, hidden_size, n_layers, activation_function)
+function setup_ANN(n_qois, hist_len, out_size, hidden_size, n_layers, rng; activation_function = leakyrelu, hist_var=:q)
+    model_dict = (; n_qois, hist_len, out_size, hidden_size, n_layers, activation_function, hist_var)
     in_size = n_qois *(1+ hist_len)
     if activation_function == leakyrelu
         last_activation = identity
@@ -58,7 +58,7 @@ end
 
 function load_ANN(file_name)
     (model_dict, parameters, states, scaling) = load(file_name, "model_dict", "parameters", "states", "scaling")
-    (; hidden_size, n_layers, n_qois, hist_len, out_size, activation_function) = model_dict
+    (; hidden_size, n_layers, n_qois, hist_len, out_size, activation_function, hist_var) = model_dict
     in_size = n_qois *(1+ hist_len)
     if activation_function == leakyrelu
         last_activation = identity
@@ -71,7 +71,7 @@ function load_ANN(file_name)
     ps = parameters |> dev
     st = states |> dev
     scaling = scaling |> dev
-    return model, ps, st, scaling
+    return model, ps, st, scaling, hist_var
 end
 
 function create_dataloader(data_in, data_out , batchsize, rng; normalization = :normal)

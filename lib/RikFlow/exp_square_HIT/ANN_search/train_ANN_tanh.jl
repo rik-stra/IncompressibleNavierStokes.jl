@@ -26,11 +26,11 @@ model_index = parse(Int, ARGS[1])
 
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
-(; name, track_file, hist_len, lr, lambda, n_replicas, hidden_size, n_layers, batchsize, normalization) = inputs[model_index]
+(; name, track_file, hist_len, hist_var, lr, lambda, n_replicas, hidden_size, n_layers, batchsize, normalization) = inputs[model_index]
 
 out_dir = @__DIR__()*"/output/$(name)/"
 if isdir(out_dir)
-    error("Output directory already exists")
+    error("Output directory already exists: $(out_dir)")
 else
     mkpath(out_dir)
     save(out_dir*"parameters.jld2", "parameters", (; name, track_file, hist_len, lr, lambda, n_replicas, hidden_size, n_layers, batchsize, normalization))
@@ -40,7 +40,11 @@ data = load(@__DIR__()*track_file, "data_track");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 
 loss_function = Lux.MSELoss()
-inputs,outputs = create_history(hist_len, data.q_star[:,1:3000], data.q[:,1:3000], data.dQ[:,1:3000])
+if hist_var == :q
+    inputs,outputs = create_history(hist_len, data.q_star[:,1:3000], data.q[:,1:3000], data.dQ[:,1:3000])
+elseif hist_var == :q_star
+    inputs,outputs = create_history(hist_len, data.q_star[:,2:3000], data.q_star[:,1:3000-1], data.dQ[:,2:3000])
+end
 
 for k in 1:n_replicas
     rng = Random.Xoshiro(13+k)
