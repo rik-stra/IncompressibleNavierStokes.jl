@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["ANN1", "ANN2", "ANN3", "ANN4", "ANN5", "ANN6", "ANN8", "ANN9"]
+ANN_names = ["ANN13"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -24,11 +24,11 @@ for ANN_name in ANN_names
 n_replicas = 10
 q_rep = stack([load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim10.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas])
 ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
-
+hist_var = ANN_parameters.hist_var
 # plot trajectories
 best_runs = []
 for i in 1:n_replicas
-    if q_rep[1,end,i]>500 && q_rep[1,end,i]<1500
+    if q_rep[1,end,i]>500 && q_rep[1,end-50,i]<1650
         push!(best_runs, i)
     end
 end
@@ -57,7 +57,7 @@ end
 Label(g[-1, :], text = "ANN tanh \n hist = $(ANN_parameters.hist_len), lamda_reg = $(ANN_parameters.lambda)", fontsize = 20)
 Legend(g[0,2], [lines[2], lines[3], lines[1], best], ["Reference", "No model", "Online", "best models"], fontsize = 12)
 display(g)
-save(figsfolder*"/trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_lamb$(ANN_parameters.lambda).png", g)
+save(figsfolder*"/trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var)_lamb$(ANN_parameters.lambda).png", g)
 end
 
 # only best runs
@@ -81,7 +81,7 @@ let
     Label(g[-1, :], text = "ANN tanh \n hist = $(ANN_parameters.hist_len), lamda_reg = $(ANN_parameters.lambda)", fontsize = 20)
     Legend(g[0,2], [lines[1], lines[2], best], ["Reference", "No model", "Online best"], fontsize = 12)
     display(g)
-    save(figsfolder*"/best_trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_lamb$(ANN_parameters.lambda).png", g)
+    save(figsfolder*"/best_trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var)_lamb$(ANN_parameters.lambda).png", g)
 end
 
 
@@ -114,7 +114,7 @@ let
     Label(g[-1, :], text = "ANN tanh \n hist = $(ANN_parameters.hist_len), lamda_reg = $(ANN_parameters.lambda)", fontsize = 20)
     Legend(g[0,2], [lines[2], lines[1], best], ["Reference", "Online", "best models"], fontsize = 12)
     display(g)
-    save(figsfolder*"/dQ_trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_lamb$(ANN_parameters.lambda).png", g)
+    save(figsfolder*"/dQ_trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var)_lamb$(ANN_parameters.lambda).png", g)
     end
 
 # plot Training loss
@@ -138,6 +138,6 @@ let
     
     Label(g[0, :], text = "ANN tanh \n hist = $(ANN_parameters.hist_len), lamda_reg = $(ANN_parameters.lambda)", fontsize = 20)
     display(g)
-    save(figsfolder*"/training_loss_$(ANN_name)_hist$(ANN_parameters.hist_len)_lamb$(ANN_parameters.lambda).png", g)
+    save(figsfolder*"/training_loss_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var)_lamb$(ANN_parameters.lambda).png", g)
 end
 end
