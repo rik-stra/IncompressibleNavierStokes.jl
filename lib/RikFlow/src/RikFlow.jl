@@ -290,7 +290,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
     elseif to_setup.to_mode == :ONLINE
         if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]
             dQ = get_next_item_timeseries(to_setup.time_series_method)
-        elseif typeof(to_setup.time_series_method) == ANN
+        elseif typeof(to_setup.time_series_method) in [ANN, LinReg]
             q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
             dQ = get_next_item_timeseries(to_setup.time_series_method, q_star)
         end
@@ -313,7 +313,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
     src_Q = reshape(sum(-conj(cij).*ip, dims = 1),:)
     tau = dQ./src_Q
     to_setup.outputs.tau[:,stepper.n] = real(tau)
- 
+
     # move to GPU
     cij = setup.ArrayType(cij)
     tau = setup.ArrayType(tau)
