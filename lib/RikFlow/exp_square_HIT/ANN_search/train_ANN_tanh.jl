@@ -49,7 +49,7 @@ end
 for k in 1:n_replicas
     rng = Random.Xoshiro(13+k)
     data_loaders, scaling=create_dataloader(inputs, outputs, batchsize, rng; normalization);
-    model, ps, st, model_dict = setup_ANN(6, hist_len, hist_var, 6, hidden_size, n_layers, rng, activation_function = tanh);
+    model, ps, st, model_dict = setup_ANN(6, hist_len, 6, hidden_size, n_layers, rng, activation_function = tanh, hist_var=hist_var);
     @info model
     tstate = Lux.Training.TrainState(model, ps, st, AdamW(; eta=lr, lambda))
     tstate, losses = train_model(tstate, data_loaders, loss_function, 3000);
