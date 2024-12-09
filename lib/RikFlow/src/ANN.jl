@@ -26,8 +26,15 @@ function _normalise(x; normalization= :normal, dims=ndims(x), ϵ=1e-6)
     elseif normalization == :minmax
         min = minimum(x, dims=dims)
         max = maximum(x, dims=dims)
-        mu = 0.5(min+max)
-        sigma = 0.5(max-min)
+        mu = convert(eltype(x), 0.5)*(min+max)
+        sigma = convert(eltype(x), 0.5)*(max-min)
+    elseif normalization == :standardise
+        ϵ = convert(eltype(x), ϵ)
+        sigma = std(x, dims=dims, corrected=false).+ ϵ
+        mu = convert(eltype(x),0)
+    elseif normalization == :Id
+        mu = convert(eltype(x),0)
+        sigma = convert(eltype(x),1)
     end
     return (x .- mu) ./ (sigma), (;mu,sigma)
 end
