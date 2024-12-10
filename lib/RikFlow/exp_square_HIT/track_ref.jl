@@ -57,13 +57,12 @@ params_track = (;
     params_train...,
     tsim,
     Δt,
-    ArrayType,
-    ustart, 
+    ArrayType, 
     ref_reader,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 100);
 
-data_track = track_ref(; params_track...);
+data_track = track_ref(; params_track..., ustart);
 
 # check tracking
 n_steps = size(data_track.q, 2)

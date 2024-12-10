@@ -16,10 +16,10 @@ using CUDA
 
 n_dns = Int(512)
 n_les = Int(64)
-Re = Float32(2_000)
+Re = Float32(2_000);
 ############################
-Δt = Float32(2.5e-3)
-tsim = Float32(10)
+Δt = Float32(2.5e-3);
+tsim = Float32(10);
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -42,7 +42,7 @@ inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 out_dir = @__DIR__()*"/output/$(name)/"
 # For running on a CUDA compatible GPU
 T = Float32
-ArrayType = Array
+ArrayType = CuArray
 
 # load reference data
 data_track = load(@__DIR__()*track_file, "data_track");
@@ -63,7 +63,6 @@ params = (;
 # Run 10 replicas
 for i in 1:n_replicas
     LinReg_file_name = out_dir*"LinReg.jld2"
-    hist_len = load(LinReg_file_name, "hist_len")
     if hist_len == 0
         q_hist = nothing
     else

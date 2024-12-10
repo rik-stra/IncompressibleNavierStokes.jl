@@ -128,7 +128,6 @@ function create_ref_data(;
     # Build TO operators
     to_setup_les = [
         RikFlow.TO_Setup(; qois, 
-        qoi_refs_location= "none", 
         to_mode = :CREATE_REF, 
         ArrayType, 
         setup = les[i], 

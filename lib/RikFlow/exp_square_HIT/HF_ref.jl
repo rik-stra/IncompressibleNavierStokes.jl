@@ -78,13 +78,12 @@ get_params(nlesscalar) = (;
     ndns = (n -> (n, n, n))(n_dns), # DNS resolution
     filters = (FaceAverage(),),
     ArrayType,
-    ustart,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou ),
 )
 
 params_train = (; get_params([n_les])..., savefreq = 10, plotfreq = 1000);
 t3 = time()
-data_train = create_ref_data(; params_train...);
+data_train = create_ref_data(; params_train..., ustart);
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data
