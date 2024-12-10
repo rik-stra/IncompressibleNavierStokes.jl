@@ -8,8 +8,7 @@ using JLD2
 using Random
 using CairoMakie
 using Distributions
-ArrayType = Array
-T = Float32
+using LinearAlgebra
 
 function create_history(hist_len, q_star, q, dQ)
     if hist_len == 0
@@ -21,10 +20,10 @@ end
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-
+#model_index =1
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
-(; name, track_file, hist_len, hist_var, normalization) = inputs[model_index]
+(; name, track_file, hist_len, hist_var, n_replicas, normalization) = inputs[model_index]
 
 out_dir = @__DIR__()*"/output/$(name)/"
 if isdir(out_dir)
@@ -51,11 +50,13 @@ inputs_scaled, in_scaling = RikFlow._normalise(inputs, normalization = normaliza
 outputs_scaled, out_scaling = RikFlow._normalise(outputs, normalization = normalization)
 scaling = (;in_scaling, out_scaling)
 
-inp = cat(inputs_scaled',ones(T, (size(inputs_scaled,2),1)),dims=2) # add a bias term
-c = inp \ outputs_scaled' #For rectangular A the result is the minimum-norm least squares solution computed by a pivoted QR factorization of A and a rank estimate of A based on the R factor
+inp = cat(inputs_scaled',ones(eltype(inputs_scaled), (size(inputs_scaled,2),1)),dims=2) # add a bias term
+c = inp \ outputs_scaled' 
+#For rectangular A the result is the minimum-norm least squares solution computed by a pivoted QR factorization of A and a rank estimate of A based on the R factor
 
 preds = inp * c
 stoch_part = outputs_scaled - preds'
+loss  = norm(preds)
 # fit MVG
 stoch_distr = fit(MvNormal, stoch_part .|> Float64)
 
@@ -74,7 +75,7 @@ inputs_test_sc = RikFlow.scale_input(inputs_test, in_scaling)
 outputs_test_sc = RikFlow.scale_input(outputs_test, out_scaling)
 
 
-inp = cat(inputs_test_sc',ones(T, (size(inputs_test_sc,2),1)),dims=2)
+inp = cat(inputs_test_sc',ones(eltype(inputs_test_sc), (size(inputs_test_sc,2),1)),dims=2)
 rng = Xoshiro(12)
 rand_part = rand(rng, stoch_distr, size(inputs_test_sc,2))'
 preds = inp * c + rand_part

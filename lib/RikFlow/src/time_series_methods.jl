@@ -90,6 +90,8 @@ struct LinReg
     rng
     function LinReg(file_name, rng; q_hist = nothing)
         c, stoch_distr, scaling, hist_var = load(file_name, "c", "stoch_distr", "scaling", "hist_var")
+        scaling = scaling |> dev
+        c= c |> dev
         counter = zeros(Int)
         new(c, stoch_distr, scaling, q_hist, counter, hist_var, rng)
     end
@@ -101,9 +103,10 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             time_series_method.counter[] += 1
             dQ = time_series_method.q_hist[:,end]
         else    # after that, predict dQ  (we now have enough history)
-            input = vcat(q_star, time_series_method.q_hist[:]) 
-            data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(typeof(input[1,1]), (1,1)))
-            pred =  time_series_method.c * data .+ rand(time_series_method.rng, time_series_method.stoch_distr)
+            input = vcat(q_star, time_series_method.q_hist[:])
+            data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
+            stoch = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
+            pred =  time_series_method.c * data .+ stoch
             dQ = scale_output(pred, time_series_method.scaling.out_scaling)[:]
         end
         time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1] # shift history
@@ -114,8 +117,9 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
         end
     else    # if the model does not use history, predict dQ directly from q_star
         input = q_star
-        data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(typeof(input[1,1]), (1,1)))
-        pred = time_series_method.c * data .+ rand(time_series_method.rng, time_series_method.stoch_distr)
+        data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
+        stoch = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
+        pred = time_series_method.c * data .+ stoch
         dQ = scale_output(pred, time_series_method.scaling.out_scaling)[:]
     end
     return dQ
