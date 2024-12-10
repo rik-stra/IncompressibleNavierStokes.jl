@@ -144,10 +144,11 @@ end
 
 function get_masks_and_partials(QoIs, setup, ArrayType)
     N = setup.grid.Np
+    T = typeof(setup.Re)
     xlims = setup.grid.xlims
-    k = fftfreq(N[1], N[1])./(xlims[1][2] - xlims[1][1])
-    l = fftfreq(N[2], N[2])./(xlims[2][2] - xlims[2][1])
-    m = fftfreq(N[3], N[3])./(xlims[3][2] - xlims[3][1])
+    k = convert.(T,fftfreq(N[1], N[1])./(xlims[1][2] - xlims[1][1]))
+    l = convert.(T,fftfreq(N[2], N[2])./(xlims[2][2] - xlims[2][1]))
+    m = convert.(T,fftfreq(N[3], N[3])./(xlims[3][2] - xlims[3][1]))
     # create a list of bolean arrays
     masks_list = [Array{Bool, length(N)}(undef,N) for i in 1:length(QoIs)]
     #println("masks_list: ", typeof(masks_list))
@@ -161,9 +162,9 @@ function get_masks_and_partials(QoIs, setup, ArrayType)
         end
     end
     masks_list = ArrayType.(masks_list)
-    ∂ = [2*pi.*reshape(k,(:,1,1))*1im,
-    2*pi.*reshape(l,(1,:,1))*1im,
-    2*pi.*reshape(m,(1,1,:))*1im]
+    ∂ = [convert(T,2*pi).*reshape(k,(:,1,1))*1im,
+    convert(T,2*pi).*reshape(l,(1,:,1))*1im,
+    convert(T,2*pi).*reshape(m,(1,1,:))*1im]
     ∂ = ArrayType.(∂)
     
     return masks_list, ∂
@@ -209,7 +210,7 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
             error("QoI not recognized")
         end 
     end
-    q=ArrayType(q)
+    
     return q
 end
 
@@ -259,7 +260,8 @@ Create processor that stores the QoI values every `nupdate` time step.
 """
 qoisaver(; setup, to_setup, nupdate = 1) =
     processor() do state
-        qoi_hist = fill(zeros(0), 0)
+        T = typeof(setup.Re)
+        qoi_hist = fill(zeros(T,0), 0)
         on(state) do state
             state.n % nupdate == 0 || return
             u_hat = get_u_hat(state.u, setup)
@@ -291,20 +293,20 @@ function to_sgs_term(u, setup, to_setup, stepper)
         if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]
             dQ = get_next_item_timeseries(to_setup.time_series_method)
         elseif typeof(to_setup.time_series_method) in [ANN, LinReg]
-            q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
+            q_star = setup.ArrayType(compute_QoI(u_hat, w_hat, to_setup,setup))
             dQ = get_next_item_timeseries(to_setup.time_series_method, q_star)
         end
         
     end
     dQ = Array(dQ)
-    #println("dQ: ", dQ)
     to_setup.outputs.dQ[:,stepper.n] = dQ
-    
+
     # get V_i
     vi = [to_setup.V_i[i](u_hat, w_hat) for i in 1:to_setup.N_qois]
     vi = stack(vi, dims=5)
     # get T_i
     ti = copy(vi)
+
 
     # compute innerproducts (returns ip on CPU)
     ip = innerpoducts(vi,ti,setup)
@@ -313,7 +315,6 @@ function to_sgs_term(u, setup, to_setup, stepper)
     src_Q = reshape(sum(-conj(cij).*ip, dims = 1),:)
     tau = dQ./src_Q
     to_setup.outputs.tau[:,stepper.n] = real(tau)
-
     # move to GPU
     cij = setup.ArrayType(cij)
     tau = setup.ArrayType(tau)
