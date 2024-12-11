@@ -79,7 +79,7 @@ end
 ### Track ref ###################################################################
 # We now run track_ref.jl to track the reference trajectories of the qois
 #################################################################################
-fname = @__DIR__()*"/output/new/data_track_qstar2_dns512_les64_Re2000.0_tsim10.0.jld2"
+fname = @__DIR__()*"/output/new/data_track_dns512_les64_Re2000.0_tsim10.0.jld2"
 track_data = load(fname, "data_track");
 # plot dQ data
 #trajectories
@@ -141,6 +141,22 @@ let
     save(fig_folder*"/dQ_hist_overtime_dns512_les64_Re2000.0_tsim10.png", g)
 end
 
+## plot corrected trajectories
+let 
+    interval = 550:660
+    g = Figure()
+    axs = [Axis(g[i ÷ 2, i%2], 
+           title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        for i in 0:size(track_data.q, 1)-1]
+    for i in 1:size(track_data.q, 1)
+        lines!(axs[i], q_ref[i, interval], label = "ref", color = :black)
+        lines!(axs[i], track_data.q_star[i, interval], label = "*")
+        lines!(axs[i], track_data.q[i, interval], label = "corrected")
+    end
+    axislegend(position = :rt)
+    display(g)
+    
+end
 
 ### no SGS ###
 fname = @__DIR__()*"/output/new/data_no_sgs_dns512_les64_Re2000.0_tsim10.0.jld2"
