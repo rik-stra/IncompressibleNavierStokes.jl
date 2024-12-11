@@ -267,6 +267,10 @@ qoisaver(; setup, to_setup, nupdate = 1) =
             u_hat = get_u_hat(state.u, setup)
             w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
             q = compute_QoI(u_hat, w_hat, to_setup,setup)
+            if any(q .> 1f5)
+                @warn "Unreasonable large QoI at n = $(state.n)"
+                setup.nans_detected[] = true
+            end
             push!(qoi_hist, q)
         end
         state[] = state[]  # invokes all processors on initial state!

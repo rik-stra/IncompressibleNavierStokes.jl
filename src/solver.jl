@@ -97,6 +97,11 @@ function solve_unsteady(;
 
             # Process iteration results with each processor
             state[] = get_state(stepper)
+            
+            if setup.nans_detected[]
+                @warn "NaNs detected in the solution. Stopping the simulation."
+                break
+            end
         end
     end
 

@@ -25,6 +25,7 @@ function Setup(;
         T = eltype(x[1]),
         workgroupsize,
         temperature,
+        nans_detected = zeros(Bool),
     )
     if !isnothing(ou_bodyforce)  # Calculate OU body force
         ou_setup = OU_setup(; ou_bodyforce... , setup)
