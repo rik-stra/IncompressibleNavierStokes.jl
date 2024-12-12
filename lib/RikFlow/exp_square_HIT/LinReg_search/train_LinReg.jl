@@ -66,19 +66,23 @@ exit()
 
 
 ## test the model
+dir = @__DIR__()*"/output/LinReg9/"
+model = load(dir*"LinReg.jld2")
+hist_var = model["hist_var"]
+#hist_var = :q
 if hist_var == :q
-    inputs_test,outputs_test = create_history(hist_len, data.q_star[:,1:4000], data.q[:,1:4000], data.dQ[:,1:4000])
+    inputs_test,outputs_test = create_history(model["hist_len"], data.q_star[:,1:4000], data.q[:,1:4000], data.dQ[:,1:4000])
 elseif hist_var == :q_star
-    inputs_test,outputs_test = create_history(hist_len, data.q_star[:,2:4000], data.q_star[:,1:4000-1], data.dQ[:,2:4000])
+    inputs_test,outputs_test = create_history(model["hist_len"], data.q_star[:,2:4000], data.q_star[:,1:4000-1], data.dQ[:,2:4000])
 end
-inputs_test_sc = RikFlow.scale_input(inputs_test, in_scaling)
-outputs_test_sc = RikFlow.scale_input(outputs_test, out_scaling)
+inputs_test_sc = RikFlow.scale_input(inputs_test, model["scaling"].in_scaling)
+outputs_test_sc = RikFlow.scale_input(outputs_test, model["scaling"].out_scaling)
 
 
 inp = cat(inputs_test_sc',ones(eltype(inputs_test_sc), (size(inputs_test_sc,2),1)),dims=2)
 rng = Xoshiro(12)
-rand_part = rand(rng, stoch_distr, size(inputs_test_sc,2))'
-preds = inp * c + rand_part
+rand_part = rand(rng, model["stoch_distr"], size(inputs_test_sc,2))'
+preds = model["c"] * inp' + rand_part'
 
 
 function plot_time_series(data, qois, title; ref = nothing)
@@ -98,7 +102,7 @@ function plot_time_series(data, qois, title; ref = nothing)
     display(g)
 end
 
-plot_time_series(preds', qois, "preds", ref = outputs_test_sc)
+plot_time_series(preds, qois, "preds", ref = outputs_test_sc)
 plot_time_series(rand_part', qois, "stoch_part", ref = stoch_part)
 
 # plot original time series

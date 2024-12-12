@@ -18,7 +18,8 @@ for hv in varying_parameters.hist_var
         push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = h, hist_var = hv))
     end
 end
-
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 100, hist_var = :q))
 
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
