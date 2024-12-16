@@ -2,6 +2,7 @@
 localdev = haskey(ENV, "LOCALDEV")
 
 # Get access to example dependencies
+# Those are required for running the examples and generating output
 push!(LOAD_PATH, joinpath(@__DIR__, "..", "examples"))
 
 using IncompressibleNavierStokes
@@ -47,21 +48,26 @@ examples = [
     (true, "examples/RayleighTaylor2D"),
     (false, "examples/RayleighTaylor3D"),
 
-    # Neural closure models
-    (false, "lib/PaperDC/prioranalysis"),
-    (false, "lib/PaperDC/postanalysis"),
-    (false, "lib/SymmetryClosure/symmetryanalysis"),
+    # # Neural closure models
+    # (false, "lib/PaperDC/prioranalysis"),
+    # (false, "lib/PaperDC/postanalysis"),
+    # (false, "lib/SymmetryClosure/symmetryanalysis"),
 ]
 
 # Convert scripts to executable markdown files
 output = "examples/generated"
 outputdir = joinpath(@__DIR__, "src", output)
 ## rm(outputdir; recursive = true)
+scriptdir = mktempdir()
 for (run, name) in examples
     inputfile = joinpath(@__DIR__, "..", name * ".jl")
+    script = Literate.script(inputfile, scriptdir; config = Dict("credit" => false))
+    code = strip(read(script, String))
+    codepair = "CODE_CONTENT" => code
+    replacefunc(pairs...) = content -> replace(content, pairs...)
     if run
         # With code execution blocks
-        Literate.markdown(inputfile, outputdir)
+        Literate.markdown(inputfile, outputdir; postprocess = replacefunc(codepair))
     else
         # Turn off code execution.
         # Note: Literate has a `documenter = false` option, but this would also remove
@@ -73,7 +79,7 @@ for (run, name) in examples
             preprocess = content ->
                 "# *Note: Output is not generated for this example (to save resources on GitHub).*\n\n" *
                 content,
-            postprocess = content -> replace(content, r"@example.*" => "julia"),
+            postprocess = replacefunc(codepair, r"@example.*" => "julia"),
         )
     end
 end
@@ -83,10 +89,13 @@ vitepress_kwargs = localdev ? (;
     build_vitepress = false
 ) : (;)
 
+# There is an issue with linking to other MD pages:
+# https://github.com/LuxDL/DocumenterVitepress.jl/issues/172
 makedocs(;
     # draft = true,
     # clean = !localdev,
     modules = [IncompressibleNavierStokes, NeuralClosure],
+    # warnonly = true, # Reexporting KernelAbstractions.CPU fails otherwise
     plugins = [bib],
     authors = "Syver Døving Agdestein, Benjamin Sanderse, and contributors",
     repo = Remotes.GitHub("agdestein", "IncompressibleNavierStokes.jl"),

@@ -1,6 +1,6 @@
 # Neural closure models
 
-!!! note "`NeuralClorusure`"
+!!! note "`NeuralClosure`"
     These features are experimental, and require cloning
     IncompressibleNavierStokes from GitHub:
     ```sh
@@ -102,5 +102,5 @@ Pages = ["cnn.jl", "groupconv.jl", "fno.jl"]
 
 ```@autodocs
 Modules = [NeuralClosure]
-Pages = ["create_les_data.jl"]
+Pages = ["data_generation.jl"]
 ```

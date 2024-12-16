@@ -10,14 +10,18 @@ $(EXPORTS)
 module IncompressibleNavierStokes
 
 using Adapt
+using Atomix: @atomic
 using ChainRulesCore
 using DocStringExtensions
 using FFTW
+using EnzymeCore
+using EnzymeCore.EnzymeRules
 using IterativeSolvers
 using KernelAbstractions
+using KernelAbstractions.Extras.LoopInfo: @unroll
 using LinearAlgebra
-using Makie
 using NNlib
+using Observables
 using PrecompileTools
 using Printf
 using Random
@@ -54,6 +58,12 @@ import cuTENSOR
 "$LICENSE"
 license = "MIT"
 
+# We are reexporting KernelAbstractions.CPU, but
+# Documenter cannot find the docstring and complains.
+# Reapply the docstring here to keep Documenter happy.
+s = @doc(KernelAbstractions.CPU)
+@doc s.text[1] KernelAbstractions.CPU
+
 # # Easily retrieve value from Val
 # (::Val{x})() where {x} = x
 
@@ -63,9 +73,12 @@ include("grid.jl")
 include("setup.jl")
 include("pressure.jl")
 include("operators.jl")
+include("eddyviscosity.jl")
+include("tensorbasis.jl")
 include("matrices.jl")
 include("initializers.jl")
 include("processors.jl")
+include("sciml.jl")
 include("ouforcer.jl")
 include("solver.jl")
 include("utils.jl")
@@ -75,8 +88,6 @@ include("utils.jl")
 include("time_steppers/methods.jl")
 include("time_steppers/time_stepper_caches.jl")
 include("time_steppers/step.jl")
-include("time_steppers/isexplicit.jl")
-include("time_steppers/lambda_max.jl")
 include("time_steppers/RKMethods.jl")
 
 # Precompile workflow
@@ -86,40 +97,44 @@ include("precompile.jl")
 export PeriodicBC, DirichletBC, SymmetricBC, PressureBC
 
 # Processors
-export processor, timelogger, vtk_writer, fieldsaver, realtimeplotter, animator
+export processor,
+    timelogger,
+    vtk_writer,
+    observefield,
+    observespectrum,
+    fieldsaver,
+    realtimeplotter,
+    animator
 export fieldplot, energy_history_plot, energy_spectrum_plot, enstrophy_spectrum_plot
 
 # Setup
-export Setup, temperature_equation, scalarfield, vectorfield
+export Setup, temperature_equation
+export CPU
 
 # 1D grids
 export stretched_grid, cosine_grid, tanh_grid
 
 # Pressure solvers
-export default_psolver,
-    psolver_direct,
-    psolver_cg,
-    psolver_cg_matrix,
-    psolver_spectral,
-    psolver_spectral_lowmemory
+export default_psolver, psolver_direct, psolver_cg, psolver_cg_matrix, psolver_spectral
 
 # Solvers
-export solve_unsteady
+export solve_unsteady, timestep, create_stepper
 
 # Field generation
-export velocityfield, temperaturefield, random_field
+export scalarfield, vectorfield, velocityfield, temperaturefield, random_field
 
 # Utils
-export plotgrid, save_vtk
+export getoffset, splitseed, plotgrid, save_vtk, get_lims
 
 # ODE methods
-export AdamsBashforthCrankNicolsonMethod, OneLegMethod, RKMethods
+export AdamsBashforthCrankNicolsonMethod, OneLegMethod, RKMethods, LMWray3
 
 # Operators
 export apply_bc_u,
     apply_bc_p,
     apply_bc_temp,
     applybodyforce,
+    applypressure,
     convection_diffusion_temp,
     convection,
     diffusion,
@@ -133,17 +148,33 @@ export apply_bc_u,
     interpolate_u_p,
     interpolate_ω_p,
     laplacian,
-    laplacian_mat,
     momentum,
     poisson,
+    pressure,
     pressuregradient,
     project,
     scalewithvolume,
     smagorinsky_closure,
-    tensorbasis,
     total_kinetic_energy,
     vorticity,
     Dfield,
     Qfield
+
+export tensorbasis
+
+# Matrices
+export bc_u_mat,
+    bc_p_mat,
+    bc_temp_mat,
+    divergence_mat,
+    pressuregradient_mat,
+    laplacian_mat,
+    diffusion_mat,
+    volume_mat,
+    pad_vectorfield_mat,
+    pad_scalarfield_mat
+
+# SciML operations
+export create_right_hand_side, right_hand_side!
 
 end

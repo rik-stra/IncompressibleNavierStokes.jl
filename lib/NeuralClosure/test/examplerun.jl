@@ -1,38 +1,42 @@
 @testitem "Example run" begin
     using CairoMakie
     using IncompressibleNavierStokes
+    using NeuralClosure
     using LinearAlgebra
     using Optimisers
     using Random
 
     # Parameters
-    rng = Xoshiro(123)
     params = (;
         D = 2,
+        lims = (0.0, 1.0),
         Re = 1e3,
         tburn = 5e-2,
         tsim = 0.5,
-        Δt = 5e-3,
-        nles = [(16, 16), (32, 32)],
-        ndns = (32, 32),
-        filters = (FaceAverage(),),
-        create_psolver = psolver_spectral,
-        icfunc = (setup, psolver, rng) ->
-            random_field(setup, zero(eltype(setup.grid.x[1])); kp = 20, psolver, rng),
-        rng,
-        savefreq = 1,
+        savefreq = 2,
+        ndns = 32,
+        nles = [16, 32],
+        filters = (FaceAverage(), VolumeAverage()),
     )
 
-    data = [create_les_data(; params...) for _ = 1:3]
+    data =
+        stack(seed -> create_les_data(; params..., rng = Xoshiro(seed)), splitseed(123, 3))
 
     # Build LES setups and assemble operators
-    setups = map(params.nles) do nles
-        x = ntuple(α -> LinRange(0.0, 1.0, nles[α] + 1), params.D)
-        Setup(; x, params.Re)
-    end
+    setups = map(
+        nles -> Setup(;
+            x = ntuple(α -> range(params.lims..., nles + 1), params.D),
+            params.Re,
+        ),
+        params.nles,
+    )
 
     # Create input/output arrays for a-priori training (ubar vs c)
-    io = create_io_arrays(data, setups)
+    io = map(
+        Iterators.product(eachindex(params.nles), eachindex(params.filters)),
+    ) do (igrid, ifil)
+        create_io_arrays(data[igrid, ifil, :], setups[igrid])
+    end
 
     m_cnn = let
         rng = Xoshiro(123)
@@ -69,29 +73,28 @@
     # A-priori training
     let
         rng = Xoshiro(123)
-        ig = 1
+        sample = io[1]
         for (im, m) in enumerate(models)
-            d = create_dataloader_prior(io[ig]; batchsize = 10, rng)
+            dataloader = create_dataloader_prior(sample; batchsize = 10)
             θ = m.θ₀
-            loss = create_loss_prior(mean_squared_error, m.closure)
+            loss = create_loss_prior(m.closure)
             opt = Adam(1.0e-3)
             optstate = Optimisers.setup(opt, θ)
-            it = rand(rng, 1:size(io[ig].u, 4), 5)
-            validset = map(v -> v[:, :, :, it], io[ig])
+            it = rand(rng, 1:size(sample.u, 4), 5)
+            validset = map(v -> v[:, :, :, it], sample)
             (; callbackstate, callback) = create_callback(
                 create_relerr_prior(m.closure, validset...);
                 θ,
                 displayref = false,
                 displayfig = false,
-                display_each_iteration = false, # Set to `true` if using CairoMakie
+                displayupdates = false, # Set to `true` if using CairoMakie
+                nupdate = 1,
             )
-            (; optstate, θ, callbackstate) = train(
-                [d],
+            (; trainstate, callbackstate) = train(;
+                dataloader,
                 loss,
-                optstate,
-                θ;
+                trainstate = (; optstate, θ, rng),
                 niter = 10,
-                ncallback = 1,
                 callbackstate,
                 callback,
             )
@@ -101,38 +104,48 @@
     # A-posteriori training
     let
         rng = Random.Xoshiro(123)
-        ig = 1
-        for (im, m) in enumerate(models)
+        ig, ifil = 1, 1
+        for m in models
             setup = setups[ig]
             psolver = psolver_spectral(setup)
-            loss = create_loss_post(; setup, psolver, m.closure, nupdate = 1)
-            snaps = [(; u = d.data[ig].u, d.t) for d in data]
-            d = create_dataloader_post(snaps; nunroll = 5, rng)
-            θ = copy(m.θ₀)
+            loss = create_loss_post(;
+                setup,
+                psolver,
+                method = RKMethods.RK44(),
+                m.closure,
+                nsubstep = 1,
+            )
+            dataloader = create_dataloader_post(
+                map(d -> (; d.u, d.t), data[ig, ifil, :]);
+                nunroll = 5,
+                ntrajectory = 2,
+            )
+            θ = m.θ₀
             opt = Adam(1.0e-3)
             optstate = Optimisers.setup(opt, θ)
+            d = data[ig, ifil, 1]
             it = 1:5
-            snaps = (; u = data[1].data[ig].u[it], t = data[1].t[it])
+            snap = (; u = selectdim(d.u, ndims(d.u), it), t = d.t[it])
             (; callbackstate, callback) = create_callback(
                 create_relerr_post(;
-                    data = snaps,
+                    data = snap,
                     setup,
                     psolver,
+                    method = RKMethods.RK44(),
                     closure_model = wrappedclosure(m.closure, setup),
-                    nupdate = 2,
+                    nsubstep = 2,
                 );
                 θ,
                 displayref = false,
                 displayfig = false,
-                display_each_iteration = false, # Set to `true` if using CairoMakie
+                displayupdates = false, # Set to `true` if using CairoMakie
+                nupdate = 1,
             )
-            (; optstate, θ, callbackstate) = train(
-                [d],
+            (; trainstate, callbackstate) = train(;
+                dataloader,
                 loss,
-                optstate,
-                θ;
+                trainstate = (; optstate, θ, rng),
                 niter = 3,
-                ncallback = 1,
                 callbackstate,
                 callback,
             )
@@ -154,19 +167,20 @@
     # Compute a-posteriori errors
     e_post = let
         e = zeros(length(models))
-        ig = 1
+        ig, ifil, itraj = 1, 1, 1
         setup = setups[ig]
         psolver = psolver_spectral(setup)
+        traj = data[ig, ifil, itraj]
         it = 1:5
-        snaps = (; u = data[1].data[ig].u[it], t = data[1].t[it])
-        nupdate = 1
+        snaps = (; u = selectdim(traj.u, ndims(traj.u), it), t = traj.t[it])
         for (im, m) in enumerate(models)
             err = create_relerr_post(;
                 data = snaps,
                 setup,
                 psolver,
+                method = RKMethods.RK44(),
                 closure_model = wrappedclosure(m.closure, setup),
-                nupdate,
+                nsubstep = 1,
             )
             e[im] = err(m.θ₀)
         end
@@ -176,11 +190,11 @@
     # A-priori symmetry errors
     e_symm_prior = let
         e = zeros(length(models))
-        ig = 1
+        ig, ifil, itraj = 1, 1, 1
         for (im, m) in enumerate(models)
             setup = setups[ig]
             setup = (; setup..., closure_model = wrappedclosure(m.closure, setup))
-            err = create_relerr_symmetry_prior(; u = data[1].data[ig].u, setup)
+            err = create_relerr_symmetry_prior(; u = data[ig, ifil, itraj].u, setup)
             e[im] = err(m.θ₀)
         end
         e
@@ -189,16 +203,16 @@
     # A-posteriori symmetry errors
     e_symm_post = let
         e = zeros(length(models))
-        ig = 1
+        ig, ifil, itraj = 1, 1, 1
         for (im, m) in enumerate(models)
             setup = setups[ig]
             setup = (; setup..., closure_model = wrappedclosure(m.closure, setup))
-            # setup = (; setup..., closure_model = wrappedclosure(m.closure, setup))
+            traj = data[ig, ifil, itraj]
             err = create_relerr_symmetry_post(;
-                u = data[1].data[ig].u[1],
+                u = selectdim(traj.u, ndims(traj.u), 1),
                 setup,
                 psolver = psolver_spectral(setup),
-                Δt = (data[1].t[2] - data[1].t[1]),
+                Δt = (traj.t[2] - traj.t[1]),
                 nstep = 5,
                 g = 1,
             )

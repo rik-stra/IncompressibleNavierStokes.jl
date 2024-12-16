@@ -71,7 +71,7 @@ seeds = (;
 # Consider reducing the sizes of DNS, LES, and CNN layers if
 # you want to test run on a laptop.
 T = Float32
-ArrayType = Array
+backend = CPU()
 device = identity
 clean() = nothing
 
@@ -79,7 +79,7 @@ clean() = nothing
 using LuxCUDA
 using CUDA;
 T = Float32;
-ArrayType = CuArray;
+backend = CUDABackend();
 CUDA.allowscalar(false);
 device = x -> adapt(CuArray, x)
 clean() = (GC.gc(); CUDA.reclaim())
@@ -107,7 +107,7 @@ get_params(nlesscalar) = (;
     ndns = (n -> (n, n))(4096), # DNS resolution
     ## ndns = (n -> (n, n))(1024), # DNS resolution
     filters = (FaceAverage(),),
-    ArrayType,
+    backend,
     create_psolver = psolver_spectral,
     icfunc = (setup, psolver, rng) ->
         random_field(setup, zero(eltype(setup.grid.x[1])); kp = 20, psolver, rng),
@@ -153,7 +153,7 @@ getsetups(params) =
         Setup(;
             x = ntuple(α -> LinRange(T(0), T(1), nles[α] + 1), params.D),
             params.Re,
-            params.ArrayType,
+            params.backend,
         )
     end
 
@@ -290,13 +290,13 @@ end
 # Train
 dotrain = false
 dotrain && let
-    rng = Xoshiro(seeds.training)
     for (im, m) in enumerate(models), ig = 1:length(nles)
         @info "Training for $(m.name), grid $ig"
         clean()
         plotfile = "$plotdir/training_prior_$(m.name)_igrid$ig.pdf"
+        rng = Xoshiro(seeds.training)
         starttime = time()
-        d = create_dataloader_prior(io_train[ig]; batchsize = 100, device, rng)
+        dataloader = create_dataloader_prior(io_train[ig]; batchsize = 100, device)
         θ = device(m.θ₀)
         loss = create_loss_prior(mean_squared_error, m.closure)
         opt = Adam(T(1.0e-3))
@@ -307,15 +307,14 @@ dotrain && let
             create_relerr_prior(m.closure, validset...);
             θ,
             displayref = true,
-            display_each_iteration = true, # Set to `true` if using CairoMakie
+            displayupdates = true, # Set to `true` if using CairoMakie
+            nupdate = 20,
         )
-        (; optstate, θ, callbackstate) = train(
-            [d],
+        (; trainstate, callbackstate) = train(;
+            dataloader,
             loss,
-            optstate,
-            θ;
+            trainstate = (; optstate, θ, rng),
             niter = 10_000,
-            ncallback = 20,
             callbackstate,
             callback,
         )

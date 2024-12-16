@@ -7,10 +7,10 @@ using GLMakie #!md
 using IncompressibleNavierStokes
 
 # Hardware
-ArrayType = Array
+backend = CPU()
 
 ## using CUDA, CUDSS
-## ArrayType = CuArray
+## backend = CUDABackend()
 
 # Precision
 T = Float32
@@ -49,7 +49,7 @@ setup = Setup(;
     ),
     Re = 1 / temperature.α1,
     temperature,
-    ArrayType,
+    backend,
 );
 
 plotgrid(x[1], x[2])
@@ -106,3 +106,11 @@ fieldplot(
     ## fieldname = :eig2field,
     fieldname = :temperature,
 )
+
+#md # ## Copy-pasteable code
+#md #
+#md # Below is the full code for this example stripped of comments and output.
+#md #
+#md # ```julia
+#md # CODE_CONTENT
+#md # ```

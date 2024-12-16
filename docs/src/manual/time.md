@@ -47,11 +47,9 @@ but they may be integrated in the future.
 
 ```@docs
 AbstractODEMethod
-isexplicit
-lambda_conv_max
-lambda_diff_max
 ode_method_cache
 runge_kutta_method
+create_stepper
 timestep
 timestep!
 ```
@@ -75,6 +73,7 @@ AbstractRungeKuttaMethod
 ExplicitRungeKuttaMethod
 ImplicitRungeKuttaMethod
 RKMethods
+LMWray3
 ```
 
 ### Explicit Methods

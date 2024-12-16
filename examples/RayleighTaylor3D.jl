@@ -7,10 +7,10 @@ using GLMakie #!md
 using IncompressibleNavierStokes
 
 # Hardware
-ArrayType = Array
+backend = CPU()
 
 ## using CUDA, CUDSS
-## ArrayType = CuArray
+## backend = CUDABackend()
 
 # Precision
 T = Float64
@@ -45,7 +45,7 @@ setup = Setup(;
     ),
     Re = 1 / temperature.α1,
     temperature,
-    ArrayType,
+    backend,
 );
 
 # This will factorize the Laplace matrix
@@ -104,3 +104,11 @@ hist(vec(Array(log.(max.(eps(T), .-field)))))
 
 # Plot temperature field
 fieldplot(state; setup, fieldname = :temperature)
+
+#md # ## Copy-pasteable code
+#md #
+#md # Below is the full code for this example stripped of comments and output.
+#md #
+#md # ```julia
+#md # CODE_CONTENT
+#md # ```
