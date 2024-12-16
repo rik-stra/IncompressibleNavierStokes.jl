@@ -20,7 +20,7 @@ end
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-#model_index =1
+model_index =7
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, track_file, hist_len, hist_var, n_replicas, normalization) = inputs[model_index]
@@ -66,7 +66,7 @@ exit()
 
 
 ## test the model
-dir = @__DIR__()*"/output/LinReg9/"
+dir = @__DIR__()*"/output/LinReg7/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 #hist_var = :q
