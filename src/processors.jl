@@ -410,6 +410,8 @@ Keyword arguments:
 """
 energy_spectrum_plot
 
+using Makie
+
 function enstrophy_spectrum_plot(
     state;
     setup,

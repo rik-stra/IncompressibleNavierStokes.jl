@@ -3,10 +3,12 @@ function Setup(;
     x,
     boundary_conditions = ntuple(d -> (PeriodicBC(), PeriodicBC()), length(x)),
     bodyforce = nothing,
+    dbodyforce = nothing,
     ou_bodyforce = nothing,  # to use OU forcing pass named tuple (T_L, e_star, k_f)
     issteadybodyforce = true,
     closure_model = nothing,
     backend = CPU(),
+    ArrayType = Array,
     workgroupsize = 64,
     temperature = nothing,
     Re = isnothing(temperature) ? convert(eltype(x[1]), 1_000) : 1 / temperature.α1,
@@ -20,6 +22,7 @@ function Setup(;
         ou_bodyforce,
         closure_model,
         backend,
+        ArrayType,             ## for RikFlow
         workgroupsize,
         temperature,
         nans_detected = zeros(Bool),

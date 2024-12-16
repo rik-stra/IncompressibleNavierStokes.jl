@@ -219,12 +219,12 @@ end
     get_u_hat(u::Tuple, setup)
 Compute the Fourier transform of the field. Returns an 4D array, velocity components stacked along last dimension.
 """
-function get_u_hat(u::Tuple, setup)
+function get_u_hat(u, setup)
     (; dimension, Iu) = setup.grid
     d = dimension()
     # interpolate u to cell centers
     #u_c = interpolate_u_p(u, setup)
-    u = stack([u[a][Iu[a]] for a=1:d], dims=4)
+    u = stack([u[Iu[a], a] for a=1:d], dims=4)
     u_hat = fft(u, [1,2,3])
     return u_hat
 end

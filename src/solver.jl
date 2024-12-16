@@ -55,10 +55,10 @@ function solve_unsteady(;
         OU_get_force!(setup.ou_setup, setup)
         @info "ou random state 1: $(setup.ou_setup.state[1:2])", typeof(setup.ou_setup.state)
         @info "ou force corner $(Array(setup.bodyforce[1])[end-1,end-1,end-1])"
-        @info "ou force 1 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-2,end-2])"
-        @info "ou force 2 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-3,end-3])"
-        @info "ou force 4 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-5,end-5])"
-        @info "ou force 8 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-9,end-9])"
+        @info "ou force 1 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-2,end-2])"
+        @info "ou force 2 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-3,end-3])"
+        @info "ou force 4 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-5,end-5])"
+        @info "ou force 8 cel from corner  $(Array(setup.bodyforce[:, :, :, 1])[end-1,end-9,end-9])"
     end
 
     if isadaptive

@@ -18,11 +18,11 @@ n_dns = Int(512)
 n_les = Int(64)
 Re = Float32(2_000)
 ############################
-Δt = Float32(2.5e-3)
+Δt = Float32(2.5f-3)
 tsim = Float32(10)
 # forcing
-T_L = 0.01  # correlation time of the forcing
-e_star = 0.1 # energy injection rate
+T_L = 0.01f0  # correlation time of the forcing
+e_star = 0.1f0 # energy injection rate
 k_f = sqrt(2) # forcing wavenumber  
 freeze = 1 # number of time steps to freeze the forcing
 
@@ -47,6 +47,7 @@ params_track = load(track_file, "params_track");
 # get initial condition
 ustart = ArrayType.(data_track.fields[1].u);
 
+ustart = stack(ustart) # from old INS
 
 params = (;
     params_track...,
@@ -54,15 +55,15 @@ params = (;
     Δt,
     ArrayType,
     ustart, 
-    #ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
+    ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 100);
 
 # Build setup and assemble operators
-setup = 
-Setup(;
+setup = Setup(;
     x = ntuple(α -> LinRange(params.lims[α]..., params.nles[1][α] + 1), params.D),
     Re=params.Re,
     ArrayType,
+    backend = CUDABackend(),
     params.ou_bodyforce,
 );
 
@@ -80,18 +81,21 @@ psolver = psolver_spectral(setup);
 
 # Solve
 @info "Solving LF sim (no SGS)"
-(; u, t), outputs =
-        solve_unsteady(; setup, 
-        params.ustart, 
-        tlims = (T(0), params.tsim),
-        params.Δt,
-        processors = (;
-            log = timelogger(; nupdate = 100),
-            fields = fieldsaver(; setup, nupdate = params.savefreq),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
-        ),
-        psolver);
+(; u, t), outputs = solve_unsteady(;
+    # method = LMWray3(; T),
+    setup, 
+    ustart,
+    tlims = (T(0), params.tsim),
+    params.Δt,
+    processors = (;
+        log = timelogger(; nupdate = 100),
+        fields = fieldsaver(; setup, nupdate = params.savefreq),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
+    ),
+    psolver,
+);
+
 q = stack(outputs.qoihist);
 data_online = (;q, fields = outputs.fields);
 # Save tracking data
-jldsave("$outdir/data_no_sgs_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+jldsave("$outdir/data_no_sgs2_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
