@@ -12,14 +12,14 @@ For periodic and no-slip BC, the sum of `f` should be zero.
 
 Differentiable version.
 """
-poisson(psolver, f) = poisson!(psolver, zero(f), f)
+poisson(psolver, f) = poisson!(psolver, copy(f))
 
 # Laplacian is auto-adjoint
 ChainRulesCore.rrule(::typeof(poisson), psolver, f) =
     (poisson(psolver, f), φ -> (NoTangent(), NoTangent(), poisson(psolver, unthunk(φ))))
 
 "Solve the Poisson equation for the pressure (in-place version)."
-poisson!(psolver, p, f) = psolver(p, f)
+poisson!(psolver, f) = psolver(f)
 
 """
 Compute pressure from velocity field. This makes the pressure compatible with the velocity
@@ -28,9 +28,6 @@ field, resulting in same order pressure as velocity.
 Differentiable version.
 """
 function pressure(u, temp, t, setup; psolver)
-    (; grid) = setup
-    (; dimension, Iu, Ip) = grid
-    D = dimension()
     F = momentum(u, temp, t, setup)
     F = apply_bc_u(F, t, setup; dudt = true)
     div = divergence(F, setup)
@@ -41,22 +38,19 @@ function pressure(u, temp, t, setup; psolver)
 end
 
 "Compute pressure from velocity field (in-place version)."
-function pressure!(p, u, temp, t, setup; psolver, F, div)
-    (; grid) = setup
-    (; dimension, Iu, Ip) = grid
-    D = dimension()
+function pressure!(p, u, temp, t, setup; psolver, F)
     momentum!(F, u, temp, t, setup)
     apply_bc_u!(F, t, setup; dudt = true)
-    divergence!(div, F, setup)
-    scalewithvolume!(div, setup)
-    poisson!(psolver, p, div)
+    divergence!(p, F, setup)
+    scalewithvolume!(p, setup)
+    poisson!(psolver, p)
     apply_bc_p!(p, t, setup)
     p
 end
 
 "Project velocity field onto divergence-free space (differentiable version)."
 function project(u, setup; psolver)
-    T = eltype(u[1])
+    T = eltype(u)
 
     # Divergence of tentative velocity field
     div = divergence(u, setup)
@@ -72,15 +66,15 @@ function project(u, setup; psolver)
 end
 
 "Project velocity field onto divergence-free space (in-place version)."
-function project!(u, setup; psolver, div, p)
-    T = eltype(u[1])
+function project!(u, setup; psolver, p)
+    T = eltype(u)
 
     # Divergence of tentative velocity field
-    divergence!(div, u, setup)
-    scalewithvolume!(div, setup)
+    divergence!(p, u, setup)
+    scalewithvolume!(p, setup)
 
     # Solve the Poisson equation
-    poisson!(psolver, p, div)
+    poisson!(psolver, p)
     apply_bc_p!(p, T(0), setup)
 
     # Apply pressure correction term
@@ -146,8 +140,8 @@ function psolver_direct(::Array, setup)
         fact = ldlt(L)
     end
     # fact = factorize(L)
-    function psolve!(p, f)
-        copyto!(view(ftemp, viewrange), view(view(f, Ip), :))
+    function psolve!(p)
+        copyto!(view(ftemp, viewrange), view(view(p, Ip), :))
         ptemp .= fact \ ftemp
         if isdefinite && !(0.0 isa T)
             # Convert from Float64 to T
@@ -182,8 +176,8 @@ function psolver_cg_matrix(setup; kwargs...)
         L = [L e; e' 0]
         viewrange = 1:prod(Np)
     end
-    function psolve!(p, f)
-        copyto!(view(ftemp, viewrange), view(view(f, Ip), :))
+    function psolve!(p)
+        copyto!(view(ftemp, viewrange), view(view(p, Ip), :))
         cg!(ptemp, L, ftemp; kwargs...)
         copyto!(view(view(p, Ip), :), view(ptemp, viewrange))
         p
@@ -193,9 +187,7 @@ end
 # Preconditioner
 function create_laplace_diag(setup)
     (; grid, workgroupsize) = setup
-    (; dimension, Δ, Δu, N, Np, Ip) = grid
-    D = dimension()
-    δ = Offset{D}()
+    (; Δ, Δu, Np, Ip) = grid
     @kernel function _laplace_diag!(z, p, I0)
         I = @index(Global, Cartesian)
         I = I + I0
@@ -227,7 +219,7 @@ function psolver_cg(
     r = scalarfield(setup)
     L = scalarfield(setup)
     q = scalarfield(setup)
-    function psolve!(p, f)
+    function psolve!(p)
         function innerdot(a, b)
             @kernel function innerdot!(d, a, b, I0)
                 I = @index(Global, Cartesian)
@@ -243,20 +235,18 @@ function psolver_cg(
             d[]
         end
 
-        p .= 0
-
-        # Initial residual
-        laplacian!(L, p, setup)
-
         # Initialize
         q .= 0
-        r .= f .- L
+        laplacian!(L, q, setup) # Initial residual
+        r .= p .- L
         ρ_prev = one(T)
         # residual = norm(r[Ip])
         residual = sqrt(sum(abs2, view(r, Ip)))
         # residual = norm(r)
         tolerance = max(reltol * residual, abstol)
         iteration = 0
+
+        p .= 0
 
         while iteration < maxiter && residual > tolerance
             preconditioner(L, r)
@@ -315,109 +305,40 @@ function psolver_spectral(setup)
         "Spectral psolver requires uniform grid along each dimension",
     )
 
-    # Fourier transform of the discretization
+    # Since we use rfft, the first dimension is halved
+    kmax = ntuple(α -> α == 1 ? div(Np[α], 2) + 1 : Np[α], D)
+
+    # Fourier transform of the discrete Laplacian
     # Assuming uniform grid, although Δx[1] and Δx[2] do not need to be the same
-
-    k = ntuple(d -> reshape(0:Np[d]-1, ntuple(Returns(1), d - 1)..., :), D)
-
-    Ahat = fill!(similar(x[1], Complex{T}, Np), 0)
-    Tπ = T(π) # CUDA doesn't like pi
-    for d = 1:D
-        @. Ahat += sin(k[d] * Tπ / Np[d])^2 / Δx[d]^2
+    ahat = ntuple(D) do α
+        k = 0:kmax[α]-1
+        ahat = similar(x[1], kmax[α])
+        Ω = prod(Δx)
+        @. ahat = 4 * Ω * sinpi(k / Np[α])^2 / Δx[α]^2
+        ahat
     end
 
-    # Scale with Δx*Δy*Δz, since we solve the PDE in integrated form
-    Ahat .*= 4 * prod(Δx)
-
-    # Pressure is determined up to constant. By setting the constant
-    # scaling factor to 1, we preserve the average.
-    # Note use of singleton range 1:1 instead of scalar index 1
-    # (otherwise CUDA gets annoyed)
-    Ahat[1:1] .= 1
-
     # Placeholders for intermediate results
-    phat = zero(Ahat)
-    fhat = zero(Ahat)
-    plan = plan_fft(fhat)
+    phat = similar(x[1], Complex{T}, kmax)
+    pI = similar(x[1], Np)
+    plan = plan_rfft(pI)
 
-    function psolver(p, f)
-        f = view(f, Ip)
-
-        fhat .= complex.(f)
+    function psolve!(p)
+        # Buffer of the right size (cannot work on view directly)
+        copyto!(pI, view(p, Ip))
 
         # Fourier transform of right hand side
-        mul!(phat, plan, fhat)
-
-        # Solve for coefficients in Fourier space
-        @. fhat = -phat / Ahat
-
-        # Pressure is determined up to constant. We set this to 0 (instead of
-        # phat[1] / 0 = Inf)
-        # Note use of singleton range 1:1 instead of scalar index 1
-        # (otherwise CUDA gets annoyed)
-        fhat[1:1] .= 0
-
-        # Transform back
-        ldiv!(phat, plan, fhat)
-        @. p[Ip] = real(phat)
-
-        p
-    end
-end
-
-"""
-Create spectral Poisson solver from setup.
-This one is slower than `psolver_spectral` but occupies less memory.
-"""
-function psolver_spectral_lowmemory(setup)
-    (; grid, boundary_conditions) = setup
-    (; dimension, Δ, Np, Ip, x) = grid
-
-    D = dimension()
-    T = eltype(Δ[1])
-
-    Δx = Array(Δ[1])[1]
-
-    @assert(
-        all(bc -> bc[1] isa PeriodicBC && bc[2] isa PeriodicBC, boundary_conditions),
-        "Spectral psolver only implemented for periodic boundary conditions",
-    )
-
-    @assert(
-        all(α -> all(≈(Δx), Δ[α]), 1:D),
-        "Spectral psolver requires uniform grid along each dimension",
-    )
-
-    @assert all(n -> n == Np[1], Np)
-
-    # Fourier transform of the discretization
-    # Assuming uniform grid, although Δx[1] and Δx[2] do not need to be the same
-
-    k = 0:Np[1]-1
-
-    ahat = fill!(similar(x[1], Np[1]), 0)
-    @. ahat = 4 * Δx^D * sinpi(k / Np[1])^2 / Δx^2
-
-    # Placeholders for intermediate results
-    phat = fill!(similar(x[1], Complex{T}, Np), 0)
-
-    function psolve!(p, f)
-        f = view(f, Ip)
-
-        phat .= complex.(f)
-
-        # Fourier transform of right hand side
-        fft!(phat)
+        mul!(phat, plan, pI)
 
         # Solve for coefficients in Fourier space
         if D == 2
-            ax = ahat
-            ay = reshape(ahat, 1, :)
+            ax = reshape(ahat[1], :)
+            ay = reshape(ahat[2], 1, :)
             @. phat = -phat / (ax + ay)
         else
-            ax = ahat
-            ay = reshape(ahat, 1, :)
-            az = reshape(ahat, 1, 1, :)
+            ax = reshape(ahat[1], :)
+            ay = reshape(ahat[2], 1, :)
+            az = reshape(ahat[3], 1, 1, :)
             @. phat = -phat / (ax + ay + az)
         end
 
@@ -427,10 +348,50 @@ function psolver_spectral_lowmemory(setup)
         # (otherwise CUDA gets annoyed)
         phat[1:1] .= 0
 
-        # Transform back
-        ifft!(phat)
-        @. p[Ip] = real(phat)
+        # Inverse Fourier transform
+        ldiv!(pI, plan, phat)
+
+        # Put results in full size array
+        copyto!(view(p, Ip), pI)
 
         p
     end
 end
+
+# COV_EXCL_START
+# Wrap a function to return `nothing`, because Enzyme can not handle vector return values.
+function enzyme_wrap(f::typeof(poisson!))
+    function wrapped_f(p, psolve, d)
+        p .= d
+        f(psolve, p)
+        return nothing
+    end
+    return wrapped_f
+end
+function EnzymeRules.augmented_primal(
+    config::RevConfigWidth{1},
+    func::Const{typeof(enzyme_wrap(poisson!))},
+    ::Type{<:Const},
+    y::Duplicated,
+    psolver::Const,
+    div::Duplicated,
+)
+    primal = func.val(y.val, psolver.val, div.val)
+    return AugmentedReturn(primal, nothing, nothing)
+end
+function EnzymeRules.reverse(
+    config::RevConfigWidth{1},
+    func::Const{typeof(enzyme_wrap(poisson!))},
+    dret,
+    tape,
+    y::Duplicated,
+    psolver::Const,
+    div::Duplicated,
+)
+    auto_adj = copy(y.val)
+    func.val(auto_adj, psolver.val, y.val)
+    div.dval .+= auto_adj .* y.dval
+    EnzymeCore.make_zero!(y.dval)
+    return (nothing, nothing, nothing)
+end
+# COV_EXCL_STOP

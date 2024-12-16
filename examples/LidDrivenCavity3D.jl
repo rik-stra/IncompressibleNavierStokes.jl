@@ -14,12 +14,9 @@ outdir = joinpath(@__DIR__, "output", "LidDrivenCavity3D")
 # Floating point type
 T = Float64
 
-# Array type
-ArrayType = Array
-## using CUDA; ArrayType = CuArray
-## using AMDGPU; ArrayType = ROCArray
-## using oneAPI; ArrayType = oneArray
-## using Metal; ArrayType = MtlArray
+# Backend
+backend = CPU()
+## using CUDA; backend = CUDABackend()
 
 # Reynolds number
 Re = T(1_000)
@@ -43,7 +40,7 @@ boundary_conditions = (
 )
 
 # Build setup and assemble operators
-setup = Setup(; x, Re, boundary_conditions, ArrayType);
+setup = Setup(; x, Re, boundary_conditions, backend);
 
 # Initial conditions
 ustart = velocityfield(setup, (dim, x, y, z) -> zero(x))
@@ -74,3 +71,11 @@ save_vtk(state; setup, filename = joinpath(outdir, "solution"))
 
 # Energy history
 outputs.ehist
+
+#md # ## Copy-pasteable code
+#md #
+#md # Below is the full code for this example stripped of comments and output.
+#md #
+#md # ```julia
+#md # CODE_CONTENT
+#md # ```

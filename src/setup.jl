@@ -6,23 +6,20 @@ function Setup(;
     ou_bodyforce = nothing,  # to use OU forcing pass named tuple (T_L, e_star, k_f)
     issteadybodyforce = true,
     closure_model = nothing,
-    projectorder = :last,
-    ArrayType = Array,
+    backend = CPU(),
     workgroupsize = 64,
     temperature = nothing,
     Re = isnothing(temperature) ? convert(eltype(x[1]), 1_000) : 1 / temperature.α1,
 )
     setup = (;
-        grid = Grid(x, boundary_conditions; ArrayType),
+        grid = Grid(; x, boundary_conditions, backend),
         boundary_conditions,
         Re,
         bodyforce,
         issteadybodyforce = false,
         ou_bodyforce,
         closure_model,
-        projectorder,
-        ArrayType,
-        T = eltype(x[1]),
+        backend,
         workgroupsize,
         temperature,
         nans_detected = zeros(Bool),
@@ -40,6 +37,18 @@ function Setup(;
             bodyforce = applybodyforce!(F, u, T(0), setup)
             setup = (; setup..., issteadybodyforce = true, bodyforce)
         end
+    end
+    if !isnothing(dbodyforce)
+        @warn "dbodyforce is not used at the moment. No need to define it."
+        if issteadybodyforce
+            dsetup = (; setup..., bodyforce = dbodyforce, issteadybodyforce = false)
+            (; x) = setup.grid
+            T = eltype(x[1])
+            u = vectorfield(setup)
+            F = vectorfield(setup)
+            dbodyforce = applybodyforce!(F, u, T(0), dsetup)
+        end
+        setup = (; setup..., dbodyforce)
     end
     setup
 end

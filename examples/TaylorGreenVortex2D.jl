@@ -26,13 +26,13 @@ ispath(outdir) || mkpath(outdir)
 """
 Compare numerical solution with analytical solution at final time.
 """
-function compute_convergence(; D, nlist, lims, Re, tlims, Δt, uref, ArrayType = Array)
+function compute_convergence(; D, nlist, lims, Re, tlims, Δt, uref, backend = CPU())
     T = typeof(lims[1])
     e = zeros(T, length(nlist))
     for (i, n) in enumerate(nlist)
         @info "Computing error for n = $n"
         x = ntuple(α -> LinRange(lims..., n + 1), D)
-        setup = Setup(; x, Re, ArrayType)
+        setup = Setup(; x, Re, backend)
         psolver = psolver_spectral(setup)
         ustart = velocityfield(
             setup,
@@ -49,11 +49,8 @@ function compute_convergence(; D, nlist, lims, Re, tlims, Δt, uref, ArrayType =
         )
         (; u, t), outputs = solve_unsteady(; setup, ustart, tlims, Δt, psolver)
         (; Ip) = setup.grid
-        a, b = T(0), T(0)
-        for α = 1:D
-            a += sum(abs2, u[α][Ip] - ut[α][Ip])
-            b += sum(abs2, ut[α][Ip])
-        end
+        a = sum(abs2, u[Ip, :] - ut[Ip, :])
+        b = sum(abs2, ut[Ip, :])
         e[i] = sqrt(a) / sqrt(b)
     end
     e
@@ -93,3 +90,11 @@ fig
 
 # Save figure
 save(joinpath(outdir, "convergence.png"), fig)
+
+#md # ## Copy-pasteable code
+#md #
+#md # Below is the full code for this example stripped of comments and output.
+#md #
+#md # ```julia
+#md # CODE_CONTENT
+#md # ```

@@ -103,7 +103,7 @@ function boundary(β, N, I, isright)
 end
 
 "Apply velocity boundary conditions (differentiable version)."
-apply_bc_u(u, t, setup; kwargs...) = apply_bc_u!(copy.(u), t, setup; kwargs...)
+apply_bc_u(u, t, setup; kwargs...) = apply_bc_u!(copy(u), t, setup; kwargs...)
 
 "Apply pressure boundary conditions (differentiable version)."
 apply_bc_p(p, t, setup; kwargs...) = apply_bc_p!(copy(p), t, setup; kwargs...)
@@ -118,7 +118,7 @@ ChainRulesCore.rrule(::typeof(apply_bc_u), u, t, setup; kwargs...) = (
         NoTangent(),
         # Important: identity operator should be part of `apply_bc_u_pullback`,
         # but is actually implemented via the `copy` below instead.
-        Tangent{typeof(u)}(apply_bc_u_pullback!(copy.((φbar...,)), t, setup; kwargs...)...),
+        apply_bc_u_pullback!(copy(unthunk(φbar)), t, setup; kwargs...),
         NoTangent(),
         NoTangent(),
     ),
@@ -155,11 +155,10 @@ ChainRulesCore.rrule(::typeof(apply_bc_temp), temp, t, setup) = (
         NoTangent(),
     ),
 )
-
 "Apply velocity boundary conditions (in-place version)."
 function apply_bc_u!(u, t, setup; kwargs...)
     (; boundary_conditions) = setup
-    D = length(u)
+    D = setup.grid.dimension()
     for β = 1:D
         apply_bc_u!(boundary_conditions[β][1], u, β, t, setup; isright = false, kwargs...)
         apply_bc_u!(boundary_conditions[β][2], u, β, t, setup; isright = true, kwargs...)
@@ -276,35 +275,31 @@ end
 
 function apply_bc_u!(::PeriodicBC, u, β, t, setup; isright, kwargs...)
     isright && return u # We do both in one go for "left"
-    (; dimension, N, Iu) = setup.grid
+    (; dimension, N, Ip) = setup.grid
     D = dimension()
-    for α = 1:D
-        uα, eβ = u[α], Offset{D}()(β)
-        Ia = boundary(β, N, Iu[α], false)
-        Ib = boundary(β, N, Iu[α], true)
-        Ja = Ia .+ eβ
-        Jb = Ib .- eβ
-        @. uα[Ia] = uα[Jb]
-        @. uα[Ib] = uα[Ja]
-    end
+    eβ = Offset(D)(β)
+    Ia = boundary(β, N, Ip, false)
+    Ib = boundary(β, N, Ip, true)
+    Ja = Ia .+ eβ
+    Jb = Ib .- eβ
+    @. u[Ia, :] = u[Jb, :]
+    @. u[Ib, :] = u[Ja, :]
     u
 end
 
 function apply_bc_u_pullback!(::PeriodicBC, φbar, β, t, setup; isright, kwargs...)
     isright && return φbar # We do both in one go for "left"
-    (; dimension, N, Iu) = setup.grid
+    (; dimension, N, Ip) = setup.grid
     D = dimension()
-    for α = 1:D
-        φα, eβ = φbar[α], Offset{D}()(β)
-        Ia = boundary(β, N, Iu[α], false)
-        Ib = boundary(β, N, Iu[α], true)
-        Ja = Ia .+ eβ
-        Jb = Ib .- eβ
-        @. φα[Jb] += φα[Ia]
-        @. φα[Ja] += φα[Ib]
-        @. φα[Ia] = 0
-        @. φα[Ib] = 0
-    end
+    eβ = Offset(D)(β)
+    Ia = boundary(β, N, Ip, false)
+    Ib = boundary(β, N, Ip, true)
+    Ja = Ia .+ eβ
+    Jb = Ib .- eβ
+    @. φbar[Jb, :] += φbar[Ia, :]
+    @. φbar[Ja, :] += φbar[Ib, :]
+    @. φbar[Ia, :] = 0
+    @. φbar[Ib, :] = 0
     φbar
 end
 
@@ -312,7 +307,7 @@ function apply_bc_p!(bc::PeriodicBC, p, β, t, setup; isright, kwargs...)
     isright && return p # We do both in one go for "left"
     (; dimension, N, Ip) = setup.grid
     D = dimension()
-    eβ = Offset{D}()(β)
+    eβ = Offset(D)(β)
     Ia = boundary(β, N, Ip, false)
     Ib = boundary(β, N, Ip, true)
     Ja = Ia .+ eβ
@@ -326,7 +321,7 @@ function apply_bc_p_pullback!(::PeriodicBC, φbar, β, t, setup; isright, kwargs
     isright && return φbar # We do both in one go for "left"
     (; dimension, N, Ip) = setup.grid
     D = dimension()
-    eβ = Offset{D}()(β)
+    eβ = Offset(D)(β)
     Ia = boundary(β, N, Ip, false)
     Ib = boundary(β, N, Ip, true)
     Ja = Ia .+ eβ
@@ -353,7 +348,7 @@ function apply_bc_u!(bc::DirichletBC, u, β, t, setup; isright, dudt = false, kw
         (α, args...) -> dudt ? zero(bc.u[α]) : bc.u[α]
     elseif dudt
         # Use central difference to approximate dudt
-        h = sqrt(eps(eltype(u[1]))) / 2
+        h = sqrt(eps(eltype(u))) / 2
         function (args...)
             args..., t = args
             (bc.u(args..., t + h) - bc.u(args..., t - h)) / 2h
@@ -372,7 +367,7 @@ function apply_bc_u!(bc::DirichletBC, u, β, t, setup; isright, dudt = false, kw
             ),
             D,
         )
-        u[α][I] .= bcfunc.(α, xI..., t)
+        u[I, α] .= bcfunc.(α, xI..., t)
     end
     u
 end
@@ -382,31 +377,14 @@ function apply_bc_u_pullback!(::DirichletBC, φbar, β, t, setup; isright, kwarg
     D = dimension()
     for α = 1:D
         I = boundary(β, N, Iu[α], isright)
-        φbar[α][I] .= 0
+        φbar[I, α] .= 0
     end
     φbar
 end
 
-function apply_bc_p!(::DirichletBC, p, β, t, setup; isright, kwargs...)
-    (; dimension, N, Ip) = setup.grid
-    D = dimension()
-    e = Offset{D}()
-    I = boundary(β, N, Ip, isright)
-    J = isright ? I .- e(β) : I .+ e(β)
-    @. p[I] = p[J]
-    p
-end
-
-function apply_bc_p_pullback!(::DirichletBC, φbar, β, t, setup; isright, kwargs...)
-    (; dimension, N, Ip) = setup.grid
-    D = dimension()
-    e = Offset{D}()
-    I = boundary(β, N, Ip, isright)
-    J = isright ? I .- e(β) : I .+ e(β)
-    @. φbar[J] += φbar[I]
-    φbar[I] .= 0
-    φbar
-end
+# These BC are not used
+apply_bc_p!(::DirichletBC, p, β, t, setup; isright, kwargs...) = p
+apply_bc_p_pullback!(::DirichletBC, φbar, β, t, setup; isright, kwargs...) = φbar
 
 function apply_bc_temp!(bc::DirichletBC, temp, β, t, setup; isright, kwargs...)
     (; dimension, N, Ip, xp) = setup.grid
@@ -432,30 +410,32 @@ function apply_bc_temp_pullback!(::DirichletBC, φbar, β, t, setup; isright, kw
 end
 
 function apply_bc_u!(::SymmetricBC, u, β, t, setup; isright, kwargs...)
-    (; dimension, Nu, Iu) = setup.grid
+    (; dimension, N, Iu) = setup.grid
     D = dimension()
-    e = Offset{D}()
+    e = Offset(D)
     for α = 1:D
-        if α != β
-            I = boundary(β, Nu[α], Iu[α], isright)
+        I = boundary(β, N, Iu[α], isright)
+        if α == β
+            @. u[I, α] = 0
+        else
             J = isright ? I .- e(β) : I .+ e(β)
-            @. u[α][I] = u[α][J]
+            @. u[I, α] = u[J, α]
         end
     end
     u
 end
 
 function apply_bc_u_pullback!(::SymmetricBC, φbar, β, t, setup; isright, kwargs...)
-    (; dimension, Nu, Iu) = setup.grid
+    (; dimension, N, Iu) = setup.grid
     D = dimension()
-    e = Offset{D}()
+    e = Offset(D)
     for α = 1:D
+        I = boundary(β, N, Iu[α], isright)
         if α != β
-            I = boundary(β, Nu[α], Iu[α], isright)
             J = isright ? I .- e(β) : I .+ e(β)
-            @. φbar[α][J] += φbar[α][I]
-            @. φbar[α][I] = 0
+            @. φbar[J, α] += φbar[I, α]
         end
+        @. φbar[I, α] = 0
     end
     φbar
 end
@@ -463,7 +443,7 @@ end
 function apply_bc_p!(::SymmetricBC, p, β, t, setup; isright, kwargs...)
     (; dimension, N, Ip) = setup.grid
     D = dimension()
-    e = Offset{D}()
+    e = Offset(D)
     I = boundary(β, N, Ip, isright)
     J = isright ? I .- e(β) : I .+ e(β)
     @. p[I] = p[J]
@@ -473,7 +453,7 @@ end
 function apply_bc_p_pullback!(::SymmetricBC, φbar, β, t, setup; isright, kwargs...)
     (; dimension, N, Ip) = setup.grid
     D = dimension()
-    e = Offset{D}()
+    e = Offset(D)
     I = boundary(β, N, Ip, isright)
     J = isright ? I .- e(β) : I .+ e(β)
     @. φbar[J] += φbar[I]
@@ -490,11 +470,11 @@ apply_bc_temp_pullback!(bc::SymmetricBC, φbar, β, t, setup; isright, kwargs...
 function apply_bc_u!(bc::PressureBC, u, β, t, setup; isright, kwargs...)
     (; dimension, N, Iu) = setup.grid
     D = dimension()
-    e = Offset{D}()
+    e = Offset(D)
     for α = 1:D
         I = boundary(β, N, Iu[α], isright)
         J = isright ? I .- e(β) : I .+ e(β)
-        @. u[α][I] = u[α][J]
+        @. u[I, α] = u[J, α]
     end
     u
 end
@@ -502,12 +482,12 @@ end
 function apply_bc_u_pullback!(::PressureBC, φbar, β, t, setup; isright, kwargs...)
     (; dimension, N, Iu) = setup.grid
     D = dimension()
-    e = Offset{D}()
+    e = Offset(D)
     for α = 1:D
         I = boundary(β, N, Iu[α], isright)
         J = isright ? I .- e(β) : I .+ e(β)
-        @. φbar[α][J] += φbar[α][I]
-        @. φbar[α][I] = 0
+        @. φbar[J, α] += φbar[I, α]
+        @. φbar[I, α] = 0
     end
     φbar
 end
@@ -532,3 +512,80 @@ apply_bc_temp!(bc::PressureBC, temp, β, t, setup; isright, kwargs...) =
 
 apply_bc_temp_pullback!(bc::PressureBC, φbar, β, t, setup; isright, kwargs...) =
     apply_bc_p_pullback!(SymmetricBC(), φbar, β, t, setup; isright, kwargs...)
+
+# COV_EXCL_START
+# Wrap a function to return `nothing`, because Enzyme can not handle vector return values.
+function enzyme_wrap(
+    f::Union{typeof(apply_bc_u!),typeof(apply_bc_p!),typeof(apply_bc_temp!)},
+)
+    # the boundary condition modifies x which is usually the field that we want to differentiate, so we need to introduce a copy of it and modify it instead
+    function wrapped_f(y, x, args...)
+        y .= x
+        f(y, args...)
+        return nothing
+    end
+    return wrapped_f
+end
+
+function EnzymeRules.augmented_primal(
+    config::RevConfigWidth{1},
+    func::Union{
+        Const{typeof(enzyme_wrap(apply_bc_u!))},
+        Const{typeof(enzyme_wrap(apply_bc_p!))},
+        Const{typeof(enzyme_wrap(apply_bc_temp!))},
+    },
+    ::Type{<:Const},
+    y::Duplicated,
+    x::Duplicated,
+    t::Const,
+    setup::Const,
+)
+    primal = func.val(y.val, x.val, t.val, setup.val)
+    return AugmentedReturn(primal, nothing, nothing)
+end
+function EnzymeRules.reverse(
+    config::RevConfigWidth{1},
+    func::Const{typeof(enzyme_wrap(apply_bc_u!))},
+    dret,
+    tape,
+    y::Duplicated,
+    x::Duplicated,
+    t::Const,
+    setup::Const,
+)
+    adj = apply_bc_u_pullback!(x.val, t.val, setup.val)
+    x.dval .+= adj
+    y.dval .= x.dval # y is a copy of x
+    return (nothing, nothing, nothing, nothing)
+end
+function EnzymeRules.reverse(
+    config::RevConfigWidth{1},
+    func::Const{typeof(enzyme_wrap(apply_bc_p!))},
+    dret,
+    tape,
+    y::Duplicated,
+    x::Duplicated,
+    t::Const,
+    setup::Const,
+)
+    adj = apply_bc_p_pullback!(x.val, t.val, setup.val)
+    x.dval .+= adj
+    y.dval .= x.dval # y is a copy of x
+    return (nothing, nothing, nothing, nothing)
+end
+function EnzymeRules.reverse(
+    config::RevConfigWidth{1},
+    func::Const{typeof(enzyme_wrap(apply_bc_temp!))},
+    dret,
+    tape,
+    y::Duplicated,
+    x::Duplicated,
+    t::Const,
+    setup::Const,
+)
+    adj = apply_bc_temp_pullback!(x.val, t.val, setup.val)
+    x.dval .+= adj
+    y.dval .= x.dval # y is a copy of x
+    return (nothing, nothing, nothing, nothing)
+end
+# COV_EXCL_STOP
