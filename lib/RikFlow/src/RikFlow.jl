@@ -372,8 +372,8 @@ export TOMethod
 IncompressibleNavierStokes.create_stepper(method::TOMethod; setup, psolver, u, temp, t, n = 0) =
     create_stepper(method.rk_method; setup, psolver, u, temp, t, n)
 
-IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup, u, temp) =
- ode_method_cache(method.rk_method, setup, u, temp)
+IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup) =
+ ode_method_cache(method.rk_method, setup)
 
 function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ = nothing, cache)
     (; rk_method, to_setup) = method
@@ -388,7 +388,7 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
     sgs = to_sgs_term(stepper.u, setup, to_setup, stepper)
     # add SGS term to u
     for a in 1:D
-        stepper.u[a][Iu[a]] .+= sgs[:,:,:,a]
+        stepper.u[Iu[a],a] .+= sgs[:,:,:,a]
     end
 
     apply_bc_u!(stepper.u, stepper.t, setup)

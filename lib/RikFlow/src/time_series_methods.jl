@@ -19,13 +19,13 @@ struct MVG_sampler
     dQ_distribution
     rng
     function MVG_sampler(dQ_data, rng)
-        dQ_distribution = fit(MvNormal, dQ_data)
+        dQ_distribution = fit(MvNormal, dQ_data .|> Float64)
         new(dQ_distribution, rng)
     end
 end
 
 function get_next_item_timeseries(time_series_method::MVG_sampler)
-    return rand(time_series_method.rng, time_series_method.dQ_distribution)
+    return rand(time_series_method.rng, time_series_method.dQ_distribution) .|> Float32
 end
 
 struct Resampler

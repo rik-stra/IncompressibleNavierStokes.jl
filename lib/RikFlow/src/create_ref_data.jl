@@ -2,35 +2,22 @@ include("plotter.jl")
 
 
 function lesdatagen(dnsobs, Φ, les, compression, to_setup, n_plot)
-    Φu = zero.(Φ(dnsobs[].u, les, compression))
-    p = zero(Φu[1])
-    div = zero(p)
-    ΦF = zero.(Φu)
-    FΦ = zero.(Φu)
-    c = zero.(Φu)
+    p = scalarfield(les)
+    Φu = vectorfield(les)
+
     #results = (; u = fill(Array.(dnsobs[].u), 0), c = fill(Array.(dnsobs[].u), 0))
-    results = (; u = fill(Array.(dnsobs[].u), 0), qoi_hist = fill(zeros(typeof(les.Re),0), 0))
-    temp = nothing
+    results = (; u = fill(Array(Φu), 0), qoi_hist = fill(zeros(typeof(les.Re),0), 0))
     on(dnsobs) do (; u, t, n)
         Φ(Φu, u, les, compression)
         apply_bc_u!(Φu, t, les)
-        #Φ(ΦF, F, les, compression)
-        #momentum!(FΦ, Φu, temp, t, les)
-        #apply_bc_u!(FΦ, t, les; dudt = true)
-        #project!(FΦ, les; psolver, div, p)
-        #for α = 1:length(u)
-        #    c[α] .= ΦF[α] .- FΦ[α]
-        #end
         u_hat = get_u_hat(Φu, les)
         w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
         q = compute_QoI(u_hat, w_hat, to_setup,les)
-        #println("QoI: ", q)
         push!(results.qoi_hist, Array(q))
 
         n % n_plot == 0 || return
-        push!(results.u, Array.(Φu))
+        push!(results.u, Array(Φu))
         
-        #push!(results.c, Array.(c))
     end
     results
 end
@@ -88,6 +75,7 @@ function create_ref_data(;
     savefreq = 1,
     plotfreq = 1000,
     ArrayType = Array,
+    backend,
     ustart = nothing,
     ou_bodyforce = nothing,
     kwargs...,
@@ -104,6 +92,7 @@ function create_ref_data(;
         x = ntuple(α -> LinRange(lims[α]..., ndns[α] + 1), D),
         Re,
         ArrayType,
+        backend,
         ou_bodyforce,
         kwargs...,
     )
@@ -117,6 +106,7 @@ function create_ref_data(;
             x = ntuple(α -> LinRange(lims[α]..., nles[α] + 1), D),
             Re,
             ArrayType,
+            backend,
             kwargs...,
         ) for nles in nles
     ]
@@ -195,12 +185,12 @@ end
 function spinnup(;
     D = 3,
     Re = 1e3,
+    backend,
     lims = ntuple(α -> (typeof(Re)(0), typeof(Re)(1)), D),
     ndns = ntuple(α -> 64, D),
     tburn = typeof(Re)(0.1),
     create_psolver = psolver_spectral,
     savefreq = 100,
-    ArrayType = Array,
     ou_bodyforce = nothing,
     kwargs...,
 )
@@ -211,8 +201,8 @@ function spinnup(;
     dns = Setup(;
         x = ntuple(α -> LinRange(lims[α]..., ndns[α] + 1), D),
         Re,
-        ArrayType,
         ou_bodyforce,
+        backend,
     )
 
     # Since the grid is uniform and identical for x and y, we may use a specialized

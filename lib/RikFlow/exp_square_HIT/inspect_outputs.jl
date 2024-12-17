@@ -81,15 +81,19 @@ end
 #################################################################################
 fname = @__DIR__()*"/output/new/data_track_dns512_les64_Re2000.0_tsim10.0.jld2"
 track_data = load(fname, "data_track");
+fname = @__DIR__()*"/output/new/data_track2_dns512_les64_Re2000.0_tsim10.0.jld2"
+track_data2 = load(fname, "data_track");
 # plot dQ data
 #trajectories
 let 
     g = Figure()
+    range = 3500:4000
     axs = [Axis(g[i ÷ 2, i%2], 
            title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(track_data.dQ, 1)-1]
     for i in 1:size(track_data.dQ, 1)
-        lines!(axs[i], track_data.dQ[i, :])
+        lines!(axs[i], track_data.dQ[i, range])
+        lines!(axs[i], track_data2.dQ[i, range], linestyle = :dash ,color = :red)
     end
     display(g)
     save(fig_folder*"/dQ_dns512_les64_Re2000.0_tsim10.png", g)
@@ -118,7 +122,7 @@ let
            title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(track_data.dQ, 1)-1]
     for i in 1:size(track_data.dQ, 1)
-        density!(axs[i], track_data.dQ[i, :])
+        density!(axs[i], track_data2.dQ[i, :])
     end
     display(g)
 end
@@ -143,7 +147,7 @@ end
 
 ## plot corrected trajectories
 let 
-    interval = 550:660
+    interval = 2550:2660
     g = Figure()
     axs = [Axis(g[i ÷ 2, i%2], 
            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
@@ -161,6 +165,8 @@ end
 ### no SGS ###
 fname = @__DIR__()*"/output/new/data_no_sgs_dns512_les64_Re2000.0_tsim10.0.jld2"
 no_sgs_data = load(fname, "data_online");
+fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim10.0.jld2"
+no_sgs_data2 = load(fname, "data_online");
 
 let 
     g = Figure()
@@ -170,6 +176,7 @@ let
     for i in 1:size(no_sgs_data.q, 1)
         lines!(axs[i], q_ref[i, :], label = "ref")
         lines!(axs[i], no_sgs_data.q[i, :], label = "no sgs")
+        lines!(axs[i], no_sgs_data2.q[i, :], label = "no sgs2", color = :red)
         if i == size(no_sgs_data.q, 1) axislegend(axs[i], position = :rt) end
     end
     display(g)

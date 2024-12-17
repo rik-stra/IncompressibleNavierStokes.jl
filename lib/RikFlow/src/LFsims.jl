@@ -11,6 +11,7 @@ function track_ref(;
     create_psolver = psolver_spectral,
     savefreq = 1,
     ArrayType = Array,
+    backend,
     ou_bodyforce = none,
     kwargs...,
 )
@@ -24,6 +25,7 @@ Setup(;
     Re,
     ArrayType,
     ou_bodyforce,
+    backend,
 )
 
 # Number of time steps to save
@@ -83,6 +85,7 @@ function online_sgs(;
     create_psolver = psolver_spectral,
     savefreq = 1,
     ArrayType = Array,
+    backend,
     ou_bodyforce = none,
     kwargs...,
 )
@@ -95,6 +98,7 @@ Setup(;
     x = ntuple(α -> LinRange(lims[α]..., nles[1][α] + 1), D),
     Re,
     ArrayType,
+    backend,
     ou_bodyforce,
 )
 

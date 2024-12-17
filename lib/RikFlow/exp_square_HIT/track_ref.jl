@@ -14,6 +14,7 @@ using RikFlow
 using IncompressibleNavierStokes
 using CUDA
 ArrayType = CuArray
+backend = CUDABackend()
 
 n_dns = Int(512)
 n_les = Int(64)
@@ -47,7 +48,12 @@ ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim10.
 data_train = load(ref_file, "data_train");
 params_train = load(ref_file, "params_train");
 # get initial condition
-ustart = ArrayType.(data_train.data[1].u[1]);
+if data_train.data[1].u[1] isa Tuple
+    ustart = stack(ArrayType.(data_train.data[1].u[1]));
+elseif data_train.data[1].u[1] isa Array{<:Number,4}
+    ustart = ArrayType(data_train.data[1].u[1]);
+end
+
 # get ref trajectories
 qoi_ref = stack(data_train.data[1].qoi_hist);
 
@@ -57,7 +63,8 @@ params_track = (;
     params_train...,
     tsim,
     Δt,
-    ArrayType, 
+    ArrayType,
+    backend, 
     ref_reader,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 100);
@@ -71,4 +78,4 @@ maximum(abs, erel)
 #@assert(maximum(abs, erel)<1e-2)
 
 # Save tracking data
-jldsave("$outdir/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
+jldsave("$outdir/data_track2_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);

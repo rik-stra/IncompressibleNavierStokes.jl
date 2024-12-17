@@ -62,9 +62,15 @@ ispath(outdir) || mkpath(outdir)
 
 T = Float32
 ArrayType = CuArray
+backend = CUDABackend()
 #device = x -> adapt(CuArray, x)
 tburn = Float32(4)
-ustart = ArrayType.(load(indir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start"));
+ustart = load(indir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start");
+if ustart isa Tuple
+    ustart = stack(ArrayType.(ustart));
+elseif ustart isa Array{<:Number,4}
+    ustart = ArrayType(ustart);
+end
 
 # Parameters
 get_params(nlesscalar) = (;
@@ -78,6 +84,7 @@ get_params(nlesscalar) = (;
     ndns = (n -> (n, n, n))(n_dns), # DNS resolution
     filters = (FaceAverage(),),
     ArrayType,
+    backend,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou ),
 )
 

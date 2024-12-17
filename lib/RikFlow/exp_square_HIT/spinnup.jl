@@ -60,7 +60,7 @@ seeds = (;
 # For running on a CUDA compatible GPU
 
 T = Float32
-ArrayType = CuArray
+backend = CUDABackend()
 
 # Parameters
 get_params(nlesscalar) = (;
@@ -68,15 +68,15 @@ get_params(nlesscalar) = (;
     Re,
     lims = ( (T(0) , T(1)) , (T(0) , T(1)), (T(0),T(1)) ),
     tburn,
+    backend,
     ndns = (n -> (n, n, n))(n_dns), # DNS resolution
-    ArrayType,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou_spin ),
 )
 
 params_train = (; get_params([n_les])..., Δt);
 t3 = time()
 u_start, ehist = spinnup(; params_train...);
-u_start = Array.(u_start);
+u_start = Array(u_start);
 
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")

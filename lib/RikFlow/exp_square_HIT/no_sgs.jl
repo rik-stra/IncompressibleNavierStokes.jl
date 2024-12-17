@@ -45,9 +45,12 @@ track_file = outdir*"/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim10.0.jld2"
 data_track = load(track_file, "data_track");
 params_track = load(track_file, "params_track");
 # get initial condition
-ustart = ArrayType.(data_track.fields[1].u);
+if data_track.fields[1].u isa Tuple
+    ustart = stack(ArrayType.(data_track.fields[1].u));
+elseif data_track.fields[1].u isa Array{<:Number,4}
+    ustart = ArrayType(data_track.fields[1].u);
+end
 
-ustart = stack(ustart) # from old INS
 
 params = (;
     params_track...,
