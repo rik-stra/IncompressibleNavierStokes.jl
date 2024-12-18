@@ -2,7 +2,7 @@ include("plotter.jl")
 
 
 function lesdatagen(dnsobs, Φ, les, compression, to_setup, n_plot)
-    p = scalarfield(les)
+    #p = scalarfield(les)
     Φu = vectorfield(les)
 
     #results = (; u = fill(Array.(dnsobs[].u), 0), c = fill(Array.(dnsobs[].u), 0))
@@ -25,33 +25,29 @@ end
 """
 Save filtered DNS data.
 """
-filtersaver(dns, les, filters, compression, to_setup_les; nupdate = 1, n_plot = 1000) =
+filtersaver(dns, les, filters, compression, to_setup_les; nupdate = 1, n_plot = 1000, checkpoints = nothing, checkpoint_name=nothing) =
     processor(
         (results, state) -> (; results..., comptime = time() - results.comptime),
     ) do state
         comptime = time()
         (; x) = dns.grid
         T = eltype(x[1])
-        #F = zero.(state[].u)
-        #div = zero(state[].u[1])
-        #p = zero(state[].u[1])
+
         dnsobs = Observable((; state[].u, state[].t, state[].n))
         data = [
             lesdatagen(dnsobs, Φ, les[i], compression[i], to_setup_les[i], n_plot) for
             i = 1:length(les), Φ in filters
         ]
-        results = (; data, t = zeros(T, 0), comptime)
+        results = (; data, comptime)
         #temp = nothing
         on(state) do (; u, t, n)
-            
-            #momentum!(F, u, temp, t, dns)
-            #apply_bc_u!(F, t, dns; dudt = true)
-            #project!(F, dns; psolver = psolver_dns, div, p)
-            
-            #push!(results.t, t)
             if n % nupdate == 0
                 dnsobs[] = (; u, t, n)
             end
+            if !isnothing(checkpoints) && n in checkpoints
+                filename = "$checkpoint_name/checkpoint_n$(n).jld2"
+                jldsave(filename; results)
+            end 
         end
         state[] = state[] # Save initial conditions
         results
@@ -78,6 +74,8 @@ function create_ref_data(;
     backend,
     ustart = nothing,
     ou_bodyforce = nothing,
+    n_checkpoints = nothing,
+    checkpoint_name = nothing,
     kwargs...,
 )
     T = typeof(Re)
@@ -114,6 +112,8 @@ function create_ref_data(;
     # Number of time steps to save
     nt = round(Int, tsim / Δt)
     Δt = tsim / nt
+    checkpoints= 0:round(nt/(n_checkpoints+1)):nt
+    checkpoints = checkpoints[2:end-1]
 
     # Build TO operators
     to_setup_les = [
@@ -165,6 +165,8 @@ function create_ref_data(;
                 to_setup_les;
                 nupdate = savefreq,
                 n_plot = plotfreq,
+                checkpoints,
+                checkpoint_name,
             ),
             #vort = realtimeplotter(;
             #    setup = _dns,
