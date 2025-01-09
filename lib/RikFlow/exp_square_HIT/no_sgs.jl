@@ -41,7 +41,7 @@ T = Float32
 ArrayType = CuArray
 
 # load reference data
-track_file = outdir*"/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim10.0.jld2"
+track_file = outdir*"/data_track2_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim100.0.jld2"
 data_track = load(track_file, "data_track");
 params_track = load(track_file, "params_track");
 # get initial condition
