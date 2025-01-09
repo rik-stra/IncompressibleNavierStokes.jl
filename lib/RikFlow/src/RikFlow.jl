@@ -410,4 +410,7 @@ export online_sgs
 
 include("ANN.jl")
 
+include("post_processing_funcs.jl")
+export ks_dist
+
 end # module RikFlow
