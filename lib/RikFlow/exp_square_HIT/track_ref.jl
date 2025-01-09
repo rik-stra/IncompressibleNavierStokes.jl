@@ -21,7 +21,7 @@ n_les = Int(64)
 Re = Float32(2_000)
 ############################
 Δt = Float32(2.5e-3)
-tsim = Float32(10)
+tsim = Float32(100)
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -44,7 +44,7 @@ T = Float32
 
 
 # load reference data
-ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim10.0.jld2"
+ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim100.0.jld2"
 data_train = load(ref_file, "data_train");
 params_train = load(ref_file, "params_train");
 # get initial condition
@@ -64,12 +64,11 @@ params_track = (;
     tsim,
     Δt,
     ArrayType,
-    backend, 
-    ref_reader,
+    backend,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 100);
 
-data_track = track_ref(; params_track..., ustart);
+data_track = track_ref(; params_track..., ref_reader, ustart);
 
 # check tracking
 n_steps = size(data_track.q, 2)
