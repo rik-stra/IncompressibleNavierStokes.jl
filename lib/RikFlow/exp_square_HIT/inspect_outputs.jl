@@ -49,7 +49,7 @@ filename = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_ts
 ref_data = load(filename, "data_train");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 q_ref = stack(ref_data.data[1].qoi_hist)
-t_sim = 10
+t_sim = 50
 time_index = 0:2.5e-3:t_sim
 
 # begin some plots
@@ -196,7 +196,7 @@ time_index = 0:2.5e-3:t_sim
 ### no SGS ###
 ##############
 # begin
-    fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim10.0.jld2"
+    fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim100.0.jld2"
     no_sgs_data = load(fname, "data_online");
 
 
@@ -206,13 +206,13 @@ time_index = 0:2.5e-3:t_sim
             title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
             for i in 0:size(no_sgs_data.q, 1)-1]
         for i in 1:size(no_sgs_data.q, 1)
-            lines!(axs[i], q_ref[i, 1:size(no_sgs_data.q,2)], label = "ref")
-            lines!(axs[i], no_sgs_data.q[i, :], label = "no sgs")
+            lines!(axs[i], time_index, q_ref[i, 1:size(time_index,1)], label = "ref")
+            lines!(axs[i], time_index, no_sgs_data.q[i, 1:size(time_index,1)], label = "no sgs")
             #lines!(axs[i], no_sgs_data2.q[i, :], label = "no sgs2", color = :red)
             if i == size(no_sgs_data.q, 1) axislegend(axs[i], position = :rt) end
         end
         display(g)
-        save(fig_folder*"/q_no_sgs_dns512_les64_Re2000.0_tsim10.png", g)
+        save(fig_folder*"/q_no_sgs_dns512_les64_Re2000.0_tsim100.png", g)
     end
 
     # plot distrubution of QoIs
@@ -223,13 +223,13 @@ time_index = 0:2.5e-3:t_sim
             for i in 0:size(no_sgs_data.q, 1)-1]
         for i in 1:size(no_sgs_data.q, 1)
             density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
-            strokecolor = :black, strokewidth = 3, strokearound = true)
+            strokecolor = :black, strokewidth = 3, strokearound = false)
             density!(axs[i], no_sgs_data.q[i, :], label = "no model", color = (:red, 0.3),
-            strokecolor = :red, strokewidth = 3, strokearound = true)
+            strokecolor = :red, strokewidth = 3, strokearound = false)
             if i == size(no_sgs_data.q, 1) axislegend(axs[i], position = :rt) end
         end
         display(g)
-        
+        save(fig_folder*"/lt_distr_q_nomodel_dns512_les64_Re2000.0_tsim100.png", g)
     end
 
     ## plot final field

@@ -19,7 +19,7 @@ n_les = Int(64)
 Re = Float32(2_000)
 ############################
 Δt = Float32(2.5f-3)
-tsim = Float32(10)
+tsim = Float32(100)
 # forcing
 T_L = 0.01f0  # correlation time of the forcing
 e_star = 0.1f0 # energy injection rate
