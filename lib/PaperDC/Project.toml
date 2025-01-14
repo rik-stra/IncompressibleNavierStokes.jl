@@ -32,7 +32,7 @@ path = "../NeuralClosure"
 [compat]
 Adapt = "4"
 CUDA = "5"
-CairoMakie = "0.12"
+CairoMakie = "0.13"
 FFTW = "1.8"
 GLMakie = "0.10"
 IncompressibleNavierStokes = "1"
