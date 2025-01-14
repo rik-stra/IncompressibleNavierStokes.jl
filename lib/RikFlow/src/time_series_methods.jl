@@ -87,23 +87,32 @@ struct LinReg
     q_hist
     counter
     hist_var
+    include_predictor
     rng
     function LinReg(file_name, rng; q_hist = nothing)
-        c, stoch_distr, scaling, hist_var = load(file_name, "c", "stoch_distr", "scaling", "hist_var")
+        c, stoch_distr, scaling, hist_var, include_predictor = load(file_name, "c", "stoch_distr", "scaling", "hist_var", "include_predictor")
         scaling = scaling |> dev
         c= c |> dev
         counter = zeros(Int)
-        new(c, stoch_distr, scaling, q_hist, counter, hist_var, rng)
+        new(c, stoch_distr, scaling, q_hist, counter, hist_var, include_predictor, rng)
     end
 end
 
 function get_next_item_timeseries(time_series_method::LinReg, q_star)
     if !isnothing(time_series_method.q_hist)  # if the model uses history
+        n_qoi = size(q_star,1)
         if time_series_method.counter[] < size(time_series_method.q_hist, 2) # for the first few steps, directly read dQ
             time_series_method.counter[] += 1
-            dQ = time_series_method.q_hist[:,end]
+            dQ = time_series_method.q_hist[1:n_qoi,end]
         else    # after that, predict dQ  (we now have enough history)
-            input = vcat(q_star, time_series_method.q_hist[:])
+            
+            if time_series_method.include_predictor
+                input = vcat(q_star, time_series_method.q_hist[:])
+            else
+                input = time_series_method.q_hist[:]
+                
+            end
+            
             data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
             stoch = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
             pred =  time_series_method.c * data .+ stoch
@@ -114,6 +123,9 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             time_series_method.q_hist[:,1] .= q_star + dQ                             # add new q to history
         elseif time_series_method.hist_var == :q_star
             time_series_method.q_hist[:,1] .= q_star
+        elseif time_series_method.hist_var == :q_star_q
+            time_series_method.q_hist[1:n_qoi,1] .= q_star + dQ
+            time_series_method.q_hist[n_qoi+1:end,1] .= q_star
         end
     else    # if the model does not use history, predict dQ directly from q_star
         input = q_star
