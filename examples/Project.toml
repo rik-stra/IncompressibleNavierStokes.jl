@@ -19,7 +19,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 path = ".."
 
 [compat]
-CairoMakie = "0.12"
+CairoMakie = "0.13"
 FFTW = "1"
 GLMakie = "0.10"
 IncompressibleNavierStokes = "1"
