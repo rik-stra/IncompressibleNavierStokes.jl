@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg17", "LinReg18"]
+ANN_names = ["LinReg19", "LinReg20","LinReg21","LinReg22",]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -29,8 +29,8 @@ no_sgs_data = stack(load(filename, "data_online").q);
 
 # load replica simulations
 for ANN_name in ANN_names
-
-    n_replicas = 1
+    #ANN_name = "LinReg19"
+    n_replicas = 10
     #ANN_name = ANN_names[5]
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
@@ -45,13 +45,14 @@ for ANN_name in ANN_names
     axs = [Axis(g[i ÷ 2, i%2], 
             title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(q_ref, 1)-1]
-    xlim_right = min(maximum(size.(q_rep,2)), size(time_index,1))
+    
     for i in 1:size(q_ref, 1)
         for j in 1:n_replicas
-            
+                xlim_right = min(size(q_rep[j],2), size(time_index,1))
                 model=lines!(axs[i],time_index[1:xlim_right], q_rep[j][i,1:xlim_right], color = (:blue, 0.2))
             
         end
+        xlim_right = min(maximum(size.(q_rep,2)), size(time_index,1))
         ref = lines!(axs[i], time_index[1:xlim_right], q_ref[i,1:xlim_right], color = :black)
         no_model = lines!(axs[i], time_index[1:min(xlim_right,size(no_sgs_data,2))], no_sgs_data[i,1:min(xlim_right,size(no_sgs_data,2))], color = (:red, 0.6))
         ylims!(axs[i],(0, maximum(q_ref[i,:])*2)) 
@@ -65,7 +66,7 @@ for ANN_name in ANN_names
 
 
     # plot dQ trajectories
-    dQ_rep = stack([load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").dQ for i in 1:n_replicas])
+    dQ_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").dQ for i in 1:n_replicas]
     
     let
         lims = [(nothing, (-10,22)), 
@@ -82,12 +83,14 @@ for ANN_name in ANN_names
                 limits = lims[i+1],
                 title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
             for i in 0:size(q_ref, 1)-1]
-        xlim_right = min(maximum(size(dQ_rep,2)), size(time_index,1)-1)
+        
         for i in 1:size(q_ref, 1)
             for j in 1:n_replicas
-                    model=lines!(axs[i],time_index[1:xlim_right], dQ_rep[i,1:xlim_right,j], color = (:blue, 0.2))
+                    xlim_right = min(size(dQ_rep[j],2), size(time_index,1))
+                    model=lines!(axs[i],time_index[1:xlim_right], dQ_rep[j][i,1:xlim_right], color = (:blue, 0.2))
                 
             end
+            xlim_right = min(maximum(size.(dQ_rep,2)), size(time_index,1)-1)
             ref = lines!(axs[i], time_index[1:xlim_right], dQ_ref[i,1:xlim_right], color = :black)
             
         end
@@ -128,10 +131,11 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg18"
+    ANN_name = "LinReg22"
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
-    n_replicas = 2
+    n_replicas = 10
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
+    q_rep = q_rep[size.(q_rep,2) .>= 40000]
     qs = cat(q_rep..., dims = 2)
     g = Figure()
     axs = [Axis(g[i ÷ 2, i%2], 
@@ -146,7 +150,7 @@ let # all replicas together
         
         if i == size(qois, 1) axislegend(axs[i], position = :rt) end
     end
-    Label(g[-1, :], text = "LinReg \n hist = $(ANN_parameters.hist_len), $(ANN_parameters.hist_var)", fontsize = 20)
+    Label(g[-1, :], text = "LinReg \n hist = $(ANN_parameters.hist_len), $(ANN_parameters.hist_var), $(10-size(q_rep,1)) unstable", fontsize = 20)
     display(g)
     save(figsfolder*"/lt_distr_q_TO_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(ANN_parameters.hist_var)_dns512_les64_Re2000.0_tsim100.png", g)
 
