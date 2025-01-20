@@ -30,7 +30,7 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method = nothing)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method = nothing, tracking_noise = nothing)
     T = typeof(setup.Re)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
@@ -40,7 +40,7 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method =
         V_i = get_vi_functions(to_setup)
         cij_masks = get_cij_masks(to_setup)
         outputs = allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
-        to_setup = (; to_setup..., V_i, cij_masks, outputs)
+        to_setup = (; to_setup..., V_i, cij_masks, outputs, tracking_noise)
     end
     return to_setup
 end
@@ -293,6 +293,9 @@ function to_sgs_term(u, setup, to_setup, stepper)
         to_setup.outputs.q_star[:,stepper.n] = q_star
         q_ref = get_next_item_timeseries(to_setup.time_series_method)
         dQ = q_ref-q_star
+        if !isnothing(to_setup.tracking_noise)
+            dQ += randn(eltype(dQ),size(dQ)).*dQ.*convert(eltype(dQ),to_setup.tracking_noise)
+        end
     elseif to_setup.to_mode == :ONLINE
         if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]
             dQ = get_next_item_timeseries(to_setup.time_series_method)
