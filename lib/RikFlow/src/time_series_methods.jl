@@ -105,15 +105,22 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             time_series_method.counter[] += 1
             dQ = time_series_method.q_hist[1:n_qoi,end]
         else    # after that, predict dQ  (we now have enough history)
-            
-            if time_series_method.include_predictor
-                input = vcat(q_star, time_series_method.q_hist[:])
+            q_star_sc = scale_input(q_star, time_series_method.scaling.in_scaling)
+            if time_series_method.hist_var == :q_star_q
+                q_hist_sc1 = scale_input(time_series_method.q_hist[1:n_qoi,:], time_series_method.scaling.in_scaling)
+                q_hist_sc2 = scale_input(time_series_method.q_hist[n_qoi+1:end,:], time_series_method.scaling.in_scaling)
+                q_hist_sc = cat(q_hist_sc1, q_hist_sc2, dims = 1)
             else
-                input = time_series_method.q_hist[:]
-                
+                q_hist_sc = scale_input(time_series_method.q_hist, time_series_method.scaling.in_scaling)
+            end
+
+            if time_series_method.include_predictor                
+                input = vcat(q_star_sc, q_hist_sc[:])
+            else
+                input = q_hist_sc
             end
             
-            data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
+            data = vcat(input,ones(eltype(input), (1,1)))
             stoch = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
             pred =  time_series_method.c * data .+ stoch
             dQ = scale_output(pred, time_series_method.scaling.out_scaling)[:]

@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg19", "LinReg20","LinReg21","LinReg22",]
+ANN_names = ["LinReg4",]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -16,7 +16,7 @@ q_ref = stack(ref_data.data[1].qoi_hist)
 track_file = "/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
 dQ_ref = stack(load(@__DIR__()*track_file, "data_track").dQ)
 # = stack(ref_data.dQ[1])
-t_sim = 20
+t_sim = 100
 time_index = 0:0.0025:t_sim
 
 # load no-model sim
@@ -30,7 +30,7 @@ no_sgs_data = stack(load(filename, "data_online").q);
 # load replica simulations
 for ANN_name in ANN_names
     #ANN_name = "LinReg19"
-    n_replicas = 10
+    n_replicas = 4
     #ANN_name = ANN_names[5]
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
@@ -104,9 +104,9 @@ end
 
 
 let
-    ANN_name = "LinReg14"
-    replica = 5
-    n_replicas = 10
+    ANN_name = "LinReg4"
+    replica = 1
+    n_replicas = 4
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
     
@@ -118,7 +118,7 @@ let
         density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
         strokecolor = :black, strokewidth = 3, strokearound = true)
         
-        density!(axs[i], q_rep[replica][i,:], label = "TO", color = (:red, 0.3),
+        density!(axs[i], q_rep[replica][i,1:17000], label = "TO", color = (:red, 0.3),
             strokecolor = :red, strokewidth = 3, strokearound = true)
         
         if i == size(qois, 1) axislegend(axs[i], position = :rt) end
@@ -131,9 +131,9 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg22"
+    ANN_name = "LinReg4"
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
-    n_replicas = 10
+    n_replicas = 4
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
     q_rep = q_rep[size.(q_rep,2) .>= 40000]
     qs = cat(q_rep..., dims = 2)

@@ -33,8 +33,8 @@ seeds = (;
 )
 
 #parse input ARGS
-model_index = parse(Int, ARGS[1])
-#model_index = 13
+#model_index = parse(Int, ARGS[1])
+model_index = 4
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, track_file, hist_len, n_replicas, hist_var) = inputs[model_index]
