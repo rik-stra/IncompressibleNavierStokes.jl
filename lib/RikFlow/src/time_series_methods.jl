@@ -2,10 +2,14 @@
 struct Reference_reader
     vals
     index::Array{Int64, 0}
+    stds
+    means
     function Reference_reader(vals)
         index = ones(Int)
         index[] = 2
-        new(vals, index)
+        stds = std(vals, dims = 2)
+        means = mean(vals, dims = 2)
+        new(vals, index, stds, means)
     end
 end
 

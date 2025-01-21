@@ -294,7 +294,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
         q_ref = get_next_item_timeseries(to_setup.time_series_method)
         dQ = q_ref-q_star
         if !isnothing(to_setup.tracking_noise)
-            dQ += randn(eltype(dQ),size(dQ)).*dQ.*convert(eltype(dQ),to_setup.tracking_noise)
+            dQ += randn(eltype(dQ),size(dQ)).*to_setup.time_series_method.means.*convert(eltype(dQ),to_setup.tracking_noise)
         end
     elseif to_setup.to_mode == :ONLINE
         if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]

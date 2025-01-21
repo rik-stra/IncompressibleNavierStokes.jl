@@ -22,7 +22,7 @@ Re = Float32(2_000)
 ############################
 Δt = Float32(2.5e-3)
 tsim = Float32(10)
-tracking_noise = 0.1
+tracking_noise = 0.001
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -79,4 +79,4 @@ maximum(abs, erel)
 #@assert(maximum(abs, erel)<1e-2)
 
 # Save tracking data
-jldsave("$outdir/data_track2_dns$(n_dns)_les$(n_les)_trackingnoise_$(tracking_noise)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
+jldsave("$outdir/data_track2_dns$(n_dns)_les$(n_les)_trackingnoise_mu_$(tracking_noise)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
