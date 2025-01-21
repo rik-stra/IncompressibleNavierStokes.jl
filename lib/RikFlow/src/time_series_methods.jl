@@ -89,25 +89,32 @@ struct LinReg
     stoch_distr
     scaling
     q_hist
+    spinnup_data
     counter
     hist_var
     include_predictor
     rng
-    function LinReg(file_name, rng; q_hist = nothing)
+    function LinReg(file_name, rng; q_hist = nothing, spinnup_data = nothing)
         c, stoch_distr, scaling, hist_var, include_predictor = load(file_name, "c", "stoch_distr", "scaling", "hist_var", "include_predictor")
         scaling = scaling |> dev
         c= c |> dev
         counter = zeros(Int)
-        new(c, stoch_distr, scaling, q_hist, counter, hist_var, include_predictor, rng)
+        if !isnothing(q_hist)
+            @assert size(spinnup_data, 2) >= size(q_hist, 2) "Need spinnup data to fill history"
+        end
+        if !isnothing(spinnup_data) && isnothing(q_hist)
+            @error "Spinnup not implemented without history"
+        end
+        new(c, stoch_distr, scaling, q_hist, spinnup_data, counter, hist_var, include_predictor, rng)
     end
 end
 
 function get_next_item_timeseries(time_series_method::LinReg, q_star)
     if !isnothing(time_series_method.q_hist)  # if the model uses history
         n_qoi = size(q_star,1)
-        if time_series_method.counter[] < size(time_series_method.q_hist, 2) # for the first few steps, directly read dQ
+        if time_series_method.counter[] < size(time_series_method.spinnup_data,2) # for the first few steps, directly read dQ
             time_series_method.counter[] += 1
-            dQ = time_series_method.q_hist[1:n_qoi,end]
+            dQ = time_series_method.spinnup_data[1:n_qoi, time_series_method.counter[]]
         else    # after that, predict dQ  (we now have enough history)
             q_star_sc = scale_input(q_star, time_series_method.scaling.in_scaling)
             if time_series_method.hist_var == :q_star_q
