@@ -13,6 +13,7 @@ function track_ref(;
     ArrayType = Array,
     backend,
     ou_bodyforce = none,
+    tracking_noise = 0.0,
     kwargs...,
 )
 T = typeof(Re)
@@ -37,7 +38,8 @@ to_setup_les = RikFlow.TO_Setup(;
         ArrayType, 
         setup, 
         nstep=nt,
-        time_series_method = ref_reader,)
+        time_series_method = ref_reader,
+        tracking_noise = tracking_noise)
 
 psolver = create_psolver(setup)
 

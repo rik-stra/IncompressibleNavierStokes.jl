@@ -21,7 +21,8 @@ n_les = Int(64)
 Re = Float32(2_000)
 ############################
 Δt = Float32(2.5e-3)
-tsim = Float32(100)
+tsim = Float32(10)
+tracking_noise = 0.001
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -66,7 +67,8 @@ params_track = (;
     ArrayType,
     backend,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
-    savefreq = 100);
+    savefreq = 100,
+    tracking_noise);
 
 data_track = track_ref(; params_track..., ref_reader, ustart);
 
@@ -77,4 +79,4 @@ maximum(abs, erel)
 #@assert(maximum(abs, erel)<1e-2)
 
 # Save tracking data
-jldsave("$outdir/data_track2_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
+jldsave("$outdir/data_track2_dns$(n_dns)_les$(n_les)_trackingnoise_mu_$(tracking_noise)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
