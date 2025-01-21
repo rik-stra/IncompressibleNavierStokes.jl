@@ -22,9 +22,16 @@ i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 10, hist_var = :q))
 i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 10, track_file = "/../output/new/data_track2_dns512_les64_trackingnoise_0.1_Re2000.0_tsim10.0.jld2" ))
-
-#push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 100, hist_var = :q))
-
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 10, track_file = "/../output/new/data_track2_dns512_les64_trackingnoise_0.001_Re2000.0_tsim10.0.jld2" ))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 10, track_file = "/../output/new/data_track2_dns512_les64_trackingnoise_0.001_Re2000.0_tsim10.0.jld2" ))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 10, track_file = "/../output/new/data_track2_dns512_les64_trackingnoise_0.005_Re2000.0_tsim10.0.jld2" ))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 10, track_file = "/../output/new/data_track2_dns512_les64_trackingnoise_mu_0.001_Re2000.0_tsim10.0.jld2" ))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 10, hist_var = :q, track_file = "/../output/new/data_track2_dns512_les64_trackingnoise_mu_0.001_Re2000.0_tsim10.0.jld2" ))
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 

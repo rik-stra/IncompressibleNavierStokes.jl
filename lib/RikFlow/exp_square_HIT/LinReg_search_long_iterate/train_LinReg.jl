@@ -51,7 +51,7 @@ end
 
 #parse input ARGS
 #model_index = parse(Int, ARGS[1])
-model_index =4
+model_index =9
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, track_file, hist_len, hist_var, n_replicas, normalization, include_predictor, train_range) = inputs[model_index]
@@ -147,7 +147,7 @@ end
 #plot convergence of c
 g = Figure()
 ax = Axis(g[1,1], title = "c[1,1]")
-lines!(ax, [c[4,4] for c in c_list])
+lines!(ax, [c[5,1] for c in c_list])
 display(g)
 
 #plot convergence of stoch_distr
@@ -195,20 +195,21 @@ println(mean(dQ_scaled[:,hist_len+1:end], dims=2))
 
 
 ## save model
-save(out_dir*"/LinReg.jld2", "c", c_list[1]', "stoch_distr", stoch_distr_list[1], "scaling", scaling, "hist_var", hist_var, "hist_len", hist_len, "include_predictor", include_predictor)
+save(out_dir*"/LinReg.jld2", "c", c_list[end]', "stoch_distr", stoch_distr_list[end], "scaling", scaling, "hist_var", hist_var, "hist_len", hist_len, "include_predictor", include_predictor)
 exit()
 
 
 ## test the model
-dir = @__DIR__()*"/output/LinReg2/"
+data_test = load(@__DIR__()*"/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2", "data_track");
+dir = @__DIR__()*"/output/LinReg7/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 include_predictor = model["include_predictor"]
 #hist_var = :q
 # scale inputs and outputs
-q_test = RikFlow.scale_input(data.q[:,1:8000], model["scaling"].in_scaling)
-q_star_test = RikFlow.scale_input(data.q_star[:,1:8000], model["scaling"].in_scaling)
-dQ_test = RikFlow.scale_input(data.dQ[:,1:8000], model["scaling"].out_scaling)
+q_test = RikFlow.scale_input(data_test.q[:,1:8000], model["scaling"].in_scaling)
+q_star_test = RikFlow.scale_input(data_test.q_star[:,1:8000], model["scaling"].in_scaling)
+dQ_test = RikFlow.scale_input(data_test.dQ[:,1:8000], model["scaling"].out_scaling)
 
 inputs_test,outputs_test = create_history(model["hist_len"], q_star_test, q_test, dQ_test, hist_var; include_predictor)
 
@@ -230,4 +231,4 @@ plot_time_series(rand_part', qois, "stoch_part")
 
 # plot original time series
 preds_unsc = RikFlow.scale_output(preds, out_scaling)
-plot_time_series(preds_unsc, qois, "preds_unsc", ref = data.dQ[:,model["hist_len"]+1:8000])
+plot_time_series(preds_unsc, qois, "preds_unsc", ref = data_test.dQ[:,model["hist_len"]+1:8000])

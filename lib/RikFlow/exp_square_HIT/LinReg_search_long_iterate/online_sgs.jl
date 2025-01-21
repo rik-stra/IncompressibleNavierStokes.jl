@@ -19,7 +19,7 @@ n_les = Int(64)
 Re = Float32(2_000);
 ############################
 Δt = Float32(2.5e-3);
-tsim = Float32(100);
+tsim = Float32(20);
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -34,7 +34,7 @@ seeds = (;
 
 #parse input ARGS
 #model_index = parse(Int, ARGS[1])
-model_index = 4
+model_index = 9
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, track_file, hist_len, n_replicas, hist_var) = inputs[model_index]

@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg4",]
+ANN_names = ["LinReg9"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -16,7 +16,7 @@ q_ref = stack(ref_data.data[1].qoi_hist)
 track_file = "/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
 dQ_ref = stack(load(@__DIR__()*track_file, "data_track").dQ)
 # = stack(ref_data.dQ[1])
-t_sim = 100
+t_sim = 10
 time_index = 0:0.0025:t_sim
 
 # load no-model sim
@@ -32,7 +32,7 @@ for ANN_name in ANN_names
     #ANN_name = "LinReg19"
     n_replicas = 4
     #ANN_name = ANN_names[5]
-    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
+    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim20.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
     hist_var = ANN_parameters.hist_var
     # plot trajectories
@@ -66,7 +66,7 @@ for ANN_name in ANN_names
 
 
     # plot dQ trajectories
-    dQ_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").dQ for i in 1:n_replicas]
+    dQ_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim20.0_replica$(i).jld2", "data_online").dQ for i in 1:n_replicas]
     
     let
         lims = [(nothing, (-10,22)), 
@@ -131,9 +131,9 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg4"
+    ANN_name = "LinReg8"
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
-    n_replicas = 4
+    n_replicas = 10
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
     q_rep = q_rep[size.(q_rep,2) .>= 40000]
     qs = cat(q_rep..., dims = 2)
@@ -145,7 +145,7 @@ let # all replicas together
         density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
         strokecolor = :black, strokewidth = 3, strokearound = false)
         
-        density!(axs[i], qs[i,:], label = "TO", color = (:red, 0.3),
+        density!(axs[i], qs[i,1:20000], label = "TO", color = (:red, 0.3),
             strokecolor = :red, strokewidth = 3, strokearound = false)
         
         if i == size(qois, 1) axislegend(axs[i], position = :rt) end
