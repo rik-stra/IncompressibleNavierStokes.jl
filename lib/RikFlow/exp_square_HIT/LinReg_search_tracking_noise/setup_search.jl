@@ -23,17 +23,17 @@ push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true))
 i += 1 #4
 push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true))
 i += 1 #5
-push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005))
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005)) # succes with noise in linreg targets
 i += 1 #6
 push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tracking_noise = 0.005))
 i += 1 #7
-push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01))
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005, n_replicas = 5))  # no longer noise in linreg targets
 i += 1 #8
-push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.0))
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, n_replicas = 5))
 i += 1 #9
-push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005, hist_len = 5))
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005, hist_len = 5, n_replicas = 5))
 i += 1 #10
-push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tracking_noise = 0.005, hist_len = 5))
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tracking_noise = 0.005, hist_len = 5, n_replicas = 5))
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 

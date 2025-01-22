@@ -56,21 +56,25 @@ let
     #save(fig_folder*"/dQ_dns512_les64_Re2000.0_tsim10.png", g)
 end
 
+println(track_data[1].dQ[2, 2])
+println(track_data[2].dQ[2, 2])
+println(track_data[3].dQ[2, 2])
+println(track_data[4].dQ[2, 2])
 # trajectories Q
 let
-    t_sim = 0.05
-    time_index = 0:2.5e-3:t_sim
-    g = Figure()
-    
-    axs = [Axis(g[i ÷ 2, i%2], 
-        title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
-        for i in 0:size(track_data[1].q, 1)-1]
-    for i in 1:size(track_data[1].q, 1)
-        for n in 1:size(noise_levels,1)
-            lines!(axs[i], time_index[1:end-1], track_data[n].q[i, 1:size(time_index,1)-1])
-            #lines!(axs[i], track_data2.Q[i, range], linestyle = :dash ,color = :red)
+    for r in 1:size(input_index,1)
+        t_sim = 10
+        time_index = 0:2.5e-3:t_sim
+        g = Figure()
+        range = 1:4000
+        axs = [Axis(g[i ÷ 2, i%2], 
+            title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+            for i in 0:size(track_data[1].dQ, 1)-1]
+        for i in 1:size(track_data[1].dQ, 1)
+            lines!(axs[i], time_index[1:end-1], track_data[r].q[i, range])
+                #lines!(axs[i], track_data2.dQ[i, range], linestyle = :dash ,color = :red)
         end
+        Label(g[-1, :], text = "tracking noise $(inputs[input_index[r]].tracking_noise)", fontsize = 20)
+        display(g)
     end
-    display(g)
-    #save(fig_folder*"/Q_dns512_les64_Re2000.0_tsim10.png", g)
 end
