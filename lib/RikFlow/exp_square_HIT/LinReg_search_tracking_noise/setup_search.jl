@@ -20,6 +20,20 @@ push!(inputs, (name = "LinReg$i", fixed_parameters...)) # with spinnup
 i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true))
 
+i += 1 #4
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true))
+i += 1 #5
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005))
+i += 1 #6
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tracking_noise = 0.005))
+i += 1 #7
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01))
+i += 1 #8
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.0))
+i += 1 #9
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005, hist_len = 5))
+i += 1 #10
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tracking_noise = 0.005, hist_len = 5))
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 

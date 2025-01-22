@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg3"]
+ANN_names = ["LinReg4", "LinReg5"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -32,7 +32,7 @@ for ANN_name in ANN_names
     #ANN_name = "LinReg19"
     n_replicas = 4
     #ANN_name = ANN_names[5]
-    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim20.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
+    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
     hist_var = ANN_parameters.hist_var
     # plot trajectories
@@ -66,13 +66,13 @@ for ANN_name in ANN_names
 
 
     # plot dQ trajectories
-    dQ_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim20.0_replica$(i)_rand_initial_dQ.jld2", "data_online").dQ for i in 1:n_replicas]
+    dQ_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").dQ for i in 1:n_replicas]
     
     let
-        lims = [(nothing, (-10,22)), 
-            (nothing, (-0.05, 0.05)), 
-            (nothing, (-50, 12)), 
-            (nothing, (-0.005, 0.002)), 
+        lims = [(nothing, (-25,25)), 
+            (nothing, (-0.06, 0.06)), 
+            (nothing, (-50, 50)), 
+            (nothing, (-0.005, 0.005)), 
             (nothing, (-300, 0)), 
             (nothing, (-0.007, 0))]
         lines = []
@@ -131,10 +131,10 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg3"
+    ANN_name = "LinReg6"
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
     n_replicas = 4
-    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim20.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
+    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     q_rep = q_rep[size.(q_rep,2) .>= 8000]
     qs = cat(q_rep..., dims = 2)
     g = Figure()
@@ -142,7 +142,7 @@ let # all replicas together
         title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(qois, 1)-1]
     for i in 1:size(qois, 1)
-        density!(axs[i], q_ref[i, 1:8001], label = "ref", color = (:black, 0.3),
+        density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
         strokecolor = :black, strokewidth = 3, strokearound = false)
         
         density!(axs[i], qs[i,:], label = "TO", color = (:red, 0.3),
