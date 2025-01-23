@@ -5,6 +5,7 @@ fixed_parameters = (tracking_noise = 0.001,
                     hist_len = 10,
                     hist_var = :q_star_q,
                     train_range = (400,4000),
+                    lambda = 0.0,
                     indep_normals = false,
                     include_predictor = true,
                     n_replicas = 10,
@@ -34,6 +35,13 @@ i += 1 #9
 push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005, hist_len = 5, n_replicas = 5))
 i += 1 #10
 push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tracking_noise = 0.005, hist_len = 5, n_replicas = 5))
+i += 1 #11
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tracking_noise = 0.01, hist_len = 10, n_replicas = 5, lambda = 0.01))
+i += 1 #12
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, hist_len = 3, n_replicas = 5, lambda = 0.01))
+i += 1 #13
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, hist_len = 5, n_replicas = 2, lambda = 0.01))
+
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 

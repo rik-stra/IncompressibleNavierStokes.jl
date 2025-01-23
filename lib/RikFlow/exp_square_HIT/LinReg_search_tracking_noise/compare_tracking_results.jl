@@ -12,7 +12,7 @@ q_ref = stack(ref_data.data[1].qoi_hist)
 t_sim = 50
 time_index = 0:2.5e-3:t_sim
 
-input_index = [8,4,5,7]
+input_index = [11]
 inputs= load(@__DIR__()*"/inputs.jld2", "inputs")
 track_data = []
 for r in input_index
@@ -33,6 +33,14 @@ let
     println("dQ:");
     println("means: $(mean(track_data[1].dQ, dims=2))");
     println("std: $(std(track_data[1].dQ, dims=2))");
+end
+
+let
+    for i in 1:size(track_data,1)
+    println("dQ $i:");
+    println("means: $(mean(track_data[i].dQ, dims=2))");
+    println("std: $(std(track_data[i].dQ, dims=2))");
+    end
 end
 
 
@@ -77,4 +85,59 @@ let
         Label(g[-1, :], text = "tracking noise $(inputs[input_index[r]].tracking_noise)", fontsize = 20)
         display(g)
     end
+end
+
+
+# plot linregs
+input_index = [9,10]
+inputs= load(@__DIR__()*"/inputs.jld2", "inputs")
+track_data = []
+qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
+for r in input_index
+    
+    (;tracking_noise) = inputs[r]
+    fname = @__DIR__()*"/output/LinReg$(r)/LinReg.jld2"
+    c,stoch_distr =load(fname, "c", "stoch_distr")
+    g = Figure()
+    axs = [Axis(g[i ÷ 2, i%2], 
+    title = "d$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+    for i in 0:size(qois, 1)-1]
+    for i in 1:size(qois,1)
+        c_plot = reshape(c[i,7:end-1], 12,5)
+        heatmap!(axs[i], c_plot, colormap = :viridis)
+    end
+    display(g)
+end
+
+# plot linregs
+input_index = [13]
+inputs= load(@__DIR__()*"/inputs.jld2", "inputs")
+track_data = []
+qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
+for r in input_index
+    
+    (;tracking_noise) = inputs[r]
+    fname = @__DIR__()*"/output/LinReg$(r)/LinReg.jld2"
+    c,stoch_distr =load(fname, "c", "stoch_distr")
+    g = Figure()
+    ax,hm = heatmap(g[1,1], c, 
+    #colormap = :grays, colorrange = (-5, 5), highclip = :red, lowclip = :blue)
+    colormap = :balance, colorrange = (-25,25))
+    Colorbar(g[1, 2], hm)
+    Label(g[0,:], text = "tracking noise $(inputs[r].tracking_noise)", fontsize = 20)
+    display(g)
+end
+
+for r in input_index
+    
+    (;tracking_noise) = inputs[r]
+    fname = @__DIR__()*"/output/LinReg$(r)/LinReg.jld2"
+    c,stoch_distr =load(fname, "c", "stoch_distr")
+    g = Figure()
+    ax,hm = heatmap(g[1,1], stoch_distr.Σ, 
+    #colormap = :grays, colorrange = (-5, 5), highclip = :red, lowclip = :blue)
+    colormap = :balance, colorrange = (-1.2,1.2))
+    Colorbar(g[1, 2], hm)
+    Label(g[0,:], text = "Σ, tracking noise $(inputs[r].tracking_noise)", fontsize = 20)
+    display(g)
 end

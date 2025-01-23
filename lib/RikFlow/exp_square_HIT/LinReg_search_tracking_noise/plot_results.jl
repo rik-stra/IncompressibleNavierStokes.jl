@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg4", "LinReg5"]
+ANN_names = ["LinReg13"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -16,7 +16,7 @@ q_ref = stack(ref_data.data[1].qoi_hist)
 track_file = "/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
 dQ_ref = stack(load(@__DIR__()*track_file, "data_track").dQ)
 # = stack(ref_data.dQ[1])
-t_sim = 20
+t_sim = 100
 time_index = 0:0.0025:t_sim
 
 # load no-model sim
@@ -30,7 +30,7 @@ no_sgs_data = stack(load(filename, "data_online").q);
 # load replica simulations
 for ANN_name in ANN_names
     #ANN_name = "LinReg19"
-    n_replicas = 4
+    n_replicas = 1
     #ANN_name = ANN_names[5]
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
@@ -41,7 +41,7 @@ for ANN_name in ANN_names
     lines = []
     best, ref, no_model, model= nothing, nothing, nothing, nothing
 
-    g = Figure(size = (1000, 800))
+    g = Figure(size = (2000, 1600))
     axs = [Axis(g[i ÷ 2, i%2], 
             title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
         for i in 0:size(q_ref, 1)-1]
@@ -131,11 +131,11 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg6"
+    ANN_name = "LinReg13"
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
-    n_replicas = 4
+    n_replicas = 1
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
-    q_rep = q_rep[size.(q_rep,2) .>= 8000]
+    q_rep = q_rep[size.(q_rep,2) .>= 40000]
     qs = cat(q_rep..., dims = 2)
     g = Figure()
     axs = [Axis(g[i ÷ 2, i%2], 
@@ -150,7 +150,7 @@ let # all replicas together
         
         if i == size(qois, 1) axislegend(axs[i], position = :rt) end
     end
-    Label(g[-1, :], text = "LinReg \n hist = $(ANN_parameters.hist_len), $(ANN_parameters.hist_var), $(10-size(q_rep,1)) unstable", fontsize = 20)
+    Label(g[-1, :], text = "LinReg \n hist = $(ANN_parameters.hist_len), $(ANN_parameters.hist_var), $(n_replicas-size(q_rep,1)) unstable", fontsize = 20)
     display(g)
     save(figsfolder*"/lt_distr_q_TO_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(ANN_parameters.hist_var)_dns512_les64_Re2000.0_tsim100.png", g)
     

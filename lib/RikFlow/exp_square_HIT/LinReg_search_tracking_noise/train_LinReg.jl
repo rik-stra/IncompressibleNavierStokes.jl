@@ -9,10 +9,11 @@ using Random
 using CairoMakie
 using Distributions
 using LinearAlgebra
+using RegularizedLeastSquares
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-#model_index =3
+#model_index =9
 
 function create_history(hist_len, q_star, q, dQ; include_predictor = true)
     if hist_len == 0
@@ -40,7 +41,7 @@ end
 
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
-(; name, hist_len, hist_var, n_replicas, normalization, include_predictor, train_range, tracking_noise, indep_normals) = inputs[model_index]
+(; name, hist_len, hist_var, n_replicas, normalization, include_predictor, train_range, tracking_noise, indep_normals, lambda) = inputs[model_index]
 
 out_dir = @__DIR__()*"/output/$(name)/"
 save(out_dir*"parameters.jld2", "parameters", (; name, hist_len, hist_var, n_replicas, normalization, include_predictor))
@@ -57,9 +58,17 @@ scaling = (;in_scaling, out_scaling)
 inputs, outputs = create_history(hist_len, q_star_scaled, q_scaled, dQ_scaled, hist_var; include_predictor)
 
 
-function fit_model(inputs, outputs; indep_normals = false)
+
+
+function fit_model(inputs, outputs; indep_normals = false, lambda = 0.0)
     inp = cat(inputs',ones(eltype(inputs), (size(inputs,2),1)),dims=2) # add a bias term
-    c = inp \ outputs' 
+    if lambda > 0.0
+        reg = L2Regularization(lambda)
+        solver = createLinearSolver(CGNR, inp; reg=reg)
+        c = solve!(solver, outputs')
+    else
+        c = inp \ outputs'
+    end 
     #For rectangular A the result is the minimum-norm least squares solution computed by a pivoted QR factorization of A and a rank estimate of A based on the R factor
     preds = inp * c
     stoch_part = outputs - preds'
@@ -82,7 +91,16 @@ function run_model(inputs, c, stoch_distr)
 end
 
 # fit model
-c, stoch_distr = fit_model(inputs, outputs; indep_normals)
+c, stoch_distr = fit_model(inputs, outputs; indep_normals, lambda)
+
+# g = Figure();
+# ax,hm = heatmap(g[1,1], c, 
+# #colormap = :grays, colorrange = (-5, 5), highclip = :red, lowclip = :blue)
+# colormap = :balance, colorrange = (-25,25))
+# Colorbar(g[1, 2], hm)
+# Label(g[0,:], text = "lambda $(lambda)", fontsize = 20)
+# display(g)
+
 ## save model
 save(out_dir*"/LinReg.jld2", "c", c', "stoch_distr", stoch_distr, "scaling", scaling, "hist_var", hist_var, "hist_len", hist_len, "include_predictor", include_predictor)
 exit()
@@ -106,7 +124,7 @@ end
 
 ## test the model
 data_test = load(@__DIR__()*"/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2", "data_track");
-dir = @__DIR__()*"/output/LinReg3/"
+dir = @__DIR__()*"/output/LinReg9/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 include_predictor = model["include_predictor"]
