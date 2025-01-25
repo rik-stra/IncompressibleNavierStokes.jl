@@ -9,6 +9,7 @@ fixed_parameters = (tracking_noise = 0.001,
                     indep_normals = false,
                     include_predictor = true,
                     n_replicas = 10,
+                    fitted_qois = [1,2,3,4,5,6],
                     normalization = :standardise)
 
 
@@ -40,8 +41,13 @@ push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = true, tra
 i += 1 #12
 push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, hist_len = 3, n_replicas = 5, lambda = 0.01))
 i += 1 #13
-push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, hist_len = 5, n_replicas = 2, lambda = 0.01))
-
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, hist_len = 5, n_replicas = 4, lambda = 0.01))
+i += 1 #14
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, hist_len = 5, n_replicas = 4, lambda = 0.01, fitted_qois = [5,6]))
+i += 1 #15
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.01, hist_len = 5, n_replicas = 4, lambda = 0.01, fitted_qois = [3,4,5,6]))
+i += 1 #16
+push!(inputs, (name = "LinReg$i", fixed_parameters..., indep_normals = false, tracking_noise = 0.005, hist_len = 5, n_replicas = 4, lambda = 0.01, fitted_qois = [3,4,5,6]))
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 

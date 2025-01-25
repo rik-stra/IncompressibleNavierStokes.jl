@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg13"]
+ANN_names = ["LinReg12", "LinReg13", "LinReg14", "LinReg15", "LinReg16"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -16,7 +16,7 @@ q_ref = stack(ref_data.data[1].qoi_hist)
 track_file = "/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
 dQ_ref = stack(load(@__DIR__()*track_file, "data_track").dQ)
 # = stack(ref_data.dQ[1])
-t_sim = 100
+t_sim = 20
 time_index = 0:0.0025:t_sim
 
 # load no-model sim
@@ -30,7 +30,7 @@ no_sgs_data = stack(load(filename, "data_online").q);
 # load replica simulations
 for ANN_name in ANN_names
     #ANN_name = "LinReg19"
-    n_replicas = 1
+    n_replicas = 4
     #ANN_name = ANN_names[5]
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
@@ -131,9 +131,9 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg13"
+    ANN_name = "LinReg16"
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
-    n_replicas = 1
+    n_replicas = 4
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     q_rep = q_rep[size.(q_rep,2) .>= 40000]
     qs = cat(q_rep..., dims = 2)

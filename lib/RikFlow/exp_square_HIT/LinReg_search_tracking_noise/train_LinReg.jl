@@ -13,7 +13,7 @@ using RegularizedLeastSquares
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-#model_index =9
+#model_index =14
 
 function create_history(hist_len, q_star, q, dQ; include_predictor = true)
     if hist_len == 0
@@ -41,7 +41,7 @@ end
 
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
-(; name, hist_len, hist_var, n_replicas, normalization, include_predictor, train_range, tracking_noise, indep_normals, lambda) = inputs[model_index]
+(; name, hist_len, hist_var, n_replicas, normalization, include_predictor, train_range, tracking_noise, indep_normals, lambda, fitted_qois) = inputs[model_index]
 
 out_dir = @__DIR__()*"/output/$(name)/"
 save(out_dir*"parameters.jld2", "parameters", (; name, hist_len, hist_var, n_replicas, normalization, include_predictor))
@@ -60,18 +60,20 @@ inputs, outputs = create_history(hist_len, q_star_scaled, q_scaled, dQ_scaled, h
 
 
 
-function fit_model(inputs, outputs; indep_normals = false, lambda = 0.0)
+function fit_model(inputs, outputs, fitted_qois; indep_normals = false, lambda = 0.0)
     inp = cat(inputs',ones(eltype(inputs), (size(inputs,2),1)),dims=2) # add a bias term
     if lambda > 0.0
         reg = L2Regularization(lambda)
         solver = createLinearSolver(CGNR, inp; reg=reg)
-        c = solve!(solver, outputs')
+        c = solve!(solver, outputs[fitted_qois,:]')
     else
-        c = inp \ outputs'
+        c = inp \ outputs[fitted_qois,:]'
     end 
     #For rectangular A the result is the minimum-norm least squares solution computed by a pivoted QR factorization of A and a rank estimate of A based on the R factor
     preds = inp * c
-    stoch_part = outputs - preds'
+    stoch_part = copy(outputs)
+    stoch_part[fitted_qois,:] -= preds'
+
     #loss  = norm(preds)
     # fit MVG
     if indep_normals
@@ -83,15 +85,15 @@ function fit_model(inputs, outputs; indep_normals = false, lambda = 0.0)
     return c, stoch_distr
 end
 
-function run_model(inputs, c, stoch_distr)
+function run_model(inputs, c, stoch_distr, fitted_qois)
     inp = cat(inputs',ones(eltype(inputs), (size(inputs,2),1)),dims=2) # add a bias term
     preds = inp * c
     rand_part = rand(stoch_distr, size(inputs,2))'
-    return preds+rand_part
+    return rand_part[fitted_qois,:]+=preds
 end
 
 # fit model
-c, stoch_distr = fit_model(inputs, outputs; indep_normals, lambda)
+c, stoch_distr = fit_model(inputs, outputs, fitted_qois; indep_normals, lambda)
 
 # g = Figure();
 # ax,hm = heatmap(g[1,1], c, 
@@ -102,7 +104,8 @@ c, stoch_distr = fit_model(inputs, outputs; indep_normals, lambda)
 # display(g)
 
 ## save model
-save(out_dir*"/LinReg.jld2", "c", c', "stoch_distr", stoch_distr, "scaling", scaling, "hist_var", hist_var, "hist_len", hist_len, "include_predictor", include_predictor)
+save(out_dir*"/LinReg.jld2", "c", c', "stoch_distr", stoch_distr, 
+    "scaling", scaling, "hist_var", hist_var, "hist_len", hist_len, "include_predictor", include_predictor, "fitted_qois", fitted_qois)
 exit()
 
 function plot_time_series(data, qois, title; ref = nothing)
@@ -124,7 +127,7 @@ end
 
 ## test the model
 data_test = load(@__DIR__()*"/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2", "data_track");
-dir = @__DIR__()*"/output/LinReg9/"
+dir = @__DIR__()*"/output/LinReg14/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 include_predictor = model["include_predictor"]
@@ -140,7 +143,8 @@ inputs_test,outputs_test = create_history(model["hist_len"], q_star_test, q_test
 inp = cat(inputs_test',ones(eltype(inputs_test), (size(inputs_test,2),1)),dims=2)
 rng = Xoshiro(12)
 rand_part = rand(rng, model["stoch_distr"], size(inputs_test,2))'
-preds = model["c"] * inp' + rand_part'
+preds = rand_part'
+preds[fitted_qois,:] += model["c"] * inp'
 
 plot_time_series(preds, qois, "preds", ref = outputs_test)
 
