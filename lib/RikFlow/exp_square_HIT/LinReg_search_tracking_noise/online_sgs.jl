@@ -15,7 +15,7 @@ using CUDA
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-#model_index = 3
+#model_index = 14
 
 n_dns = Int(512)
 n_les = Int(64)
@@ -59,7 +59,7 @@ elseif data_track.fields[1].u isa Array{<:Number,4}
     ustart = ArrayType(data_track.fields[1].u);
 end
 # get ref trajectories
-dQ_data = data_track.dQ[:,1:400];
+dQ_data = data_track.dQ[:,1:60];
 
 params = (;
     params_track...,
