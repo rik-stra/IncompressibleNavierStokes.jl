@@ -35,7 +35,7 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method =
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
     to_setup = (; N_qois, qois, to_mode, masks, ∂, time_series_method)
-    if !isnothing(tracking_noise) && !(tracking_noise > 0.0)
+    if !isnothing(tracking_noise) && (tracking_noise == 0.0)
         tracking_noise = nothing
     end
 
@@ -309,7 +309,11 @@ function to_sgs_term(u, setup, to_setup, stepper)
     to_setup.outputs.dQ[:,stepper.n] = dQ
 
     if to_setup.to_mode == :TRACK_REF && !isnothing(to_setup.tracking_noise)
-        dQ += randn(eltype(dQ),size(dQ)).*to_setup.time_series_method.means.*convert(eltype(dQ),to_setup.tracking_noise)
+        if typeof(to_setup.tracking_noise)<:Sampleable
+            dQ += convert.(eltype(dQ),rand(to_setup.tracking_noise))
+        else
+            dQ += randn(eltype(dQ),size(dQ)).*to_setup.time_series_method.means.*convert(eltype(dQ),to_setup.tracking_noise)
+        end
     end
 
     # get V_i
