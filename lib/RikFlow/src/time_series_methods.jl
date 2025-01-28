@@ -94,9 +94,15 @@ struct LinReg
     hist_var
     include_predictor
     fitted_qois
+    target
     rng
     function LinReg(file_name, rng; q_hist = nothing, spinnup_data = nothing)
-        c, stoch_distr, scaling, hist_var, include_predictor, fitted_qois = load(file_name, "c", "stoch_distr", "scaling", "hist_var", "include_predictor", "fitted_qois")
+        c, stoch_distr, scaling, hist_var, include_predictor, fitted_qois, norm = load(file_name, "c", "stoch_distr", "scaling", "hist_var", "include_predictor", "fitted_qois", "norm")
+        if norm == :nuclear
+            target = :q
+        else
+            target = :dq
+        end
         scaling = scaling |> dev
         c= c |> dev
         counter = zeros(Int)
@@ -106,7 +112,7 @@ struct LinReg
         if !isnothing(spinnup_data) && isnothing(q_hist)
             @error "Spinnup not implemented without history"
         end
-        new(c, stoch_distr, scaling, q_hist, spinnup_data, counter, hist_var, include_predictor, fitted_qois, rng)
+        new(c, stoch_distr, scaling, q_hist, spinnup_data, counter, hist_var, include_predictor, fitted_qois, target,rng)
     end
 end
 
@@ -136,7 +142,12 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
             pred[time_series_method.fitted_qois,:] += time_series_method.c * data
             
-            dQ = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+            pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+            if time_series_method.target == :dq
+                dQ = pred
+            elseif time_series_method.target == :q
+                dQ = pred - q_star
+            end
         end
         time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1] # shift history
         if time_series_method.hist_var == :q
@@ -152,7 +163,12 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
         data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
         pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
         pred[time_series_method.fitted_qois,:] += time_series_method.c * data
-        dQ = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+        pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+        if time_series_method.target == :dq
+            dQ = pred
+        elseif time_series_method.target == :q
+            dQ = pred - q_star
+        end
     end
     return dQ
 end

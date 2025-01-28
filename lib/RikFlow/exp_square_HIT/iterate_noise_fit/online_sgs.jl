@@ -15,7 +15,7 @@ using CUDA
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-#model_index = 14
+#model_index = 4
 
 n_dns = Int(512)
 n_les = Int(64)
@@ -59,7 +59,7 @@ elseif data_track.fields[1].u isa Array{<:Number,4}
     ustart = ArrayType(data_track.fields[1].u);
 end
 # get ref trajectories
-dQ_data = data_track.dQ[:,1:60];
+dQ_data = data_track.dQ[:,1:200];
 
 params = (;
     params_track...,
@@ -72,7 +72,7 @@ params = (;
 
 # Run 10 replicas
 for i in 1:n_replicas
-    LinReg_file_name = out_dir*"LinReg.jld2"
+    LinReg_file_name = out_dir*"LinReg_nuclear.jld2"
     if hist_len == 0
         q_hist = nothing
     else
@@ -87,5 +87,5 @@ for i in 1:n_replicas
     @info "Running sim $i out of $n_replicas"
     data_online = online_sgs(; params..., time_series_method=time_series_sampler);
 # Save tracking data
-    jldsave(out_dir*"data_online_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim)_replica$(i)_rand_initial_dQ.jld2"; data_online, params);
+    jldsave(out_dir*"data_online_nuclear_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim)_replica$(i)_rand_initial_dQ.jld2"; data_online, params);
 end
