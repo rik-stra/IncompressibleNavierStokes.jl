@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg1"]
+ANN_names = ["LinReg7"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -16,7 +16,7 @@ q_ref = stack(ref_data.data[1].qoi_hist)
 track_file = "/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
 dQ_ref = stack(load(@__DIR__()*track_file, "data_track").dQ)
 # = stack(ref_data.dQ[1])
-t_sim = 10
+t_sim = 30
 time_index = 0:0.0025:t_sim
 
 # load no-model sim
@@ -30,9 +30,9 @@ no_sgs_data = stack(load(filename, "data_online").q);
 # load replica simulations
 for ANN_name in ANN_names
     #ANN_name = "LinReg19"
-    n_replicas = 2
+    n_replicas = 1
     #ANN_name = ANN_names[5]
-    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
+    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_nuclear_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
     hist_var = ANN_parameters.hist_var
     # plot trajectories
@@ -60,13 +60,13 @@ for ANN_name in ANN_names
     Label(g[-1, :], text = "LinReg \n hist = $(ANN_parameters.hist_len), $(hist_var)", fontsize = 20)
     Legend(g[0,2], [ref, no_model, model], ["Reference", "No model", "Online"], fontsize = 12)
     display(g)
-    save(figsfolder*"/trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var).png", g)
+    save(figsfolder*"/trajectories_online_nuclear_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var).png", g)
     end
 
 
 
     # plot dQ trajectories
-    dQ_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").dQ for i in 1:n_replicas]
+    dQ_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_nuclear_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").dQ for i in 1:n_replicas]
     
     let
         lims = [(nothing, (-25,25)), 
@@ -97,7 +97,7 @@ for ANN_name in ANN_names
         Label(g[-1, :], text = "LinReg \n hist = $(ANN_parameters.hist_len), $(hist_var)", fontsize = 20)
         Legend(g[0,2], [ref, model], ["ref","Online"], fontsize = 12)
         display(g)
-        save(figsfolder*"/dQ_trajectories_online_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var).png", g)
+        save(figsfolder*"/dQ_trajectories_online_nuclear_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(hist_var).png", g)
     end
 
 end
@@ -131,10 +131,10 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg1"
+    ANN_name = "LinReg7"
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
-    n_replicas = 2
-    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
+    n_replicas = 1
+    q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_nuclear_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     q_rep = q_rep[size.(q_rep,2) .>= 40000]
     qs = cat(q_rep..., dims = 2)
     g = Figure()
@@ -152,6 +152,6 @@ let # all replicas together
     end
     Label(g[-1, :], text = "LinReg \n hist = $(ANN_parameters.hist_len), $(ANN_parameters.hist_var), $(n_replicas-size(q_rep,1)) unstable", fontsize = 20)
     display(g)
-    save(figsfolder*"/lt_distr_q_TO_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(ANN_parameters.hist_var)_dns512_les64_Re2000.0_tsim100.png", g)
+    save(figsfolder*"/lt_distr_q_TO_nuclear_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(ANN_parameters.hist_var)_dns512_les64_Re2000.0_tsim100.png", g)
     
 end

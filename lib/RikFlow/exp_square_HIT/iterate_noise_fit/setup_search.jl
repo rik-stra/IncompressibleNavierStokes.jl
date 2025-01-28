@@ -25,7 +25,12 @@ i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 5))
 i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 3))
-
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 200))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 50))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = 100))
 
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)

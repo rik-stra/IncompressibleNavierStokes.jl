@@ -3,6 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 using RikFlow
+using LinearAlgebra
 
 # Load data
 filename = @__DIR__()*"/../output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
@@ -110,7 +111,7 @@ for r in input_index
 end
 
 # plot linregs
-input_index = [1]
+input_index = [4,5,6,7]
 inputs= load(@__DIR__()*"/inputs.jld2", "inputs")
 track_data = []
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
@@ -122,7 +123,7 @@ for r in input_index
     g = Figure()
     ax,hm = heatmap(g[1,1], c, 
     #colormap = :grays, colorrange = (-5, 5), highclip = :red, lowclip = :blue)
-    colormap = :balance, colorrange = (-25,25))
+    colormap = :balance, colorrange = (-5,5))
     Colorbar(g[1, 2], hm)
     Label(g[0,:], text = "tracking noise $(inputs[r].tracking_noise)", fontsize = 20)
     display(g)
@@ -141,3 +142,55 @@ for r in input_index
     Label(g[0,:], text = "Σ, tracking noise $(inputs[r].tracking_noise)", fontsize = 20)
     display(g)
 end
+
+
+
+# eigenvals c
+input_index = [4]
+inputs= load(@__DIR__()*"/inputs.jld2", "inputs")
+qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
+r = input_index[1]
+    
+(;tracking_noise, hist_len) = inputs[r]
+fname = @__DIR__()*"/output/LinReg$(r)/LinReg_nuclear.jld2"
+c,stoch_distr =load(fname, "c", "stoch_distr")
+
+#c_top_l = Matrix(1.0I, 6,6)+c[:,1:6]
+c_top_l = c[:,1:6]
+c_top_r = c[:,7:end]
+c_top = hcat(c_top_l, c_top_r)
+c_bot_1 = hcat(Matrix(1.0I, hist_len*12, hist_len*12), zeros(hist_len*12, 7))
+c_last = hcat(zeros(1, hist_len*12+6),1)
+c_star = vcat(c_top, c_bot_1, c_last)
+g = Figure();
+ax,hm = heatmap(g[1,1], c_star', 
+    #colormap = :grays, colorrange = (-5, 5), highclip = :red, lowclip = :blue)
+colormap = :balance,)# colorrange = (-25,25))
+Colorbar(g[1, 2], hm)
+Label(g[0,:], text = "tracking noise $(inputs[r].tracking_noise)", fontsize = 20)
+display(g)
+
+lines(sort(abs.(eigvals(c_star)), rev = true)[1:5])
+lines(sort(abs.(eigvals(c_star)), rev = true)[:])
+
+# compare convergence of entries Sigma
+input_index = [4,5,6,7]
+
+qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
+r = input_index[1]
+
+distrs =[ load(@__DIR__()*"/output/LinReg$(r)/noise_distrs_track_trackingnoise_Re2000.0_tsim10.0.jld2", "noise_distrs") for r in input_index]
+for i in 1:length(distrs[1][1].Σ)
+    g = Figure()
+    ax = Axis(g[1,1], title = "Σ[$i]")
+    for k in 1:size(distrs,1)
+        lines!(ax, [distrs[k][j].Σ[i] for j in 1:size(distrs[k],1)], label = "$(input_index[k])")
+    end
+    Legend(g,ax)
+    display(g)
+end
+
+
+
+c , stoch = load(@__DIR__()*"/output/LinReg7/LinReg_nuclear.jld2", "c", "stoch_distr")
+stoch.μ ./ diag(stoch.Σ)

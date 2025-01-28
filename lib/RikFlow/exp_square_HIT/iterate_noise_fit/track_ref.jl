@@ -119,15 +119,15 @@ end
 tracking_noise = 0.0
 n_iters = 20
 noise_distrs = []
-data_fractions = [0.2, 1.0]
+data_fractions = [0.2, 1]
 conv_creteria = [0.2,0.1]
-data = nothing
+
 for (data_fraction, conv_c) in zip(data_fractions, conv_creteria)
     for i in 1:n_iters
-        
+
         qoi_ref = stack(data_train.data[1].qoi_hist[1:Int(round(data_fraction*tsim/Δt))+1]);
         ref_reader = Reference_reader(qoi_ref);
-        params_track = (;
+        global params_track = (;
             params_train...,
             tsim = round(data_fraction*tsim),
             Δt,
@@ -137,16 +137,17 @@ for (data_fraction, conv_c) in zip(data_fractions, conv_creteria)
             savefreq = 100,
             tracking_noise);
 
-        data = track_ref(; params_track..., ref_reader, ustart);
+        global data = track_ref(; params_track..., ref_reader, ustart);
 
         # fit linreg
         q_scaled, in_scaling = RikFlow._normalise(data.q[:,train_range[1]:end-1], normalization = normalization)
         q_star_scaled = RikFlow.scale_input(data.q_star[:,train_range[1]:end], in_scaling)
         dQ_scaled, out_scaling = RikFlow._normalise(data.dQ[:,train_range[1]:end], normalization = normalization)
         scaling = (;in_scaling, out_scaling)
-        inputs, outputs = create_history(hist_len, q_star_scaled, q_scaled, dQ_scaled, hist_var; include_predictor)
-        c, tracking_noise = fit_model(inputs, outputs, fitted_qois; indep_normals, lambda, out_scaling)
+        inp, outputs = create_history(hist_len, q_star_scaled, q_scaled, dQ_scaled, hist_var; include_predictor)
+        c, tracking_noise = fit_model(inp, outputs, fitted_qois; indep_normals, lambda, out_scaling)
         push!(noise_distrs, tracking_noise)
+        global tracking_noise = tracking_noise
         # check for convergence
         println("tracking_noise.Σ $(tracking_noise.Σ[1,1]) $(tracking_noise.Σ[2,2]) $(tracking_noise.Σ[3,3]) $(tracking_noise.Σ[4,4]) $(tracking_noise.Σ[5,5]) $(tracking_noise.Σ[6,6])")
         if size(noise_distrs,1) > 1
@@ -164,10 +165,10 @@ end
 data_track = data;
 # Save tracking data
 jldsave("$outdir/data_track_trackingnoise_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
+jldsave("$outdir/noise_distrs_track_trackingnoise_Re$(Re)_tsim$(tsim).jld2"; noise_distrs);
 exit()
 # plot convergence of Σ[1,1]
 n = length(noise_distrs)
 lines(1:n, [noise_distrs[i].Σ[1,1] for i in 1:n])
 lines(1:n, [noise_distrs[i].Σ[2,2] for i in 1:n])
 lines(1:n, [noise_distrs[i].Σ[3,3] for i in 1:n])
-
