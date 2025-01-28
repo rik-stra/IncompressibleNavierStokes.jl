@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -J spinnup
-#SBATCH -t 120:00
+#SBATCH -t 10:00:00
 #SBATCH --partition=gpu_h100
 #SBATCH --gpus=1
 

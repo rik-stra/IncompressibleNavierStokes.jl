@@ -31,7 +31,7 @@ global_logger(logger)
 
 println("Modules loaded. Time: $(t1-t0) s")
 
-n_dns = Int(512)
+n_dns = Int(1024)
 n_les = Int(64)
 Re = Float32(2_000)
 tburn = Float32(4)
