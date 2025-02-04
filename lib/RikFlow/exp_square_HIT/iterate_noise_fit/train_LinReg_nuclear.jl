@@ -42,7 +42,7 @@ end
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, hist_var, n_replicas, normalization, include_predictor, train_range, tracking_noise, indep_normals, lambda, fitted_qois) = inputs[model_index]
-norm = :nuclear
+norm = :l2
 lambda = 0.001
 
 out_dir = @__DIR__()*"/output/$(name)/"
@@ -73,6 +73,7 @@ function fit_model(inputs, outputs, fitted_qois; indep_normals = false, lambda =
         elseif norm == :nuclear
             inp_r = kron(Matrix(I, n_targets,n_targets),inp)
             reg = NuclearRegularization(lambda, (size(inp,2), size(outputs,1)))
+            #reg = L2Regularization(lambda)
             solver = createLinearSolver(ADMM, inp_r; reg=reg)
             b = reshape(outputs[fitted_qois,:]', length(fitted_qois)*size(outputs,2),1)
             c = solve!(solver, b)
@@ -121,7 +122,7 @@ outputs
 # display(g)
 
 ## save model
-save(out_dir*"/LinReg_nuclear.jld2", "c", c', "stoch_distr", stoch_distr, 
+save(out_dir*"/LinReg_l2.jld2", "c", c', "stoch_distr", stoch_distr, 
     "scaling", scaling, "hist_var", hist_var, "hist_len", hist_len, "include_predictor", include_predictor, "fitted_qois", fitted_qois, "norm", norm)
 exit()
 
