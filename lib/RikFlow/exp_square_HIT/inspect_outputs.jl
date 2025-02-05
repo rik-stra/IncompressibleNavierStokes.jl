@@ -13,21 +13,48 @@ end
 # We first run spinnup.jl to generate an initial condition for the DNS simulation.
 
 #begin # load initial field
-    filename =  @__DIR__()*"/output/u_start_spinnup_512_Re2000.0_freeze_10_tsim4.0.jld2"
-    u_start = stack(load(filename, "u_start"));
+    filename =  @__DIR__()*"/output/u_start_spinnup_800_Re2000.0_freeze_10_tsim1.0.jld2"
+    u_start = load(filename, "u_start");
 
-    heatmap(u_start[end-1, :, :,1])
+    #heatmap(u_start[end-1, :, :,1])
     # plot energy spectrum
     let
-        n = 512
+        n = 800
         axis_x = range(0.0, 1., n + 1)
         setup = Setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
         state = (;u = u_start, t=0.);
         fig = energy_spectrum_plot(state; setup, npoint = 100)
+        display(fig)
         save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
+        println(get_scale_numbers(u_start, setup))
     end
+
+    filename =  @__DIR__()*"/output/u_start_spinnup_512_Re2000.0_freeze_10_tsim4.0.jld2"
+    u_start = stack(load(filename, "u_start"));
+
+    heatmap(u_start[end-1, :, :,1])
+    # plot energy spectrum
+    
+        n = 512
+        axis_x = range(0.0, 1., n + 1)
+        setup = Setup(;
+            x = (axis_x, axis_x, axis_x),
+            Re = Float32(2e3),);
+        state = (;u = u_start, t=0.);
+        scales = get_scale_numbers(u_start, setup)
+        fig = energy_spectrum_plot(state; setup, npoint = 100, sloperange = [2,16], scale_numbers = scales)
+        display(fig)
+        v = [scales.λ, scales.η, 1/n]
+        v_labels = ["λ", "η", "Δx"]
+        for i in 1:3
+            text!(fig[1,1], v_labels[i], position = (v[i]*1.05,1e-15*1.2), align = (:right, :bottom), color = :black)
+        end
+        display(fig)
+        save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
+        println(scales)
+    
     # plot enstrophy spectrum
     let
         n = 512
