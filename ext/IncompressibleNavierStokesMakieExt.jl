@@ -340,11 +340,11 @@ function energy_spectrum_plot(
     logmax = round(Int, log2(kmax + 1))
     #xticks = dx./(T(2) .^ (0:logmax))
 
-    fig = Figure()
+    fig = Figure(size=(600,400))
     fig[1,1] = ax = Axis(
         fig;
         #xticks,
-        xlabel = "wave length",
+        xlabel = "Wave length",
         # ylabel = "E(k)",
         xscale = log10,
         yscale = log10,
@@ -355,7 +355,6 @@ function energy_spectrum_plot(
     lines!(ax, inertia; label = slopelabel, linestyle = :dash, linewidth = 2, color = Cycled(2))
     axislegend(ax; position = :lb)
     v = [scale_numbers.λ, scale_numbers.η, Δx]
-    v_labels = ["λ", "η", "Δx"]
     vlines!(ax, v; linestyle = :dash)
     
 
