@@ -18,16 +18,30 @@ end
 
     heatmap(u_start[end-1, :, :,1])
     # plot energy spectrum
-    let
+    
         n = 512
         axis_x = range(0.0, 1., n + 1)
         setup = Setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
-        state = (;u = u_start, t=0.);
-        fig = energy_spectrum_plot(state; setup, npoint = 100)
+        state = (;u = u_start, t=0., temp=0);
+        
+        # save to vtk
+
+        save_vtk(state; setup, filename = @__DIR__()*"/output/vtks", fieldnames = (:velocity, :Qfield))
+
+        scales = get_scale_numbers(u_start, setup)
+        fig = energy_spectrum_plot(state; setup, npoint = 100, sloperange = [2,16], scale_numbers = scales, slopeoffset = 1.8)
+        display(fig)
+        v = [scales.λ, scales.η, 1/n]
+        v_labels = ["λ", "η", "Δx"]
+        for i in 1:3
+            text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1e-15*1.2), align = (:left, :bottom), color = :black)
+        end
+        display(fig)
         save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
-    end
+        println(scales)
+
     # plot enstrophy spectrum
     let
         n = 512
@@ -87,7 +101,19 @@ time_index = 0:2.5e-3:t_sim
     end
 
     u_lf = ref_data.data[1].u;
-    heatmap(u_lf[300][end-1, :, :, 1]) # initial coarse field
+    heatmap(u_lf[7][end-1, :, :, 1]) # initial coarse field
+    
+    n = 64
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+            x = (axis_x, axis_x, axis_x),
+            Re = Float32(2e3),);
+    state = (;u = u_lf[1], t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/output/vtk_files/LF_initial", fieldnames = (:velocity, :Qfield))
+    state = (;u = u_lf[10], t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/output/vtk_files/LF_10", fieldnames = (:velocity, :Qfield))
+    state = (;u = u_lf[100], t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/output/vtk_files/LF_100", fieldnames = (:velocity, :Qfield))
     ## plot specrum of filtered field
     let
         n = 64
@@ -233,7 +259,14 @@ time_index = 0:2.5e-3:t_sim
     end
 
     ## plot final field
-    heatmap(no_sgs_data.fields[end].u[1][1,:,:])
+    heatmap(no_sgs_data.fields[end].u[1,:,:,1])
+    n = 64
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+            x = (axis_x, axis_x, axis_x),
+            Re = Float32(2e3),);
+    state = (;u = no_sgs_data.fields[end].u, t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/output/vtk_files/LF_no_model", fieldnames = (:velocity, :Qfield))
 #end
 
 ### SMAG  ###
@@ -313,6 +346,17 @@ time_index = 0:2.5e-3:t_sim
         display(g)
         save(fig_folder*"/lt_distr_q_smag_dns512_les64_Re2000.0_tsim100.png", g)
     end
+    smag_fields = [load(
+        @__DIR__()*"/output/new/smag/data_smag_$(c)_dns512_les64_Re2000.0_tsim100.0.jld2",
+        "data_online").fields for c in smag_vals];
+    heatmap(smag_fields[1][end].u[1,:,:,1])
+    n = 64
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+            x = (axis_x, axis_x, axis_x),
+            Re = Float32(2e3),);
+    state = (;u = smag_fields[1][end].u, t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/output/vtk_files/LF_smag", fieldnames = (:velocity, :Qfield))
 #end
 
 

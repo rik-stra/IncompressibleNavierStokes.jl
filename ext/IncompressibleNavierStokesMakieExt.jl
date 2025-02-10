@@ -299,51 +299,76 @@ function energy_spectrum_plot(
     setup,
     sloperange = [0.6, 0.9],
     slopeoffset = 1.3,
+    scale_numbers = nothing,
     kwargs...,
 )
     state isa Observable || (state = Observable(state))
 
-    (; dimension, xp, Ip) = setup.grid
+    (; dimension, xp, Np, xlims) = setup.grid
     T = eltype(xp[1])
     D = dimension()
+    dx = xlims[1][2]-xlims[1][1]
+    Δx = dx / Np[1]
 
     (; ehat, κ) = observespectrum(state; setup, kwargs...)
 
     kmax = maximum(κ)
-
     # Build inertial slope above energy
     krange = kmax .^ sloperange
     slope, slopelabel = D == 2 ? (-T(3), L"$k^{-3}$") : (-T(5 / 3), L"$k^{-5/3}$")
-    inertia = lift(ehat) do ehat
-        (m, i) = findmax(ehat ./ κ .^ slope)
-        slopeconst = m
-        dk = exp(log(kmax) * 0.5)
-        # kpoints = κ[i] / dk, κ[i] * dk
-        kpoints = κ[i] / (dk / 3), min(κ[i] * dk, kmax)
-        slopepoints = @. slopeoffset * slopeconst * kpoints^slope
-        [Point2f(kpoints[1], slopepoints[1]), Point2f(kpoints[2], slopepoints[2])]
-    end
+
+    τ = 2π |> T
+    C_K = 1.58 |> T
+    kpoints = sloperange
+    slopepoints = @. C_K * scale_numbers.ϵ^T(2 / 3) * (τ * kpoints)^slope*slopeoffset
+    l_points = dx./kpoints
+    inertia = [Point2f(l_points[1], slopepoints[1]), Point2f(l_points[2], slopepoints[2])]
+
+
+    # inertia = lift(ehat) do ehat
+    #     (m, i) = findmax(ehat ./ κ .^ slope)
+    #     slopeconst = m
+    #     dk = exp(log(kmax) * 0.5)
+    #     # kpoints = κ[i] / dk, κ[i] * dk
+    #     kpoints = κ[i] / (dk / 3), min(κ[i] * dk, kmax)
+    #     @show kpoints, dk, i
+    #     slopepoints = @. slopeoffset * slopeconst * kpoints^slope
+    #     [Point2f(kpoints[1], slopepoints[1]), Point2f(kpoints[2], slopepoints[2])]
+    # end
 
     # Nice ticks
     logmax = round(Int, log2(kmax + 1))
-    xticks = T(2) .^ (0:logmax)
+    #xticks = dx./(T(2) .^ (0:logmax))
 
-    fig = Figure()
-    ax = Axis(
-        fig[1, 1];
-        xticks,
-        xlabel = "k",
+    fig = Figure(size=(600,400))
+    fig[1,1] = ax = Axis(
+        fig;
+        #xticks,
+        xlabel = "Wave length",
         # ylabel = "E(k)",
         xscale = log10,
         yscale = log10,
-        limits = (1, kmax, T(1e-8), T(1)),
+        limits = (dx/kmax, dx, T(1e-15), T(1)),
     )
-    lines!(ax, κ, ehat; label = "Kinetic energy")
-    lines!(ax, inertia; label = slopelabel, linestyle = :dash, color = Cycled(2))
+    l = dx./(κ)
+    lines!(ax, l, ehat; label = "Kinetic energy", linewidth = 2)
+    lines!(ax, inertia; label = slopelabel, linestyle = :dash, linewidth = 2, color = Cycled(2))
     axislegend(ax; position = :lb)
+    v = [scale_numbers.λ, scale_numbers.η, Δx]
+    vlines!(ax, v; linestyle = :dash)
+    
+
+    xlims!(ax,Δx*0.7, dx)
+    ax.xreversed = true
+
+
+    
+    
+
+
     # autolimits!(ax)
-    on(e -> autolimits!(ax), ehat)
-    autolimits!(ax)
+    #on(e -> autolimits!(ax), ehat)
+    #autolimits!(ax)
     fig
 end
 

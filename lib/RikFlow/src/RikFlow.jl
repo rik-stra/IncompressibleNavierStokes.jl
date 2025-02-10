@@ -35,6 +35,9 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method =
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
     to_setup = (; N_qois, qois, to_mode, masks, ∂, time_series_method)
+    if !isnothing(tracking_noise) && (tracking_noise == 0.0)
+        tracking_noise = nothing
+    end
 
     if to_mode in [:TRACK_REF, :ONLINE]
         V_i = get_vi_functions(to_setup)
@@ -293,9 +296,6 @@ function to_sgs_term(u, setup, to_setup, stepper)
         to_setup.outputs.q_star[:,stepper.n] = q_star
         q_ref = get_next_item_timeseries(to_setup.time_series_method)
         dQ = q_ref-q_star
-        if !isnothing(to_setup.tracking_noise)
-            dQ += randn(eltype(dQ),size(dQ)).*to_setup.time_series_method.means.*convert(eltype(dQ),to_setup.tracking_noise)
-        end
     elseif to_setup.to_mode == :ONLINE
         if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]
             dQ = get_next_item_timeseries(to_setup.time_series_method)
@@ -308,13 +308,19 @@ function to_sgs_term(u, setup, to_setup, stepper)
     dQ = Array(dQ)
     to_setup.outputs.dQ[:,stepper.n] = dQ
 
+    if to_setup.to_mode == :TRACK_REF && !isnothing(to_setup.tracking_noise)
+        if typeof(to_setup.tracking_noise)<:Sampleable
+            dQ += convert.(eltype(dQ),rand(to_setup.tracking_noise))
+        else
+            dQ += randn(eltype(dQ),size(dQ)).*to_setup.time_series_method.means.*convert(eltype(dQ),to_setup.tracking_noise)
+        end
+    end
+
     # get V_i
     vi = [to_setup.V_i[i](u_hat, w_hat) for i in 1:to_setup.N_qois]
     vi = stack(vi, dims=5)
     # get T_i
     ti = copy(vi)
-
-
     # compute innerproducts (returns ip on CPU)
     ip = innerpoducts(vi,ti,setup)
     # compute c_ij
@@ -337,12 +343,13 @@ function innerpoducts(x,y,setup)
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
     N = size(x)[1:D]
-    ip = reshape(
-        sum(
-            x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end]))),
-             dims = (1,2,3,4)
-        ),
-        (size(y)[end],size(y)[end]))
+    # ip = reshape(
+    #     sum(
+    #         x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end]))),
+    #          dims = (1,2,3,4)
+    #     ),
+    #     (size(y)[end],size(y)[end]))
+    @tensor ip[e,f] := x[a,b,c,d,e]* conj(y)[a,b,c,d,f]
     Array(ip).*(prod(L)/(prod(N)^2))
 end
 

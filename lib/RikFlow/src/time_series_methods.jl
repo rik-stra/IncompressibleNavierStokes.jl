@@ -89,25 +89,39 @@ struct LinReg
     stoch_distr
     scaling
     q_hist
+    spinnup_data
     counter
     hist_var
     include_predictor
+    fitted_qois
+    target
     rng
-    function LinReg(file_name, rng; q_hist = nothing)
-        c, stoch_distr, scaling, hist_var, include_predictor = load(file_name, "c", "stoch_distr", "scaling", "hist_var", "include_predictor")
+    function LinReg(file_name, rng; q_hist = nothing, spinnup_data = nothing)
+        c, stoch_distr, scaling, hist_var, include_predictor, fitted_qois, norm = load(file_name, "c", "stoch_distr", "scaling", "hist_var", "include_predictor", "fitted_qois", "norm")
+        if norm == :nuclear
+            target = :q
+        else
+            target = :dq
+        end
         scaling = scaling |> dev
         c= c |> dev
         counter = zeros(Int)
-        new(c, stoch_distr, scaling, q_hist, counter, hist_var, include_predictor, rng)
+        if !isnothing(q_hist)
+            @assert size(spinnup_data, 2) >= size(q_hist, 2) "Need spinnup data to fill history"
+        end
+        if !isnothing(spinnup_data) && isnothing(q_hist)
+            @error "Spinnup not implemented without history"
+        end
+        new(c, stoch_distr, scaling, q_hist, spinnup_data, counter, hist_var, include_predictor, fitted_qois, target,rng)
     end
 end
 
 function get_next_item_timeseries(time_series_method::LinReg, q_star)
     if !isnothing(time_series_method.q_hist)  # if the model uses history
         n_qoi = size(q_star,1)
-        if time_series_method.counter[] < size(time_series_method.q_hist, 2) # for the first few steps, directly read dQ
+        if time_series_method.counter[] < size(time_series_method.spinnup_data,2) # for the first few steps, directly read dQ
             time_series_method.counter[] += 1
-            dQ = time_series_method.q_hist[1:n_qoi,end]
+            dQ = time_series_method.spinnup_data[1:n_qoi, time_series_method.counter[]]
         else    # after that, predict dQ  (we now have enough history)
             q_star_sc = scale_input(q_star, time_series_method.scaling.in_scaling)
             if time_series_method.hist_var == :q_star_q
@@ -125,9 +139,15 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             end
             
             data = vcat(input,ones(eltype(input), (1,1)))
-            stoch = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
-            pred =  time_series_method.c * data .+ stoch
-            dQ = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+            pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
+            pred[time_series_method.fitted_qois,:] += time_series_method.c * data
+            
+            pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+            if time_series_method.target == :dq
+                dQ = pred
+            elseif time_series_method.target == :q
+                dQ = pred - q_star
+            end
         end
         time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1] # shift history
         if time_series_method.hist_var == :q
@@ -141,9 +161,14 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
     else    # if the model does not use history, predict dQ directly from q_star
         input = q_star
         data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
-        stoch = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
-        pred = time_series_method.c * data .+ stoch
-        dQ = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+        pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
+        pred[time_series_method.fitted_qois,:] += time_series_method.c * data
+        pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+        if time_series_method.target == :dq
+            dQ = pred
+        elseif time_series_method.target == :q
+            dQ = pred - q_star
+        end
     end
     return dQ
 end
