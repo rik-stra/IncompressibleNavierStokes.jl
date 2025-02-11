@@ -30,7 +30,7 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method = nothing, tracking_noise = nothing)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method = nothing, tracking_noise = nothing, tracking_noise_seed = 56)
     T = typeof(setup.Re)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
@@ -43,7 +43,12 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method =
         V_i = get_vi_functions(to_setup)
         cij_masks = get_cij_masks(to_setup)
         outputs = allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
-        to_setup = (; to_setup..., V_i, cij_masks, outputs, tracking_noise)
+        if !isnothing(tracking_noise)
+            tracking_rng = Xoshiro(tracking_noise_seed)
+        else
+            tracking_rng = nothing
+        end
+        to_setup = (; to_setup..., V_i, cij_masks, outputs, tracking_noise, tracking_rng)
     end
     return to_setup
 end
@@ -310,9 +315,9 @@ function to_sgs_term(u, setup, to_setup, stepper)
 
     if to_setup.to_mode == :TRACK_REF && !isnothing(to_setup.tracking_noise)
         if typeof(to_setup.tracking_noise)<:Sampleable
-            dQ += convert.(eltype(dQ),rand(to_setup.tracking_noise))
+            dQ += convert.(eltype(dQ),rand(to_setup.tracking_rng, to_setup.tracking_noise))
         else
-            dQ += randn(eltype(dQ),size(dQ)).*to_setup.time_series_method.means.*convert(eltype(dQ),to_setup.tracking_noise)
+            dQ += randn(to_setup.tracking_rng, eltype(dQ), size(dQ)).*to_setup.time_series_method.stds.*convert(eltype(dQ),to_setup.tracking_noise)
         end
     end
 
