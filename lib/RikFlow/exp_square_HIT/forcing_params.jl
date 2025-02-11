@@ -1,13 +1,13 @@
 # compute Re based on forcing parameters
-T_L = 0.05  # correlation time of the forcing
-e_star = 0.2 # energy injection rate
+T_L = 0.01  # correlation time of the forcing
+e_star = 0.1 # energy injection rate
 
 sigma = sqrt(e_star/T_L)
 
-nu = 0.001 # kinematic viscosity
+nu = 1/2_000 # kinematic viscosity
 N_points = 512 # number of grid points
 
-k_0 = 2*pi/1.0
+k_0 = 1.0
 k_f = 2.5*k_0
 N_f = 80
 β = 0.8

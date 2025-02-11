@@ -299,7 +299,9 @@ function energy_spectrum_plot(
     setup,
     sloperange = [0.6, 0.9],
     slopeoffset = 1.3,
+    v_lines = nothing,
     scale_numbers = nothing,
+    plot_wavelength = false,
     kwargs...,
 )
     state isa Observable || (state = Observable(state))
@@ -321,7 +323,11 @@ function energy_spectrum_plot(
     C_K = 1.58 |> T
     kpoints = sloperange
     slopepoints = @. C_K * scale_numbers.ϵ^T(2 / 3) * (τ * kpoints)^slope*slopeoffset
-    l_points = dx./kpoints
+    if plot_wavelength
+        l_points = dx./kpoints
+    else
+        l_points = kpoints
+    end
     inertia = [Point2f(l_points[1], slopepoints[1]), Point2f(l_points[2], slopepoints[2])]
 
 
@@ -337,35 +343,41 @@ function energy_spectrum_plot(
     # end
 
     # Nice ticks
-    logmax = round(Int, log2(kmax + 1))
-    #xticks = dx./(T(2) .^ (0:logmax))
-
+    
+    if plot_wavelength
+        xlabel = "Wave length"
+    else
+        xlabel = "Wave number ||k||"
+        logmax = round(Int, log2(kmax + 1))
+        xticks = (T(2) .^ (0:logmax))
+    end
     fig = Figure(size=(600,400))
     fig[1,1] = ax = Axis(
         fig;
-        #xticks,
-        xlabel = "Wave length",
+        xlabel,
         # ylabel = "E(k)",
         xscale = log10,
         yscale = log10,
-        limits = (dx/kmax, dx, T(1e-15), T(1)),
+        #limits = (dx/kmax, dx, T(1e-15), T(1)),
     )
-    l = dx./(κ)
+    if plot_wavelength
+        l = dx./(κ)
+    else
+        l = κ
+    end
     lines!(ax, l, ehat; label = "Kinetic energy", linewidth = 2)
     lines!(ax, inertia; label = slopelabel, linestyle = :dash, linewidth = 2, color = Cycled(2))
     axislegend(ax; position = :lb)
-    v = [scale_numbers.λ, scale_numbers.η, Δx]
-    vlines!(ax, v; linestyle = :dash)
-    
+    if !isnothing(v_lines)
+        vlines!(ax, v_lines; linestyle = :dash)
+    end
 
-    xlims!(ax,Δx*0.7, dx)
-    ax.xreversed = true
-
-
-    
-    
-
-
+    #xlims!(ax,Δx*0.7, dx)
+    if plot_wavelength
+        ax.xreversed = true
+    else
+        ax.xticks = xticks
+    end
     # autolimits!(ax)
     #on(e -> autolimits!(ax), ehat)
     #autolimits!(ax)
