@@ -21,8 +21,8 @@ using LinearAlgebra
 ArrayType = CuArray
 backend = CUDABackend()
 
-n_replicas = 2
-noise_levels = [0, 1, 0.5, 0.1, 0.05, 0.01]
+n_replicas = 5
+noise_levels = [0, 0.1, 0.05, 0.01, 0.005, 0.001]
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
 
@@ -68,7 +68,7 @@ end
 qoi_ref = stack(data_train.data[1].qoi_hist[1:Int(tsim/Δt)+1]);
 tracking_noise = noise_levels[model_index]
 
-for i in n_replicas
+for i in 1:n_replicas
     ref_reader = Reference_reader(qoi_ref);
     params_track = (;
         params_train...,
