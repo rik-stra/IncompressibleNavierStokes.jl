@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH -J ANN_search
-#SBATCH -t 60:00
+#SBATCH -J LinReg_search
+#SBATCH -t 70:00
 #SBATCH --partition=gpu_mig
 #SBATCH --gpus=1
-#SBATCH --array=1-1
+#SBATCH --array=2-48
 
 export JULIA_DEPOT_PATH=/scratch-shared/$USER/.julia_a100:
 

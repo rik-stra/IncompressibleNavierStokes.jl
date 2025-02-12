@@ -26,8 +26,10 @@ for hist_len in hist_lens
     for tracking_noise in noise_levels
         for lambda in labs
             for model_noise in model_noises
-                i += 1
-                push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len, tracking_noise, lambda, model_noise))
+                if !(model_noise == :tracking_noise && tracking_noise == 0)
+                    i += 1
+                    push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len, tracking_noise, lambda, model_noise))
+                end
             end
         end
     end
