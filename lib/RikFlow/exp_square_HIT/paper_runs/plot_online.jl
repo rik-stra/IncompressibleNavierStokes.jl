@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg3"]
+ANN_names = ["LinReg1"]
 # figs folder
 figsfolder = @__DIR__()*"/../output/figures_paper/online"
 
@@ -125,9 +125,9 @@ end
 
 
 let # all replicas together
-    ANN_name = "LinReg2"
+    ANN_name = "LinReg1"
     ANN_parameters = load(@__DIR__()*"/output/online/$(ANN_name)/parameters.jld2", "parameters")
-    n_replicas = 4
+    n_replicas = 5
     q_rep = [load(@__DIR__()*"/output/online/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2", "data_online").q for i in 1:n_replicas]
     q_rep = q_rep[size.(q_rep,2) .>= 40000]
     qs = cat(q_rep..., dims = 2)
@@ -149,3 +149,15 @@ let # all replicas together
     save(figsfolder*"/lt_distr_q_TO_nuclear_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(ANN_parameters.hist_var)_dns512_les64_Re2000.0_tsim100.png", g)
     
 end
+
+
+# plot c
+
+    ANN_name = "LinReg1"
+    ANN_parameters = load(@__DIR__()*"/output/online/$(ANN_name)/parameters.jld2", "parameters")
+    c = load(@__DIR__()*"/output/online/$(ANN_name)/LinReg.jld2", "c")
+    heatmap( c, colormap = :balance, colorrange = (-1,1))
+
+    #save(figsfolder*"/c_heatmap_$(ANN_name)_hist$(ANN_parameters.hist_len)_$(ANN_parameters.hist_var).png", g)
+
+    stoch_distr = load(@__DIR__()*"/output/online/$(ANN_name)/LinReg.jld2", "stoch_distr")
