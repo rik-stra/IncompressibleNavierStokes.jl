@@ -138,7 +138,7 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             if !isnothing(time_series_method.stoch_distr)
                 pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
             else
-                pred = zeros(eltype(input), n_qoi)
+                pred = zeros(eltype(input), (n_qoi,1)) |> dev
             end
             pred[time_series_method.fitted_qois,:] += time_series_method.c * data
             

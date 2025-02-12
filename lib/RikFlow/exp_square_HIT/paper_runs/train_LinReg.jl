@@ -105,11 +105,11 @@ end
 c, stoch_distr = fit_model(inputs, outputs, fitted_qois; indep_normals, lambda, regularizer = :l2)
 
 # use same noise distr as in tracking
-if model_noise == "tracking_noise"
+if model_noise == :tracking_noise
     stds_ref_data = load(@__DIR__()*"/output/tracking/stds_refdata.jld2", "stds")
     stds = stds_ref_data.*tracking_noise./scaling.out_scaling.sigma
     stoch_distr = MvNormal(diagm(reshape(stds,6).^2))
-elseif model_noise == "no_noise"
+elseif model_noise == :no_noise
     stoch_distr = nothing
 end
 
