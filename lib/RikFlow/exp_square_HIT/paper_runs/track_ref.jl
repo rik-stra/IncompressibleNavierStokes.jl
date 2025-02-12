@@ -68,6 +68,10 @@ end
 qoi_ref = stack(data_train.data[1].qoi_hist[1:Int(tsim/Δt)+1]);
 tracking_noise = noise_levels[model_index]
 
+# save stds ref data
+stds = std(qoi_ref, dims = 2)
+jldsave("$outdir/stds_refdata.jld2"; stds)
+
 for i in 1:n_replicas
     ref_reader = Reference_reader(qoi_ref);
     params_track = (;

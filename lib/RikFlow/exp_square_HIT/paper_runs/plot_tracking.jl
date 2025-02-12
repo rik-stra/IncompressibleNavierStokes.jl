@@ -10,22 +10,22 @@ filename = @__DIR__()*"/../output/new/data_train_dns512_les64_Re2000.0_freeze_10
 ref_data = load(filename, "data_train");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 q_ref = stack(ref_data.data[1].qoi_hist)
-t_sim = 50
-time_index = 0:2.5e-3:t_sim
 
 ## plot 1 noise level all replicas
-noise_level = 0.01
-n_replicas = 2
+noise_levels = [0, 0.1, 0.05, 0.01, 0.005, 0.001]
+n_replicas = 5
+
+
+figs_folder = @__DIR__()*"/../output/figures_paper/tracking"
+
+for noise_level in noise_levels
 track_data = []
 for i in 1:n_replicas
     fname = @__DIR__()*"/output/tracking/data_track_trackingnoise_std_$(noise_level)_Re2000.0_tsim10.0_replica$(i).jld2"
     push!(track_data, load(fname, "data_track"))
 end
-
-
 #trajectories dQ
 let
-    
     t_sim = 10
     time_index = 0:2.5e-3:t_sim
     g = Figure()
@@ -42,7 +42,7 @@ let
     Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(noise_level)", fontsize = 20)
     display(g)
     
-    #save(fig_folder*"/dQ_dns512_les64_Re2000.0_tsim10.png", g)
+    save(figs_folder*"/dQ_$(noise_level).png", g)
 end
 
 let
@@ -60,9 +60,10 @@ let
         end
         lines!(axs[i], time_index[1:end-1], q_ref[i,range], linestyle = :dash ,color = :black)
     end
-    Label(g[-1, :], text = "tracking noise $(noise_level)", fontsize = 20)
+    Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(noise_level)", fontsize = 20)
     display(g)
     
-    #save(fig_folder*"/dQ_dns512_les64_Re2000.0_tsim10.png", g)
+    save(figs_folder*"/q_$(noise_level).png", g)
 end
 
+end
