@@ -6,4 +6,4 @@
 
 export JULIA_DEPOT_PATH=/scratch-shared/$USER/.julia_a100:
 
-julia --project plot_online.jl
+julia --project compute_ks.jl
