@@ -36,6 +36,8 @@ for ANN_name in ANN_names
     linreg_params = linreg_params_table[linreg_params_table.name .== ANN_name,:]
     if linreg_params.model_noise[1] == :no_noise
         linreg_params.model_noise_str .= "no noise"
+    elseif linreg_params.model_noise[1] == :tracking_noise
+        linreg_params.model_noise_str .= "tracking noise"
     else
         linreg_params.model_noise_str = linreg_params.model_noise
     end
@@ -113,6 +115,8 @@ let # all replicas together
     linreg_params = linreg_params_table[linreg_params_table.name .== ANN_name,:]
     if linreg_params.model_noise[1] == :no_noise
         linreg_params.model_noise_str .= "no noise"
+    elseif linreg_params.model_noise[1] == :tracking_noise
+        linreg_params.model_noise_str .= "tracking noise"
     else
         linreg_params.model_noise_str = linreg_params.model_noise
     end
@@ -135,7 +139,7 @@ let # all replicas together
     end
     Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(linreg_params.tracking_noise[1]), $\eta =$ \text{%$(linreg_params.model_noise_str[1])}, hist $=$ %$(linreg_params.hist_len[1]), $\lambda =$ %$(linreg_params.lambda[1])", fontsize = 20)
     #display(g)
-    save(figsfolder*"/lt_distr_q_noise$(linreg_params.tracking_noise[1])_$(linreg_params.model_noise[1])_hist$(linreg_params.hist_len[1])_lambd$(linreg_params.lambda[1]).png", g)
+    save(figsfolder*"/lt_distr_q_$(ANN_name)_noise$(linreg_params.tracking_noise[1])_$(linreg_params.model_noise[1])_hist$(linreg_params.hist_len[1])_lambd$(linreg_params.lambda[1]).png", g)
     
 end
 end
