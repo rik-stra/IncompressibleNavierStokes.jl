@@ -427,5 +427,6 @@ include("ANN.jl")
 
 include("post_processing_funcs.jl")
 export ks_dist
+export energy_spectra_comparison
 
 end # module RikFlow

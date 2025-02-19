@@ -217,6 +217,28 @@ time_index = 0:2.5e-3:t_sim
         display(g)
         save(fig_folder*"/corrected_trajectories.png", g)
     end
+
+    ##
+    let 
+        interval = 4850:4953
+        time_index = interval*2.5e-3
+        g = Figure(size = (400,300))
+        axs = Axis(g[1,1], 
+            title = "$(qois[2][1])_[$(qois[2][2]), $(qois[2][3])]",
+            xlabel = "t",
+            limits = ((12.15, 12.5),(1.67, 1.9)),
+            )
+            
+        
+        lines!(axs, time_index, q_ref[2, interval], label = "HF", linewidth = 2)
+        #lines!(axs, time_index, track_data.q_star[i, interval], label = "*")
+        lines!(axs, time_index, track_data.q[2, interval], linestyle = :dash, label = "LF", linewidth = 2)
+        
+        axislegend(position = :rt)
+        display(g)
+        save(fig_folder*"/pred_corr_tracking_for_presentation.png", g)
+    end
+
 # end
 
 ### no SGS ###
