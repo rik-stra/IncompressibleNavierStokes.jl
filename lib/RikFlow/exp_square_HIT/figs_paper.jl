@@ -89,99 +89,102 @@ time_index = 0:2.5e-3:t_sim
         display(g)
         save(fig_folder*"/Qoi_trajectories_HF.png", g)
     end
-
+# end
 
 ## Compare spectra of final fields
-## LinReg1 at t=100
-n_fields = 1
-filename = @__DIR__()*"/paper_runs/output/online/LinReg1/data_online_dns512_les64_Re2000.0_tsim100.0_replica1_rand_initial_dQ.jld2"
-u_LinReg = load(filename)["data_online"].fields[end:-1:end-n_fields+1]; #41
+#begin
+    ## LinReg1 at t=100
+    n_fields = 1
+    filename = @__DIR__()*"/paper_runs/output/online/LinReg1/data_online_dns512_les64_Re2000.0_tsim100.0_replica1_rand_initial_dQ.jld2"
+    u_LinReg = load(filename)["data_online"].fields[end:-1:end-n_fields+1]; #41
 
-fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim100.0.jld2"
-u_no_sgs = load(fname, "data_online").fields[end:-10:end-10*n_fields+1]; #401
+    fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim100.0.jld2"
+    u_no_sgs = load(fname, "data_online").fields[end:-10:end-10*n_fields+1]; #401
 
-u_smag = load(@__DIR__()*"/output/new/smag/data_smag_0.07_dns512_les64_Re2000.0_tsim100.0.jld2", "data_online").fields[end:-1:end-n_fields+1]; #41
+    u_smag = load(@__DIR__()*"/output/new/smag/data_smag_0.07_dns512_les64_Re2000.0_tsim100.0.jld2", "data_online").fields[end:-1:end-n_fields+1]; #41
 
-fname = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
-u_ref = load(fname, "data_train").data[1].u[end:-10:end-10*n_fields+1]; #401
+    fname = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
+    u_ref = load(fname, "data_train").data[1].u[end:-10:end-10*n_fields+1]; #401
 
-n = 64
-Δx = 1/n
-axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
-            x = (axis_x, axis_x, axis_x),
-            Re = Float32(2e3),);
-states = [ u_ref,
-          u_no_sgs,
-          u_smag,
-          u_LinReg ];
-#scales = get_scale_numbers(u_ref[1], setup)
-scales = (;ϵ = 3.7794485) # taken from HF_ref
-fig = energy_spectra_comparison(
-        states,
-        ["Ref", "No model", "Smagorinsky", "TO"];
-        setup,
-        sloperange = [2, 16],
-        slopeoffset = 3,
-        scale_numbers = scales,
-    )
-save(fig_folder*"/energy_spectrum_compare_online_nsnaps_$(n_fields).png", fig)
+    n = 64
+    Δx = 1/n
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+                x = (axis_x, axis_x, axis_x),
+                Re = Float32(2e3),);
+    states = [ u_ref,
+            u_no_sgs,
+            u_smag,
+            u_LinReg ];
+    #scales = get_scale_numbers(u_ref[1], setup)
+    scales = (;ϵ = 3.7794485) # taken from HF_ref
+    fig = energy_spectra_comparison(
+            states,
+            ["Ref", "No model", "Smagorinsky", "TO"];
+            setup,
+            sloperange = [2, 16],
+            slopeoffset = 3,
+            scale_numbers = scales,
+        )
+    save(fig_folder*"/energy_spectrum_compare_online_nsnaps_$(n_fields).png", fig)
 
-
+#end
 
 
 ## save VTK files
-## LinReg1 at t=100
-filename = @__DIR__()*"/paper_runs/output/online/LinReg1/data_online_dns512_les64_Re2000.0_tsim100.0_replica1_rand_initial_dQ.jld2"
-u_final = load(filename)["data_online"].fields[end].u;
+# begin
+    ## LinReg1 at t=100
+    filename = @__DIR__()*"/paper_runs/output/online/LinReg1/data_online_dns512_les64_Re2000.0_tsim100.0_replica1_rand_initial_dQ.jld2"
+    u_final = load(filename)["data_online"].fields[end].u;
 
-n = 64
-Δx = 1/n
-axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
+    n = 64
+    Δx = 1/n
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+                x = (axis_x, axis_x, axis_x),
+                Re = Float32(2e3),);
+    state = (;u = u_final, t=0., temp=0);        
+    # save to vtk
+    save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/LinReg1_r1_T100", fieldnames = (:velocity, :Qfield))
+
+    fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim100.0.jld2"
+    no_sgs_data = load(fname, "data_online");
+    n = 64
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
-state = (;u = u_final, t=0., temp=0);        
-# save to vtk
-save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/LinReg1_r1_T100", fieldnames = (:velocity, :Qfield))
+    state = (;u = no_sgs_data.fields[end].u, t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/LF_no_model_T100", fieldnames = (:velocity, :Qfield))
 
-fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim100.0.jld2"
-no_sgs_data = load(fname, "data_online");
-n = 64
-axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
-        x = (axis_x, axis_x, axis_x),
-        Re = Float32(2e3),);
-state = (;u = no_sgs_data.fields[end].u, t=0., temp=0);
-save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/LF_no_model_T100", fieldnames = (:velocity, :Qfield))
+    smag = load(
+            @__DIR__()*"/output/new/smag/data_smag_0.07_dns512_les64_Re2000.0_tsim100.0.jld2",
+            "fields")
+    n = 64
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+            x = (axis_x, axis_x, axis_x),
+            Re = Float32(2e3),);
+    state = (;u = no_sgs_data.fields[end].u, t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Smag_007_T100", fieldnames = (:velocity, :Qfield))
 
-smag = load(
-        @__DIR__()*"/output/new/smag/data_smag_0.07_dns512_les64_Re2000.0_tsim100.0.jld2",
-        "fields")
-n = 64
-axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
-        x = (axis_x, axis_x, axis_x),
-        Re = Float32(2e3),);
-state = (;u = no_sgs_data.fields[end].u, t=0., temp=0);
-save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Smag_007_T100", fieldnames = (:velocity, :Qfield))
+    fname = @__DIR__()*"/output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
+    track_fields = load(fname, "data_track").fields;
+    n = 64
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+            x = (axis_x, axis_x, axis_x),
+            Re = Float32(2e3),);
+    state = (;u = track_fields[end].u, t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Track_T100", fieldnames = (:velocity, :Qfield))
 
-fname = @__DIR__()*"/output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
-track_fields = load(fname, "data_track").fields;
-n = 64
-axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
-        x = (axis_x, axis_x, axis_x),
-        Re = Float32(2e3),);
-state = (;u = track_fields[end].u, t=0., temp=0);
-save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Track_T100", fieldnames = (:velocity, :Qfield))
-
-fname = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
-train_field = load(fname, "data_train").data[1].u[end];
-n = 64
-axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
-        x = (axis_x, axis_x, axis_x),
-        Re = Float32(2e3),);
-state = (;u = train_field, t=0., temp=0);
-save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Train_T100", fieldnames = (:velocity, :Qfield))
+    fname = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
+    train_field = load(fname, "data_train").data[1].u[end];
+    n = 64
+    axis_x = range(0.0, 1., n + 1)
+    setup = Setup(;
+            x = (axis_x, axis_x, axis_x),
+            Re = Float32(2e3),);
+    state = (;u = train_field, t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Train_T100", fieldnames = (:velocity, :Qfield))
+# end
