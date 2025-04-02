@@ -14,7 +14,7 @@ using RikFlow
 using IncompressibleNavierStokes
 using CUDA
 
-smag_vals = collect(0.05:0.005:0.1)
+smag_vals = [0.055, 0.06, 0.08, 0.071]
 n_dns = Int(512)
 n_les = Int(64)
 Re = Float32(2_000)
@@ -35,7 +35,7 @@ seeds = (;
 
 outdir = @__DIR__() *"/output/new"
 ispath(outdir) || mkpath(outdir)
-ispath(outdir*"/smag") || mkpath(outdir*"/smag")
+ispath(outdir*"/smag2") || mkpath(outdir*"/smag2")
 
 
 # For running on a CUDA compatible GPU
@@ -45,9 +45,10 @@ ArrayType = CuArray
 backend = CUDABackend()
 
 # load reference data
-track_file = outdir*"/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim10.0.jld2"
-data_track = load(track_file, "data_track");
+track_file = @__DIR__()*"/paper_runs/output/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2"
 params_track = load(track_file, "params_track");
+#track_file = @__DIR__()*"/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
+data_track = load(track_file, "data_track");
 # get initial condition
 if data_track.fields[1].u isa Tuple
     ustart = stack(ArrayType.(data_track.fields[1].u));
@@ -109,5 +110,5 @@ for c_s in smag_vals
     q = stack(outputs.qoihist);
     data_online = (;q, fields = outputs.fields);
     # Save tracking data
-    jldsave("$outdir/smag/data_smag_$(c_s)_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+    jldsave("$outdir/smag2/data_smag_$(c_s)_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
 end

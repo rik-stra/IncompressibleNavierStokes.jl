@@ -41,9 +41,11 @@ T = Float32
 ArrayType = CuArray
 
 # load reference data
-track_file = outdir*"/data_track2_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim100.0.jld2"
-data_track = load(track_file, "data_track");
+track_file = @__DIR__()*"/paper_runs/output/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2"
 params_track = load(track_file, "params_track");
+#track_file = @__DIR__()*"/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
+data_track = load(track_file, "data_track");
+
 # get initial condition
 if data_track.fields[1].u isa Tuple
     ustart = stack(ArrayType.(data_track.fields[1].u));
@@ -101,4 +103,4 @@ psolver = psolver_spectral(setup);
 q = stack(outputs.qoihist);
 data_online = (;q, fields = outputs.fields);
 # Save tracking data
-jldsave("$outdir/data_no_sgs2_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+jldsave("$outdir/data_no_sgs3_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);

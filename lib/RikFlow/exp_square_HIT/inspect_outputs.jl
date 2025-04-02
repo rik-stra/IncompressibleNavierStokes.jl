@@ -294,8 +294,8 @@ time_index = 0:2.5e-3:t_sim
 ### SMAG  ###
 #############
 #begin
-    let 
-        smag_vals = collect(0.05:0.005:0.1)
+    #let 
+        smag_vals = [0.05, 0.055, 0.06, 0.065, 0.07, 0.071, 0.072, 0.073, 0.074, 0.075, 0.08, 0.085, 0.09, 0.095,0.1]
         smag_data = [load(
             @__DIR__()*"/output/new/smag/data_smag_$(c)_dns512_les64_Re2000.0_tsim100.0.jld2",
             "data_online").q for c in smag_vals];
@@ -323,7 +323,7 @@ time_index = 0:2.5e-3:t_sim
         lines!(ax,smag_vals,summed_ks)
         display(g)
         save(fig_folder*"/summed_KSdists_smag_dns512_les64_Re2000.0_tsim100.png", g)
-    end
+    #end
     ks_dists = [ks_dist(q_ref[i,:], smag_data[1][i,:])[1] for i in 1:size(q_ref, 1)]
     ks_dists2 = [ks_dist(q_ref[i,:], smag_data[2][i,:])[1] for i in 1:size(q_ref, 1)]
     sum(ks_dists)
