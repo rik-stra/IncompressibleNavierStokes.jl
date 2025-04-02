@@ -158,15 +158,15 @@ time_index = 0:2.5e-3:t_sim
     save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/LF_no_model_T100", fieldnames = (:velocity, :Qfield))
 
     smag = load(
-            @__DIR__()*"/output/new/smag/data_smag_0.07_dns512_les64_Re2000.0_tsim100.0.jld2",
-            "fields")
+            @__DIR__()*"/output/new/smag/data_smag_0.071_dns512_les64_Re2000.0_tsim100.0.jld2",
+            "data_online")
     n = 64
     axis_x = range(0.0, 1., n + 1)
     setup = Setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
-    state = (;u = no_sgs_data.fields[end].u, t=0., temp=0);
-    save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Smag_007_T100", fieldnames = (:velocity, :Qfield))
+    state = (;u = smag.fields[end].u, t=0., temp=0);
+    save_vtk(state; setup, filename = @__DIR__()*"/paper_runs/output/vtks/Smag_0071_T100", fieldnames = (:velocity, :Qfield))
 
     fname = @__DIR__()*"/output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
     track_fields = load(fname, "data_track").fields;

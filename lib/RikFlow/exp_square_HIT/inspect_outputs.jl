@@ -70,7 +70,7 @@ time_index = 0:2.5e-3:t_sim
     let # plot reference data
         g = Figure()
         axs = [Axis(g[i ÷ 2, i%2], 
-            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+            title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
             for i in 0:size(q_ref, 1)-1]
         for i in 1:size(q_ref, 1)
             lines!(axs[i], time_index, q_ref[i,1:size(time_index,1)])
@@ -294,7 +294,7 @@ time_index = 0:2.5e-3:t_sim
 ### SMAG  ###
 #############
 #begin
-    #let 
+    let 
         smag_vals = [0.05, 0.055, 0.06, 0.065, 0.07, 0.071, 0.072, 0.073, 0.074, 0.075, 0.08, 0.085, 0.09, 0.095,0.1]
         smag_data = [load(
             @__DIR__()*"/output/new/smag/data_smag_$(c)_dns512_les64_Re2000.0_tsim100.0.jld2",
@@ -305,39 +305,50 @@ time_index = 0:2.5e-3:t_sim
             push!(ks_dists, ks)
         end
         ks_dists = stack(ks_dists)
-        g = Figure(size = (900,600))
+        g = Figure()
         axs = [Axis(g[i ÷ 2, i%2], 
-            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+            title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
             for i in 0:size(smag_data[1], 1)-1]
 
         for i in 1:size(smag_data[1], 1)
-            lines!(axs[i], smag_vals, ks_dists[i,:])
+            scatterlines!(axs[i], smag_vals, ks_dists[i,:])
+            
             #if i == size(smag_data[1], 1) axislegend(axs[i], position = :rt) end
+            if i in [1,3,5]
+                axs[i].ylabel="KS-distance"
+            end
+            if i in [5,6]
+                axs[i].xlabel=L"C_s"
+            end
+            for i in [1, 2, 3, 4]
+                hidexdecorations!(axs[i], ticks = false, grid = false)
+            end
         end
+
         display(g)
         save(fig_folder*"/KSdists_smag_dns512_les64_Re2000.0_tsim100.png", g)
         
         summed_ks = sum(ks_dists, dims = 1)[:]
-        g = Figure()
-        ax = Axis(g[1, 1], xlabel = "Smag constant", ylabel = "Summed KS distance")
-        lines!(ax,smag_vals,summed_ks)
+        g = Figure(fontsize = 20)
+        ax = Axis(g[1, 1], xlabel = L"C_s", ylabel = "Summed KS-distance")
+        scatterlines!(ax,smag_vals,summed_ks)
         display(g)
         save(fig_folder*"/summed_KSdists_smag_dns512_les64_Re2000.0_tsim100.png", g)
-    #end
-    ks_dists = [ks_dist(q_ref[i,:], smag_data[1][i,:])[1] for i in 1:size(q_ref, 1)]
-    ks_dists2 = [ks_dist(q_ref[i,:], smag_data[2][i,:])[1] for i in 1:size(q_ref, 1)]
-    sum(ks_dists)
+    end
+
     
-    smag_vals = [0.07]
+    smag_vals = [0.071]
     smag_data = [load(
         @__DIR__()*"/output/new/smag/data_smag_$(c)_dns512_les64_Re2000.0_tsim100.0.jld2",
         "data_online").q for c in smag_vals];
-
+    ks_dists = [ks_dist(q_ref[i,:], smag_data[1][i,:])[1] for i in 1:size(q_ref, 1)]
+    summed_ks = sum(ks_dists, dims = 1)
+    
     let 
         time_index = 0:2.5e-3:10
-        g = Figure(size = (900,600))
+        g = Figure()
         axs = [Axis(g[i ÷ 2, i%2], 
-            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
             for i in 0:size(smag_data[1], 1)-1]
         for i in 1:size(smag_data[1], 1)
             lines!(axs[i], time_index, q_ref[i, 1:size(time_index,1)], label = "ref", color = :black)
@@ -345,6 +356,13 @@ time_index = 0:2.5e-3:t_sim
                 lines!(axs[i],time_index, smag_data[j][i, 1:size(time_index,1)], label = "smag $(smag_vals[j])")
             end
             if i == size(smag_data[1], 1) axislegend(axs[i], position = :rt) end
+            
+            if i in [5,6]
+                axs[i].xlabel=L"t"
+            end
+            for i in [1, 2, 3, 4]
+                hidexdecorations!(axs[i], ticks = false, grid = false)
+            end
         end
         display(g)
         save(fig_folder*"/q_smag_dns512_les64_Re2000.0_tsim10.png", g)
@@ -354,7 +372,7 @@ time_index = 0:2.5e-3:t_sim
     let 
         g = Figure()
         axs = [Axis(g[i ÷ 2, i%2], 
-            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+        title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
             for i in 0:size(smag_data[1], 1)-1]
         for i in 1:size(smag_data[1], 1)
             density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
@@ -364,10 +382,16 @@ time_index = 0:2.5e-3:t_sim
                 strokecolor = :red, strokewidth = 3, strokearound = true)
             end
             if i == size(smag_data[1], 1) axislegend(axs[i], position = :rt) end
+            if i in [1,3,5]
+                axs[i].ylabel="Density"
+            end
         end
+
         display(g)
         save(fig_folder*"/lt_distr_q_smag_dns512_les64_Re2000.0_tsim100.png", g)
     end
+    
+    
     smag_fields = [load(
         @__DIR__()*"/output/new/smag/data_smag_$(c)_dns512_les64_Re2000.0_tsim100.0.jld2",
         "data_online").fields for c in smag_vals];
@@ -378,7 +402,7 @@ time_index = 0:2.5e-3:t_sim
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
     state = (;u = smag_fields[1][end].u, t=0., temp=0);
-    save_vtk(state; setup, filename = @__DIR__()*"/output/vtk_files/LF_smag", fieldnames = (:velocity, :Qfield))
+    #save_vtk(state; setup, filename = @__DIR__()*"/output/vtk_files/LF_smag", fieldnames = (:velocity, :Qfield))
 #end
 
 
