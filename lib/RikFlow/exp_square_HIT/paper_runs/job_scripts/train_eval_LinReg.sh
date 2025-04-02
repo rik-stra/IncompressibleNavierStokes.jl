@@ -3,7 +3,7 @@
 #SBATCH -t 70:00
 #SBATCH --partition=gpu_mig
 #SBATCH --gpus=1
-#SBATCH --array=2-48
+#SBATCH --array=49-58
 
 export JULIA_DEPOT_PATH=/scratch-shared/$USER/.julia_a100:
 

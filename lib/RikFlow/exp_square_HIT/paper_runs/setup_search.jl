@@ -34,7 +34,18 @@ for hist_len in hist_lens
         end
     end
 end
-
+hist_lens = [0,1,3,50,80]
+lambdas = [0.01, 0]
+for hist_len in hist_lens
+    for lambda in lambdas
+        
+        tracking_noise = 0
+        model_noise = :MVG
+                    
+        i += 1
+        push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len, tracking_noise, lambda, model_noise))
+    end
+end
 
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
