@@ -39,7 +39,7 @@ lambdas = [0.01, 0]
 for hist_len in hist_lens
     for lambda in lambdas
         
-        tracking_noise = 0
+        tracking_noise = 0.0
         model_noise = :MVG
                     
         i += 1
