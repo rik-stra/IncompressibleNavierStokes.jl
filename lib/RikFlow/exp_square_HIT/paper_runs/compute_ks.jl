@@ -3,8 +3,8 @@ using DataFrames
 using IncompressibleNavierStokes
 using RikFlow
 
-        
-linreg_params_table = DataFrame(load(@__DIR__()*"/inputs.jld2", "inputs"))
+index_range = [49,58]
+linreg_params_table = DataFrame(load(@__DIR__()*"/inputs.jld2", "inputs"))[index_range[1]:index_range[2],:]
 # load reference data
 filename = @__DIR__()*"/../output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
 ref_data = load(filename, "data_train");
@@ -35,6 +35,6 @@ end
 linreg_params_table.ks_dist_replicas = ks_dists_replicas
 linreg_params_table.ks_dist_ensemble = ks_dist_ensemble
 
-save(@__DIR__()*"/output/ks_dists.jld2", "ks_table", linreg_params_table)
+save(@__DIR__()*"/output/ks_dists_range_$(index_range[1])_$(index_range[2]).jld2", "ks_table", linreg_params_table)
 #linreg_params_table[!,"ks_dist_ensemble"]
 
