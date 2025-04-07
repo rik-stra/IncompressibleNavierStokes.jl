@@ -41,7 +41,7 @@ for (name, n_replicas) in zip(linreg_params_table.name, linreg_params_table.n_re
 
     if size(q_rep,1) > 0
         temp = []
-        for r in 1:n_replicas
+        for r in 1:size(q_rep,1)
             ks = [ks_dist(q_ref[i,:], q_rep[r][i,:])[1] for i in 1:length(qois)]
             ks = [sum(ks), ks...]
             push!(temp, ks)
