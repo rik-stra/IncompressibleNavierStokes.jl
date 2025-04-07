@@ -39,15 +39,20 @@ for (name, n_replicas) in zip(linreg_params_table.name, linreg_params_table.n_re
         end
     end
 
-    temp = []
-    for r in 1:n_replicas
-        ks = [ks_dist(q_ref[i,:], q_rep[r][i,:])[1] for i in 1:length(qois)]
-        ks = [sum(ks), ks...]
-        push!(temp, ks)
+    if size(q_rep,1) > 0
+        temp = []
+        for r in 1:n_replicas
+            ks = [ks_dist(q_ref[i,:], q_rep[r][i,:])[1] for i in 1:length(qois)]
+            ks = [sum(ks), ks...]
+            push!(temp, ks)
+        end
+        ks_ensemble = [ks_dist(q_ref[i,:], qs[i,:])[1] for i in 1:length(qois)]
+        ks_ensemble = [sum(ks_ensemble), ks_ensemble...]
+    else
+        temp = nothing
+        ks_ensemble = nothing
     end
     
-    ks_ensemble = [ks_dist(q_ref[i,:], qs[i,:])[1] for i in 1:length(qois)]
-    ks_ensemble = [sum(ks_ensemble), ks_ensemble...]
     push!(ks_dists_replicas, temp)
     push!(ks_dist_ensemble, ks_ensemble)
     push!(n_unstable, unstable)
