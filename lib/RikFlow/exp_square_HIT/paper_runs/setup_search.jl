@@ -74,6 +74,30 @@ end
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 
+#####
+# small training data
+#####
+
+train_ranges = [(400, 2000), (400, 1000)]
+noise_levels = [0.0, 0.1, 0.01]
+hist_lens = [5, 10, 20, 30]
+labs = [0, 0.1, 0.01]
+print("Start small training data $(i+1)")
+for hist_len in hist_lens
+    for tracking_noise in noise_levels
+        for lambda in labs
+            for train_range in train_ranges
+                    i += 1
+                    push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len, tracking_noise, lambda, train_range))
+            end
+        end
+    end
+end
+print("End small training data $(i)")
+save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
+inputs_df = DataFrame(inputs)
+
+
 # read inputs
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 inputs_df = DataFrame(inputs)
