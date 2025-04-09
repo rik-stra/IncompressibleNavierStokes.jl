@@ -232,10 +232,21 @@ function get_u_hat(u, setup)
     d = dimension()
     # interpolate u to cell centers
     #u_c = interpolate_u_p(u, setup)
-    u = stack([u[Iu[a], a] for a=1:d], dims=4)
+    u = stack([u[select_physical_fourier_points(a, setup), a] for a=1:d], dims=4)
     u_hat = fft(u, [1,2,3])
     return u_hat
 end
+
+function select_physical_fourier_points(a, setup)
+    if eltype(setup.boundary_conditions[a]) == PeriodicBC
+        return setup.grid.Iu[a]
+    elseif eltype(setup.boundary_conditions[a]) == DirichletBC{Nothing}
+        return setup.grid.Ip
+    else
+        error("Boundary condition not recognized")
+    end
+end
+
 
 """
     get_w_hat(u::Tuple, setup)

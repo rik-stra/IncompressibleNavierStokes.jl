@@ -62,7 +62,9 @@ function solve_unsteady(;
     end
 
     if isadaptive
-        @assert setup.ou_bodyforce.freeze ==1 "Can't freeze the bodyforce over multiple adaptive time steps"
+        if !isnothing(setup.ou_bodyforce)
+            @assert setup.ou_bodyforce.freeze ==1  "Can't freeze the bodyforce over multiple adaptive time steps"
+        end
         while stepper.t < tend
             if stepper.n % n_adapt_Δt == 0
                 # Change timestep based on operators
