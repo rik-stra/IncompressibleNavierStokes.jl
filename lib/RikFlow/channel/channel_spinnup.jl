@@ -25,15 +25,9 @@ zlims = 0f, 4f / 3f * pi
 
 tsim = 0.1*f
 # Grid
-# nx = 48
-# ny = 24
-# nz = 24
-# nx = 64
-# ny = 32
-# nz = 32
-nx = 512
-ny = 512
-nz = 256
+nx = 128 #512
+ny = 128 #512
+nz = 64 #256
 
 
 kwargs = (;
@@ -57,8 +51,9 @@ setup = Setup(;
     kwargs...,
 );
 
-
+@info "factorize psolver ..."
 psolver = default_psolver(setup);
+@info "factorize psolver done"
 
 Re_tau = 180f
 Re_m = 2800f
