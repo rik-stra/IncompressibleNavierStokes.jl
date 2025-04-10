@@ -11,7 +11,15 @@ using CUDA
 using CUDSS
 using RikFlow
 using JLD2
+using LoggingExtras
 #using WGLMakie
+
+jobid = ENV["SLURM_JOB_ID"]
+#taskid = ENV["SLURM_ARRAY_TASK_ID"]
+logfile = joinpath(@__DIR__, "log_$(jobid).out")
+filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+logger = TeeLogger(global_logger(), filelogger)
+global_logger(logger)
 
 
 # Precision
@@ -30,6 +38,7 @@ nx = 256 #512
 ny = 256 #512
 nz = 128 #256
 
+@info "Grid size: $(nx) x $(ny) x $(nz)"
 
 kwargs = (;
     boundary_conditions = (
