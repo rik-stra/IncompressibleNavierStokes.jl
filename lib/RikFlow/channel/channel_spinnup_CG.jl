@@ -8,7 +8,7 @@ end
 using IncompressibleNavierStokes
 using CairoMakie
 using CUDA
-using CUDSS
+#using CUDSS
 using RikFlow
 using JLD2
 using LoggingExtras
@@ -63,8 +63,8 @@ setup = Setup(;
 
 @info "factorize psolver ..."
 flush(stdout)
-@time psolver = default_psolver(setup);
-#psolver = psolver_cg(setup);
+#@time psolver = default_psolver(setup);
+psolver = psolver_cg(setup);
 @info "factorize psolver done"
 flush(stdout)
 
