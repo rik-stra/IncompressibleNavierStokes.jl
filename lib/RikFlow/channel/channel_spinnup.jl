@@ -15,7 +15,8 @@ using JLD2
 
 
 # Precision
-f = one(Float32)
+T = Float32
+f = one(T)
 # f = one(Float64)
 
 # Domain
@@ -23,11 +24,11 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 0.1*f
+tsim = Float32(0.1)
 # Grid
-nx = 128 #512
-ny = 128 #512
-nz = 64 #256
+nx = 256 #512
+ny = 256 #512
+nz = 128 #256
 
 
 kwargs = (;
@@ -52,8 +53,10 @@ setup = Setup(;
 );
 
 @info "factorize psolver ..."
-psolver = default_psolver(setup);
+flush(stdout)
+@time psolver = default_psolver(setup);
 @info "factorize psolver done"
+flush(stdout)
 
 Re_tau = 180f
 Re_m = 2800f

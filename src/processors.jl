@@ -67,6 +67,7 @@ timelogger(;
             showmax && push!(msg, @sprintf("umax = %.2g", maximum(abs, u)))
             showspeed && push!(msg, @sprintf("itertime = %.2g", itertime))
             @info join(msg, "\t")
+            flush(stdout)
         end
         nothing
     end
