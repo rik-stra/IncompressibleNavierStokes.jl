@@ -35,11 +35,11 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = Float32(0.02)
+tsim = Float32(5)
 # Grid
-nx = 256 #512
-ny = 256 #512
-nz = 128 #256
+nx = 256 
+ny = 256 
+nz = 128 
 
 @info "Grid size: $(nx) x $(ny) x $(nz)"
 
