@@ -1,3 +1,5 @@
+
+
 ## Turbulent channel flow
 
 if false
@@ -12,6 +14,7 @@ using CUDA
 using RikFlow
 using JLD2
 using LoggingExtras
+using AMGX
 #using WGLMakie
 
 jobid = ENV["SLURM_JOB_ID"]
@@ -32,7 +35,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = Float32(0.1)
+tsim = Float32(0.02)
 # Grid
 nx = 256 #512
 ny = 256 #512
@@ -62,11 +65,15 @@ setup = Setup(;
 );
 
 @info "factorize psolver ..."
-flush(stdout)
 #@time psolver = default_psolver(setup);
-psolver = psolver_cg(setup);
+#IncompressibleNavierStokes.close_amgx(stuff);
+stuff = IncompressibleNavierStokes.amgx_setup();
+
+
+@time psolver = psolver_cg_matrix(setup; stuff);
+
+
 @info "factorize psolver done"
-flush(stdout)
 
 Re_tau = 180f
 Re_m = 2800f
@@ -88,7 +95,7 @@ ustartfunc = let
     end
 end
 
-ustart = velocityfield(setup, ustartfunc; psolver);
+@time ustart = velocityfield(setup, ustartfunc; psolver);
 
 @info "Solving DNS"
 # Solve DNS and store filtered quantities
@@ -110,7 +117,7 @@ ustart = velocityfield(setup, ustartfunc; psolver);
     ),
     psolver,
 );
-
+IncompressibleNavierStokes.close_amgx(stuff);
 outdir = @__DIR__()*"/output"
 ispath(outdir) || mkpath(outdir)
 

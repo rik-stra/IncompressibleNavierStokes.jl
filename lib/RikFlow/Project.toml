@@ -4,6 +4,7 @@ authors = ["Rik <rik.hoekstra@xs4all.nl>"]
 version = "0.1.0"
 
 [deps]
+AMGX = "c963dde9-0319-47f5-bf0c-b07d3c80ffa6"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
@@ -33,6 +34,7 @@ cuTENSOR = "011b41b2-24ef-40a8-b3eb-fa098493e9e1"
 IncompressibleNavierStokes = {path = "../.."}
 
 [compat]
+AMGX = "0.2.0"
 CUDSS = "0.4.3"
 DataFrames = "1.7.0"
 LaTeXStrings = "1.4.0"
