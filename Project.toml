@@ -4,7 +4,6 @@ authors = ["Syver Døving Agdestein, Benjamin Sanderse, and contributors"]
 version = "2.1.0"
 
 [deps]
-AMGX = "c963dde9-0319-47f5-bf0c-b07d3c80ffa6"
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
@@ -30,8 +29,10 @@ cuTENSOR = "011b41b2-24ef-40a8-b3eb-fa098493e9e1"
 
 [weakdeps]
 CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"
+AMGX = "c963dde9-0319-47f5-bf0c-b07d3c80ffa6"
 
 [extensions]
+IncompressibleNavierStokesAMGXExt = ["AMGX"]
 IncompressibleNavierStokesCUDSSExt = ["CUDSS"]
 IncompressibleNavierStokesMakieExt = ["Makie"]
 

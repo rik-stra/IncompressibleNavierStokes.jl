@@ -30,7 +30,6 @@ using StaticArrays
 using Statistics
 using WriteVTK: CollectionFile, paraview_collection, vtk_grid, vtk_save
 using TensorOperations
-using AMGX
 using CUDA
 import cuTENSOR
 
@@ -179,5 +178,7 @@ export bc_u_mat,
 
 # SciML operations
 export create_right_hand_side, right_hand_side!
+
+export amgx_setup, close_amgx, psolver_cg_AMGX
 
 end

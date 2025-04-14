@@ -35,10 +35,10 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = Float32(5)
+tsim = Float32(10)
 # Grid
-nx = 256 
-ny = 256 
+nx = 128 
+ny = 128 
 nz = 128 
 
 @info "Grid size: $(nx) x $(ny) x $(nz)"
@@ -67,10 +67,10 @@ setup = Setup(;
 @info "factorize psolver ..."
 #@time psolver = default_psolver(setup);
 #IncompressibleNavierStokes.close_amgx(stuff);
-stuff = IncompressibleNavierStokes.amgx_setup();
+stuff = amgx_setup();
 
 
-@time psolver = psolver_cg_matrix(setup; stuff);
+@time psolver = psolver_cg_AMGX(setup; stuff);
 
 
 @info "factorize psolver done"
@@ -106,7 +106,7 @@ end
     tlims = (0f, tsim),
     
     processors = (;
-        log = timelogger(; nupdate = 1),
+        log = timelogger(; nupdate = 50),
         ehist = realtimeplotter(;
                 setup,
                 plot = energy_history_plot,
