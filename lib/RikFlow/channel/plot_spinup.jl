@@ -18,7 +18,7 @@ kwargs = (;
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
     ),
-    Re = 180f,
+    Re = 180,
 )
 setup = Setup(;
     x = (
@@ -37,7 +37,8 @@ heatmap(u_start[:,:,20,1])
 u_ave = mean(u_start[:,:,:,1], dims=[1,3])
 u_ave = reshape(u_ave, :)
 u_ave = (u_ave[1:128] + u_ave[129:256][end:-1:1])/2
-yp = LinRange(0, 1, size(u_ave, 1)+2)[2:end-1]*180
+
+yp = setup.grid.xu[1][2][2:Int(end//2)]*180
 lines(yp, u_ave)
 
 using DelimitedFiles
@@ -48,10 +49,17 @@ u_ave_ref = data[2:end, 3]
 
 #log plot
 f = Figure()
-ax = Axis(f[1, 1], xscale = log10)
-lines!(ax, yp_ref, u_ave_ref, color=:blue, linewidth=2)
-scatter!(ax, yp, u_ave, color=:red)
-ylims!(ax,0, 19)
+ax1 = Axis(f[1, 1], xscale = log10)
+lines!(ax1, yp_ref, u_ave_ref, color=:blue, linewidth=2)
+lines!(ax1, yp, u_ave, color=:red)
+ylims!(ax1,0, 19)
+xlims!(ax1, 0.1, 180)
+
+ax1 = Axis(f[1, 2])
+lines!(ax1, yp_ref, u_ave_ref, color=:blue, linewidth=2)
+lines!(ax1, yp, u_ave, color=:red)
+ylims!(ax1,0, 19)
+xlims!(ax1, 0.1, 180)
 display(f)
 
 bulk_mean_velocity = mean(u_ave[1:128]*2)
