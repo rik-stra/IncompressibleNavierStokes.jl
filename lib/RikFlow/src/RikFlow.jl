@@ -30,7 +30,7 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method = nothing, tracking_noise = nothing, tracking_noise_seed = 56)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep = nothing, time_series_method = nothing, tracking_noise = nothing, tracking_noise_seed = 56)
     T = typeof(setup.Re)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
