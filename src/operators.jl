@@ -1555,6 +1555,31 @@ function total_kinetic_energy(u, setup; kwargs...)
     sum(view(k, Ip))
 end
 
+function total_enstropy(u, setup; kwargs...)
+    (; Ip) = setup.grid
+    w = vorticity(u, setup)
+    w = interpolate_ω_p(w, setup)
+    z = sum(w.* w, dims = 4)
+
+    #w_p = interpolate_ω_p(z, setup)
+
+    s = scalewithvolume(z, setup)
+
+    sum(view(s, Ip))
+end
+
+function total_enstropy2(u, setup; kwargs...)
+    (; Ip) = setup.grid
+    w = vorticity(u, setup)
+    w = interpolate_ω_p(w, setup)
+    z = sum(w.* w, dims = 4)
+
+    #w_p = interpolate_ω_p(z, setup)
+
+    s = scalewithvolume(z, setup)
+    s
+end
+
 """
 Get the following dimensional scale numbers [Pope2000](@cite):
 
