@@ -207,12 +207,12 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
     N = size(u_hat)
     q = Array{typeof(setup.Re)}(undef, to_setup.N_qois)  # if slow make this into a CuArray
 
-    E = sum(abs2, u_hat, dims = 4)
-    Z = sum(abs2, w_hat, dims = 4)
     for i in 1:to_setup.N_qois
         if to_setup.qois[i][1] == "E"
+            E = sum(abs2, u_hat, dims = 4)
             q[i]= sum(E.*to_setup.masks[i])*(prod(L)/(2*prod(N[1:D])^2))
         elseif to_setup.qois[i][1] == "Z"
+            Z = sum(abs2, w_hat, dims = 4)
             q[i] = sum(Z.*to_setup.masks[i])*(prod(L)/(prod(N[1:D])^2))
         else
             error("QoI not recognized")
