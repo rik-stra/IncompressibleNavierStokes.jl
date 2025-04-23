@@ -65,3 +65,32 @@ display(f)
 bulk_mean_velocity = mean(u_ave[1:128]*2)
 Rem = bulk_mean_velocity*180
 
+### plot HF ref ###
+hf_data = load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2");
+keys(hf_data)
+hf_u = hf_data["u_cpu"];
+heatmap(hf_u[:,:,1,1])
+
+lf_u = hf_data["results"].data[1].u[end]
+heatmap(lf_u[:,:,1,1])
+
+q_ref = stack(hf_data["results"].data[1].qoi_hist)
+#plot the time series in q_ref in 4 different axes
+f = Figure()
+ax1 = Axis(f[1, 1])
+ax2 = Axis(f[1, 2])
+ax3 = Axis(f[2, 1])
+ax4 = Axis(f[2, 2])
+lines!(ax1, q_ref[1,:], color=:blue)
+lines!(ax1, q[1,:], color=:red)
+lines!(ax2, q_ref[2,:], color=:blue)
+lines!(ax2, q[2,:], color=:red)
+lines!(ax3, q_ref[3,:], color=:blue)
+lines!(ax3, q[3,:], color=:red)
+lines!(ax4, q_ref[4,:], color=:blue)
+lines!(ax4, q[4,:], color=:red)
+display(f)
+
+heatmap(outputs.fields[7].u[:,:,1,1])
+
+keys(outputs.fields[end])

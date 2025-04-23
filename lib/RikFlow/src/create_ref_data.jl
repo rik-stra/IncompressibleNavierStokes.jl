@@ -46,7 +46,8 @@ filtersaver(dns, les, filters, compression, to_setup_les; nupdate = 1, n_plot = 
             end
             if !isnothing(checkpoints) && n in checkpoints
                 filename = "$checkpoint_name/checkpoint_n$(n).jld2"
-                jldsave(filename; results, Array(u))
+                u_cpu = Array(u)
+                jldsave(filename; results, u_cpu)
             end 
         end
         state[] = state[] # Save initial conditions
