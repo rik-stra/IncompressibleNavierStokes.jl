@@ -116,15 +116,6 @@ function allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
     (; dQ, tau, dic...)
 end
 
-function allocate_arrays_to(to_setup, setup, ArrayType) # not in use
-    (; Nu) = setup.grid
-    (; N_qois) = to_setup
-    d = length(Nu)
-    P_hat = ArrayType{ComplexF64}(undef, Nu[1][1], Nu[1][2], Nu[1][3], d, N_qois)
-    sgs_hat = ArrayType{ComplexF64}(undef, Nu[1][1], Nu[1][2], Nu[1][3], d)
-    return P_hat, sgs_hat
-end
-
 function get_cij_masks(to_setup)
     mask_A = ones(Bool,(to_setup.N_qois, to_setup.N_qois, to_setup.N_qois))
     mask_B = ones(Bool,(to_setup.N_qois, to_setup.N_qois))
@@ -228,7 +219,7 @@ end
 Compute the Fourier transform of the field. Returns an 4D array, velocity components stacked along last dimension.
 """
 function get_u_hat(u, setup)
-    (; dimension, Iu) = setup.grid
+    (; dimension) = setup.grid
     d = dimension()
     # interpolate u to cell centers
     #u_c = interpolate_u_p(u, setup)
@@ -252,17 +243,17 @@ end
     get_w_hat(u::Tuple, setup)
 Compute the vorticity field, interpolate to cell centers and compute the Fourier transform of the field.
 """
-function get_w_hat(u::Tuple, setup)
-    (; Ip) = setup.grid
-    # compute vorticity
-    w = vorticity(u, setup)
-    # interpolate w to cell centers
-    w = interpolate_ω_p(w, setup) 
-    w = stack(w, dims=4)[Ip,:]
-    # compute Fourier transform
-    w_hat = fft(w, [1,2,3])
-    return w_hat
-end
+# function get_w_hat(u::Tuple, setup)
+#     (; Ip) = setup.grid
+#     # compute vorticity
+#     w = vorticity(u, setup)
+#     # interpolate w to cell centers
+#     w = interpolate_ω_p(w, setup) 
+#     w = stack(w, dims=4)[Ip,:]
+#     # compute Fourier transform
+#     w_hat = fft(w, [1,2,3])
+#     return w_hat
+# end
 
 """
     get_w_hat_from_u_hat(u_hat, to_setup)
@@ -402,7 +393,7 @@ IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup) =
 function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ = nothing, cache)
     (; rk_method, to_setup) = method
     (; setup) = stepper
-    (; dimension, Iu) = setup.grid
+    (; dimension) = setup.grid
     D = dimension()
 
     # RK step
