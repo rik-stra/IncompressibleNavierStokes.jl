@@ -8,11 +8,10 @@ end
 using IncompressibleNavierStokes
 #using CairoMakie
 using CUDA
-#using CUDSS
+using CUDSS
 using AMGX
 using RikFlow
 using JLD2
-using LoggingExtras
 
 
 # Precision
@@ -24,17 +23,13 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 100f
-# Grid
-nx = 256 
-ny = 256 
-nz = 128
-Δt = 0.001f
+tsim = 10f
+Δt = 0.01f
 
 nx_les = 64
 ny_les = 64
 nz_les = 32
-
+ArrayType = CuArray
 kwargs = (;
     boundary_conditions = (
         (PeriodicBC(), PeriodicBC()),
@@ -45,18 +40,10 @@ kwargs = (;
     bodyforce = (dim, x, y, z, t) -> 1 * (dim == 1),
     issteadybodyforce = true,
     backend = CUDABackend(),
+    ArrayType = ArrayType,
 )
 
 setup = Setup(;
-    x = (
-        range(xlims..., nx + 1),
-        range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
-        range(zlims..., nz + 1)
-    ),
-    kwargs...,
-);
-
-les_setup = Setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1), # tanh_grid(ylims..., ny + 1),
@@ -64,64 +51,63 @@ les_setup = Setup(;
     ),
     kwargs...,
 );
-@info "Grid size HF: $(nx) x $(ny) x $(nz)"
+
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
-amgx_objects = amgx_setup();
-psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
+#amgx_objects = amgx_setup();
+#psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
+psolver = default_psolver(setup)
 
 qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
-ArrayType = CuArray
 
-ustart = ArrayType(load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start"));
+ustart = ArrayType(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].u[1]);
+qoi_ref = stack(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].qoi_hist);
+ref_reader = Reference_reader(qoi_ref);
+
+nt = round(Int, tsim / Δt)
 
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
-    to_mode = :CREATE_REF, 
+    to_mode = :TRACK_REF, 
     ArrayType, 
-    setup = les_setup,);
+    setup,
+    nstep=nt,
+    time_series_method = ref_reader,);
 
-#determine checkpoints
-n_checkpoints = 3
-nt = round(Int, tsim / Δt)
-checkpoints= 0:round(nt/(n_checkpoints+1)):nt
-checkpoints = checkpoints[2:end-1]
-checkpoints_dir = @__DIR__() *"/output/checkpoints"
 outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
-ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 
 
-@info "Solving DNS"
+@info "Solving LES"
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup,
     ustart,
     docopy = false,
+    method = TOMethod(; to_setup = to_setup_les),
     tlims = (0f, tsim),
     Δt,
     processors = (;
-        f = RikFlow.filtersaver(
-            setup,
-            [les_setup,],
-            (FaceAverage(),),
-            [4,],
-            [to_setup_les,];
-            nupdate = 10,
-            n_plot = 1000,
-            checkpoints,
-            checkpoint_name = checkpoints_dir,
-        ),
-        log = timelogger(; nupdate = 100),
+        log = timelogger(; nupdate = 10),
+        fields = fieldsaver(; setup, nupdate = 100),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
     ),
     psolver,
 );
-close_amgx(amgx_objects)
+
+#close_amgx(amgx_objects)
+q = stack(outputs.qoihist)
+dQ = to_setup_les.outputs.dQ
+tau = to_setup_les.outputs.tau
+q_star = to_setup_les.outputs.q_star
+fields = outputs.fields
+data_train = (;dQ, tau, q, q_star, fields)
+
 # Save filtered DNS data
-filename = "$outdir/HF_channel_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
-jldsave(filename; outputs.f)
+filename = "$outdir/LF_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+jldsave(filename; data_train)
 
 exit()
-
+q = stack(outputs.qoihist)
 a = load(filename)
 keys(a["f"].data[1])
 a["f"].data[1].qoi_hist
@@ -131,7 +117,9 @@ u_lf = a["f"].data[1].u[1]
 u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
 
 using CairoMakie
+_, _, cb = heatmap(outputs.fields[1].u[:,:,16,1], colorrange = (-20, 20))
+
 heatmap(u_lf[:,:,1,1])
-heatmap(u_hf[:,:,1,1])
+heatmap(u_hf[:,:,64,1], colorrange = (-20, 20))
 
 total_kinetic_energy(ArrayType(u_hf), setup)
