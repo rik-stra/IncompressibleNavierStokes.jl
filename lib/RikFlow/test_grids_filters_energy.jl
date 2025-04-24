@@ -2,13 +2,15 @@ using IncompressibleNavierStokes
 using RikFlow
 using CairoMakie
 using FFTW
+using CUDA
+using JLD2
 
 # create square grid
-n = 32
+n = 16
 setup = Setup(;
     x = (
-        range(0,2, n + 1),
-        range(0,1, 64 + 1), # tanh_grid(ylims..., ny + 1),
+        range(0,2, 32 + 1),
+        range(0,1, n + 1), # tanh_grid(ylims..., ny + 1),
         range(0,1, n + 1)
     ),
     boundary_conditions = (
@@ -19,13 +21,17 @@ setup = Setup(;
     Re = 180.,
 );
 
-qois = [["Z",0,17],["E", 0, 17]];
+qois = [["Z",0,3],["E", 7, 8]];
 ArrayType = Array
 TO_setup = RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
     ArrayType, 
     setup = setup,);
 
+# check filters
+fftfreq(n, n)
+TO_setup.masks[1][:,:,1]
+TO_setup.masks[2][:,:,1]
 function icfunc(dim, x, y, z)
     ux = sinpi(x)
     uy = sinpi(2*x)
@@ -52,9 +58,9 @@ ylims = 0, 2.
 zlims = 0, 4 / 3 * pi
 
 # Grid
-nx = 16 
+nx = 64 
 ny = 64 
-nz = 16
+nz = 32
 
 setup = Setup(;
     x = (
@@ -92,12 +98,15 @@ ustartfunc = let
 end
 
 ustart = velocityfield(setup, ustartfunc);
-qois = [["Z",0,100],["E", 0, 17]];
+qois = [["Z",0,4],["E", 7, 16]];
 ArrayType = Array
 TO_setup = RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
     ArrayType, 
     setup = setup,);
+
+TO_setup.masks[1][:,1,:]
+TO_setup.masks[2][:,:,1]
 
 u_hat = RikFlow.get_u_hat(ustart, setup);
 w_hat = RikFlow.get_w_hat_from_u_hat(u_hat, TO_setup);
@@ -124,6 +133,84 @@ E = total_kinetic_energy(ustart, setup, interpolate_first = true)
 E = total_kinetic_energy(ustart, setup, interpolate_first = false)
 E_hat[1]
 Z = IncompressibleNavierStokes.total_enstropy(u_tilde, setup)
+Z_field = IncompressibleNavierStokes.total_enstropy2(u_tilde, setup);
+Z = IncompressibleNavierStokes.total_enstropy(ustart, setup)
+
+diff = maximum(u_tilde-ustart)
+
+heatmap(Z_field[:,:,10])
+heatmap(ustart[:,:,10,1])
+heatmap(u_tilde[:,:,10,1])
+heatmap(real(u_hat[:,:,10,1]))
+heatmap(u_out[:,:,10,1])
+
+u_tilde = real(ifft(fft(ustart,[1,2,3]),[1,2,3]));
+
+
+### test HF
+nx = 256 
+ny = 256 
+nz = 128
+
+xlims = 0, 4 * pi
+ylims = 0, 2.
+zlims = 0, 4 / 3 * pi
+
+setup = Setup(;
+    x = (
+        range(xlims..., nx + 1),
+        range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
+        range(zlims..., nz + 1)
+    ),
+    boundary_conditions = (
+        (PeriodicBC(), PeriodicBC()),
+        (DirichletBC(), DirichletBC()),
+        (PeriodicBC(), PeriodicBC()),
+    ),
+    Re = 180.,
+    backend = CUDABackend(),
+);
+
+
+Re_tau = 180.
+Re_m = 2800.
+Re_ratio = Re_m / Re_tau
+ArrayType = CuArray
+
+ustart = ArrayType(load(@__DIR__()*"/channel/output/u_start_256_256_128_tspin10.0.jld2", "u_start"));
+
+qois = [["Z",0,100],["E", 0, 100]];
+
+TO_setup = RikFlow.TO_Setup(; qois, 
+    to_mode = :CREATE_REF, 
+    ArrayType, 
+    setup = setup,);
+
+u_hat = RikFlow.get_u_hat(ustart, setup);
+w_hat = RikFlow.get_w_hat_from_u_hat(u_hat, TO_setup);
+E_hat = RikFlow.compute_QoI(u_hat, w_hat, TO_setup, setup)
+
+w_tilde = real(ifft(w_hat, [1,2,3]));
+w = IncompressibleNavierStokes.vorticity(ustart, setup);
+size(w[2:33,2:33,2:17,:]), size(w_tilde)
+heatmap(Array(sum(w.*w,dims=4))[:,:,10])
+heatmap(Array(sum(w_tilde .* w_tilde, dims=4))[:,:,10])
+
+sum(w.*w,dims=4)[4,:,10]
+sum(w_tilde .* w_tilde, dims=4)[4,:,11]
+
+u_tilde = zeros(size(ustart));
+u_out = real(ifft(u_hat, [1,2,3]));
+for a in 1:3
+    u_tilde[RikFlow.select_physical_fourier_points(a, setup),a] = u_out[:,:,:,a]
+end
+#IncompressibleNavierStokes.apply_bc_u!(u_tilde, 0, setup);
+
+E_hat[2]
+E = total_kinetic_energy(ustart, setup, interpolate_first = true)
+E = total_kinetic_energy(ustart, setup, interpolate_first = false)
+E_hat[1]
+Z = IncompressibleNavierStokes.total_enstropy(ustart, setup)
 Z_field = IncompressibleNavierStokes.total_enstropy2(u_tilde, setup);
 Z = IncompressibleNavierStokes.total_enstropy(ustart, setup)
 
