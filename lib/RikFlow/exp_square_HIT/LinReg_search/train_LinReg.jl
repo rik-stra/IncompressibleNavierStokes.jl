@@ -20,7 +20,7 @@ end
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-model_index =7
+model_index =5
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, track_file, hist_len, hist_var, n_replicas, normalization) = inputs[model_index]
@@ -66,7 +66,7 @@ exit()
 
 
 ## test the model
-dir = @__DIR__()*"/output/LinReg7/"
+dir = @__DIR__()*"/output/LinReg4/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 #hist_var = :q
@@ -106,5 +106,5 @@ plot_time_series(preds, qois, "preds", ref = outputs_test_sc)
 plot_time_series(rand_part', qois, "stoch_part", ref = stoch_part)
 
 # plot original time series
-preds_unsc = RikFlow.scale_output(preds', out_scaling)
+preds_unsc = RikFlow.scale_output(preds, out_scaling)
 plot_time_series(preds_unsc, qois, "preds_unsc", ref = outputs_test)

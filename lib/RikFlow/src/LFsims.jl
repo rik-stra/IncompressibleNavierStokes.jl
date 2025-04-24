@@ -11,7 +11,10 @@ function track_ref(;
     create_psolver = psolver_spectral,
     savefreq = 1,
     ArrayType = Array,
+    backend,
     ou_bodyforce = none,
+    tracking_noise = 0.0,
+    tracking_noise_seed = 56,
     kwargs...,
 )
 T = typeof(Re)
@@ -24,6 +27,7 @@ Setup(;
     Re,
     ArrayType,
     ou_bodyforce,
+    backend,
 )
 
 # Number of time steps to save
@@ -35,7 +39,9 @@ to_setup_les = RikFlow.TO_Setup(;
         ArrayType, 
         setup, 
         nstep=nt,
-        time_series_method = ref_reader,)
+        time_series_method = ref_reader,
+        tracking_noise = tracking_noise,
+        tracking_noise_seed = tracking_noise_seed)
 
 psolver = create_psolver(setup)
 
@@ -83,6 +89,7 @@ function online_sgs(;
     create_psolver = psolver_spectral,
     savefreq = 1,
     ArrayType = Array,
+    backend,
     ou_bodyforce = none,
     kwargs...,
 )
@@ -95,6 +102,7 @@ Setup(;
     x = ntuple(α -> LinRange(lims[α]..., nles[1][α] + 1), D),
     Re,
     ArrayType,
+    backend,
     ou_bodyforce,
 )
 

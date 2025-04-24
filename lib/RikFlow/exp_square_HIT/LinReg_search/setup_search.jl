@@ -1,7 +1,7 @@
 using JLD2
 using DataFrames
 
-fixed_parameters = (track_file = "/data_track.jld2",
+fixed_parameters = (track_file = "/../LinReg_search_old/data_track.jld2",
                     hist_len = 5,
                     hist_var = :q_star,
                     n_replicas = 10,

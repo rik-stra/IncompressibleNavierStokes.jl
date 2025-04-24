@@ -10,10 +10,8 @@
 /scratch/
 /Paper/
 *output/
-
-# Vim swap
+/lib/Bench
 *.swp
-
-# Mac OS
+*.un~
 *.DS_Store
-docs/make.jl
+*.out

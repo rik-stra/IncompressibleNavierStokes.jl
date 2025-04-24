@@ -1,3 +1,29 @@
+function assert_uniform_periodic(setup, string)
+    (; grid, boundary_conditions) = setup
+    (; Δ, N) = grid
+    @assert(
+        all(==((PeriodicBC(), PeriodicBC())), boundary_conditions),
+        string * " requires periodic boundary conditions.",
+    )
+    @assert(
+        all(Δ -> all(≈(Δ[1]), Δ), Array.(Δ)),
+        string * " requires uniform grid spacing.",
+    )
+    @assert(all(iseven, N), string * " requires even number of volumes.",)
+end
+
+"Get value contained in `Val`."
+getval(::Val{x}) where {x} = x
+
+"Get offset from `CartesianIndices` `I`."
+function getoffset(I)
+    I0 = first(I)
+    I0 - oneunit(I0)
+end
+
+"Split random number generator seed into `n` new seeds."
+splitseed(seed, n) = rand(Xoshiro(seed), UInt32, n)
+
 """
 Get approximate lower and upper limits of a field `x` based on the mean and standard
 deviation (``\\mu \\pm n \\sigma``). If `x` is constant, a margin of `1e-4` is enforced. This is required for contour
@@ -19,49 +45,6 @@ Plot nonuniform Cartesian grid.
 """
 function plotgrid end
 
-plotgrid(x, y; kwargs...) = wireframe(
-    x,
-    y,
-    zeros(eltype(x), length(x), length(y));
-    axis = (; aspect = DataAspect(), xlabel = "x", ylabel = "y"),
-    kwargs...,
-)
-
-function plotgrid(x, y, z)
-    nx, ny, nz = length(x), length(y), length(z)
-    T = eltype(x)
-
-    # x = repeat(x, 1, ny, nz)
-    # y = repeat(reshape(y, 1, :, 1), nx, 1, nz)
-    # z = repeat(reshape(z, 1, 1, :), nx, ny, 1)
-    # vol = repeat(reshape(z, 1, 1, :), nx, ny, 1)
-    # volume(x, y, z, vol)
-    fig = Figure()
-
-    ax = Axis3(fig[1, 1])
-    wireframe!(ax, x, y, fill(z[1], length(x), length(y)))
-    wireframe!(ax, x, y, fill(z[end], length(x), length(y)))
-    wireframe!(ax, x, fill(y[1], length(z)), repeat(z, 1, length(x))')
-    wireframe!(ax, x, fill(y[end], length(z)), repeat(z, 1, length(x))')
-    wireframe!(ax, fill(x[1], length(z)), y, repeat(z, 1, length(y)))
-    wireframe!(ax, fill(x[end], length(z)), y, repeat(z, 1, length(y)))
-    ax.aspect = :data
-
-    ax = Axis(fig[1, 2]; xlabel = "x", ylabel = "y")
-    wireframe!(ax, x, y, zeros(T, length(x), length(y)))
-    ax.aspect = DataAspect()
-
-    ax = Axis(fig[2, 1]; xlabel = "y", ylabel = "z")
-    wireframe!(ax, y, z, zeros(T, length(y), length(z)))
-    ax.aspect = DataAspect()
-
-    ax = Axis(fig[2, 2]; xlabel = "x", ylabel = "z")
-    wireframe!(ax, x, z, zeros(T, length(x), length(z)))
-    ax.aspect = DataAspect()
-
-    fig
-end
-
 "Get utilities to compute energy spectrum."
 function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) / 2)
     (; dimension, xp, Ip, xlims) = setup.grid
@@ -70,21 +53,25 @@ function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) /
     domain_length = [(xlims[d][2] - xlims[d][1]) for d in 1:D]
     K = size(Ip) .÷ 2
     k = zeros(T, K)
-    for α = 1:D
-        kα =
-            reshape(0:K[α]-1, ntuple(Returns(1), α - 1)..., :, ntuple(Returns(1), D - α)...)
-        k .+= (kα./domain_length[α]) .^ 2            # we define k as the number of wavelengths per unit distance
+    if D == 2
+        kx = reshape(0:K[1]-1, :)./domain_length[1]
+        ky = reshape(0:K[2]-1, 1, :)./domain_length[2]
+        @. k = sqrt(kx^2 + ky^2)
+    elseif D == 3
+        kx = reshape(0:K[1]-1, :)./domain_length[1]
+        ky = reshape(0:K[2]-1, 1, :)./domain_length[2]
+        kz = reshape(0:K[3]-1, 1, 1, :)./domain_length[3]
+        @. k = sqrt(kx^2 + ky^2 + kz^2)
     end
-    k .= sqrt.(k)
     k = reshape(k, :)
 
     # Sum or average wavenumbers between k and k+1
     kmax = minimum([(K[d]-1)/domain_length[d] for d in 1:D]) 
     isort = sortperm(k)
     ksort = k[isort]
-    ia = zeros(Int, 0)
-    ib = zeros(Int, 0)
-    vals = zeros(T, 0)
+
+    IntArray = typeof(similar(xp[1], Int, 0))
+    inds = IntArray[]
 
     # Output query points (evenly log-spaced, but only integer wavenumbers)
     # logκ = LinRange(T(0), log(T(kmax) - 1), npoint)
@@ -112,19 +99,10 @@ function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) /
         # jstop = findfirst(≥(κ[i] + T(1.01)), ksort)
         isnothing(jstop) && (jstop = length(ksort) + 1)
         jstop -= 1
-        nk = jstop - jstart + 1
-        append!(ia, fill(i, nk))
-        append!(ib, isort[jstart:jstop])
-        append!(vals, fill(T(1), nk))
+        push!(inds, adapt(IntArray, isort[jstart:jstop]))
     end
-    IntArray = typeof(similar(xp[1], Int, 0))
-    TArray = typeof(similar(xp[1], 0))
-    ia = adapt(IntArray, ia)
-    ib = adapt(IntArray, ib)
-    vals = adapt(TArray, vals)
-    A = sparse(ia, ib, vals, npoint, length(k))
 
-    (; A, κ, K)
+    (; inds, κ, K)
 end
 
 "Get energy spectrum of velocity field."
@@ -143,8 +121,7 @@ function get_spectrum(setup; npoint = 100, a = typeof(e.setup.Re)(1 + sqrt(5)) /
     )
 
     # Output query points (evenly log-spaced, but only integer wavenumbers)
-    logκ = LinRange(T(0), log(T(kmax) / a), npoint)
-    κ = exp.(logκ)
+    κ = logrange(T(1), T(sqrt(D) * kmax), npoint)
     κ = sort(unique(round.(Int, κ)))
     npoint = length(κ)
 

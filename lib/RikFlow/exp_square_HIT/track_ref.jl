@@ -14,6 +14,7 @@ using RikFlow
 using IncompressibleNavierStokes
 using CUDA
 ArrayType = CuArray
+backend = CUDABackend()
 
 n_dns = Int(512)
 n_les = Int(64)
@@ -21,6 +22,7 @@ Re = Float32(2_000)
 ############################
 Δt = Float32(2.5e-3)
 tsim = Float32(10)
+tracking_noise = 0.001
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -43,11 +45,16 @@ T = Float32
 
 
 # load reference data
-ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim10.0.jld2"
+ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim100.0.jld2"
 data_train = load(ref_file, "data_train");
 params_train = load(ref_file, "params_train");
 # get initial condition
-ustart = ArrayType.(data_train.data[1].u[1]);
+if data_train.data[1].u[1] isa Tuple
+    ustart = stack(ArrayType.(data_train.data[1].u[1]));
+elseif data_train.data[1].u[1] isa Array{<:Number,4}
+    ustart = ArrayType(data_train.data[1].u[1]);
+end
+
 # get ref trajectories
 qoi_ref = stack(data_train.data[1].qoi_hist);
 
@@ -57,12 +64,13 @@ params_track = (;
     params_train...,
     tsim,
     Δt,
-    ArrayType, 
-    ref_reader,
+    ArrayType,
+    backend,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
-    savefreq = 100);
+    savefreq = 100,
+    tracking_noise);
 
-data_track = track_ref(; params_track..., ustart);
+data_track = track_ref(; params_track..., ref_reader, ustart);
 
 # check tracking
 n_steps = size(data_track.q, 2)
@@ -71,4 +79,4 @@ maximum(abs, erel)
 #@assert(maximum(abs, erel)<1e-2)
 
 # Save tracking data
-jldsave("$outdir/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
+jldsave("$outdir/data_track2_dns$(n_dns)_les$(n_les)_trackingnoise_mu_$(tracking_noise)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);

@@ -3,7 +3,7 @@ using CairoMakie
 using IncompressibleNavierStokes
 using Statistics
 
-ANN_names = ["LinReg15"]
+ANN_names = ["LinReg5"]
 # figs folder
 figsfolder = @__DIR__()*"/figures"
 ispath(figsfolder) || mkpath(figsfolder)
@@ -21,7 +21,7 @@ no_sgs_data = stack(load(filename, "data_online").q);
 
 # load replica simulations
 for ANN_name in ANN_names
-    n_replicas = 10
+    n_replicas = 2
     #ANN_name = ANN_names[5]
     q_rep = [load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim10.0_replica$(i).jld2", "data_online").q for i in 1:n_replicas]
     ANN_parameters = load(@__DIR__()*"/output/$(ANN_name)/parameters.jld2", "parameters")
@@ -57,7 +57,7 @@ for ANN_name in ANN_names
 
     # plot dQ trajectories
     dQ_rep = stack([load(@__DIR__()*"/output/$(ANN_name)/data_online_dns512_les64_Re2000.0_tsim10.0_replica$(i).jld2", "data_online").dQ for i in 1:n_replicas])
-    filename = @__DIR__()*"/../ANN_search/data_track.jld2"
+    filename = @__DIR__()*"/data_track.jld2"
     ref_data = load(filename, "data_track");
     dQ_ref = stack(ref_data.dQ)
     let

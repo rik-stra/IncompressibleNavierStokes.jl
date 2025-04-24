@@ -34,7 +34,7 @@ seeds = (;
 
 #parse input ARGS
 model_index = parse(Int, ARGS[1])
-
+model_index = 5
 ## Load data
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, track_file, hist_len, n_replicas) = inputs[model_index]
@@ -43,12 +43,17 @@ out_dir = @__DIR__()*"/output/$(name)/"
 # For running on a CUDA compatible GPU
 T = Float32
 ArrayType = CuArray
+backend = CUDABackend()
 
 # load reference data
 data_track = load(@__DIR__()*track_file, "data_track");
 params_track = load(@__DIR__()*track_file, "params_track");
 # get initial condition
-ustart = ArrayType.(data_track.fields[1].u);
+if data_track.fields[1].u isa Tuple
+    ustart = stack(ArrayType.(data_track.fields[1].u));
+elseif data_track.fields[1].u isa Array{<:Number,4}
+    ustart = ArrayType(data_track.fields[1].u);
+end
 # get ref trajectories
 dQ_data = data_track.dQ;
 
@@ -57,6 +62,7 @@ params = (;
     tsim,
     Δt,
     ArrayType,
+    backend,
     ustart,
     savefreq = 100);
 

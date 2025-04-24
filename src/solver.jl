@@ -4,7 +4,7 @@ Solve unsteady problem using `method`.
 If `Δt` is a real number, it is rounded such that `(t_end - t_start) / Δt` is
 an integer.
 If `Δt = nothing`, the time step is chosen every `n_adapt_Δt` iteration with
-CFL-number `cfl` .
+CFL-number `cfl`. If `Δt_min` is given, the adaptive time step never goes below it.
 
 The `processors` are called after every time step.
 
@@ -20,16 +20,19 @@ function solve_unsteady(;
     tlims,
     ustart,
     tempstart = nothing,
-    method = RKMethods.RK44(; T = eltype(ustart[1])),
+    method = RKMethods.RK44(; T = eltype(ustart)),
     psolver = default_psolver(setup),
     Δt = nothing,
-    cfl = eltype(ustart[1])(0.9),
+    Δt_min = nothing,
+    cfl = eltype(ustart)(0.9),
     n_adapt_Δt = 1,
     docopy = true,
     processors = (;),
     θ = nothing,
+    # Cache arrays for intermediate computations
+    cache = ode_method_cache(method, setup),
 )
-    docopy && (ustart = copy.(ustart))
+    docopy && (ustart = copy(ustart))
     docopy && !isnothing(tempstart) && (tempstart = copy(tempstart))
 
     tstart, tend = tlims
@@ -37,9 +40,6 @@ function solve_unsteady(;
     if isadaptive
         cflbuf = scalarfield(setup)
     end
-
-    # Cache arrays for intermediate computations
-    cache = ode_method_cache(method, setup, ustart, tempstart)
 
     # Time stepper
     stepper =
@@ -54,20 +54,23 @@ function solve_unsteady(;
         OU_forcing_step!(; setup.ou_setup, Δt=Δt*setup.ou_bodyforce.freeze)
         OU_get_force!(setup.ou_setup, setup)
         @info "ou random state 1: $(setup.ou_setup.state[1:2])", typeof(setup.ou_setup.state)
-        @info "ou force corner $(Array(setup.bodyforce[1])[end-1,end-1,end-1])"
-        @info "ou force 1 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-2,end-2])"
-        @info "ou force 2 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-3,end-3])"
-        @info "ou force 4 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-5,end-5])"
-        @info "ou force 8 cel from corner  $(Array(setup.bodyforce[1])[end-1,end-9,end-9])"
+        @info "ou force corner $(Array(setup.bodyforce[:,:,:,1])[end-1,end-1,end-1])"
+        @info "ou force 1 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-2,end-2])"
+        @info "ou force 2 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-3,end-3])"
+        @info "ou force 4 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-5,end-5])"
+        @info "ou force 8 cel from corner  $(Array(setup.bodyforce[:, :, :, 1])[end-1,end-9,end-9])"
     end
 
     if isadaptive
-        @assert setup.ou_bodyforce.freeze ==1 "Can't freeze the bodyforce over multiple adaptive time steps"
+        if !isnothing(setup.ou_bodyforce)
+            @assert setup.ou_bodyforce.freeze ==1  "Can't freeze the bodyforce over multiple adaptive time steps"
+        end
         while stepper.t < tend
             if stepper.n % n_adapt_Δt == 0
                 # Change timestep based on operators
                 # Δt = get_timestep(stepper, cfl)
                 Δt = cfl * get_cfl_timestep!(cflbuf, stepper.u, setup)
+                Δt = isnothing(Δt_min) ? Δt : max(Δt, Δt_min)
             end
 
             # Make sure not to step past `t_end`
@@ -130,17 +133,17 @@ function get_cfl_timestep!(buf, u, setup)
     D = dimension()
 
     # Initial maximum step size
-    Δt = eltype(u[1])(Inf)
+    Δt = eltype(u)(Inf)
 
     # Check maximum step size in each dimension
-    for α = 1:D
+    for (α, uα) in enumerate(eachslice(u; dims = D + 1))
         # Diffusion
         Δαmin = minimum(view(Δu[α], Iu[α].indices[α]))
         Δt_diff = Re * Δαmin^2 / 2
 
         # Convection
         Δα = reshape(Δu[α], ntuple(Returns(1), α - 1)..., :)
-        @. buf = Δα / abs(u[α])
+        @. buf = Δα / abs(uα)
         Δt_conv = minimum(view(buf, Iu[α]))
 
         # Update time step

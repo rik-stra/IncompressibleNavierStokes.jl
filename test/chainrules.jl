@@ -1,90 +1,133 @@
-@testitem "Chain rules" begin
+@testsnippet ChainRulesStuff begin
     using ChainRulesCore
     using ChainRulesTestUtils
 
+    # Test chain rule correctness by comparing with finite differences
     "Use function name only as test set name"
-    test_rrule_named(f, args...; kwargs...) =
+    function test_rrule_named(f, args...; kwargs...)
         test_rrule(f, args...; testset_name = string(f), kwargs...)
+    end
+end
 
-    @testset "Chain rules boundary conditions" begin
+@testitem "Chain rules (boundary conditions)" setup = [ChainRulesStuff] begin
+    T = Float64
+    Re = T(1_000)
+    Pr = T(0.71)
+    Ra = T(1e6)
+    Ge = T(1.0)
+    n = 7
+    lims = T(0), T(1)
+    x = range(lims..., n + 1), range(lims..., n + 1)
+    for bc in (PeriodicBC(), DirichletBC(), SymmetricBC(), PressureBC())
+        boundary_conditions = (bc, bc), (bc, bc)
+        setup = Setup(;
+            x,
+            Re,
+            boundary_conditions,
+            temperature = temperature_equation(; Pr, Ra, Ge, boundary_conditions),
+        )
+        u = randn(T, setup.grid.N..., 2)
+        p = randn(T, setup.grid.N)
+        temp = randn(T, setup.grid.N)
+        test_rrule_named(apply_bc_u, u, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
+        test_rrule_named(apply_bc_p, p, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
+        test_rrule_named(apply_bc_temp, temp, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
+    end
+end
+
+@testmodule Case begin
+    using IncompressibleNavierStokes
+
+    D2, D3 = map((2, 3)) do D
         T = Float64
         Re = T(1_000)
-        Pr = T(0.71)
-        Ra = T(1e6)
-        Ge = T(1.0)
-        n = 7
+        n = if D == 2
+            8
+        elseif D == 3
+            # 4^3 = 64 grid points
+            # 3*64 = 192 velocity components
+            # 192^2 = 36864 fininite difference pairs in convection/diffusion
+            # TODO: Check if `test_rrule` computes all combinations or only a subset
+            4
+        end
         lims = T(0), T(1)
-        x = range(lims..., n + 1), range(lims..., n + 1)
-        for bc in (PeriodicBC(), DirichletBC(), SymmetricBC(), PressureBC())
-            boundary_conditions = ((bc, bc), (bc, bc))
-            setup = Setup(;
-                x,
-                Re,
-                boundary_conditions,
-                temperature = temperature_equation(; Pr, Ra, Ge, boundary_conditions),
-            )
-            u = randn(T, setup.grid.N), randn(T, setup.grid.N)
-            p = randn(T, setup.grid.N)
-            temp = randn(T, setup.grid.N)
-            test_rrule_named(apply_bc_u, u, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
-            test_rrule_named(apply_bc_p, p, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
-            test_rrule_named(apply_bc_temp, temp, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
+        x = if D == 2
+            tanh_grid(lims..., n), tanh_grid(lims..., n, 1.3)
+        elseif D == 3
+            tanh_grid(lims..., n, 1.2), tanh_grid(lims..., n, 1.1), cosine_grid(lims..., n)
         end
+        boundary_conditions = ntuple(d -> (DirichletBC(), DirichletBC()), D)
+        temperature = temperature_equation(;
+            Pr = T(0.71),
+            Ra = T(1e6),
+            Ge = T(1.0),
+            boundary_conditions,
+        )
+        setup = Setup(; x, boundary_conditions, Re, temperature)
+        psolver = default_psolver(setup)
+        u = randn(T, setup.grid.N..., D)
+        p = randn(T, setup.grid.N)
+        temp = randn(T, setup.grid.N)
+        (; setup, psolver, u, p, temp)
     end
+end
 
-    # Test chain rule correctness by comparing with finite differences
-    for D in (2, 3)
-        @testset "Chain rules $(D)D" begin
+@testitem "Divergence" setup = [Case, ChainRulesStuff] begin
+    test_rrule_named(divergence, Case.D2.u, Case.D2.setup ⊢ NoTangent())
+    test_rrule_named(divergence, Case.D3.u, Case.D3.setup ⊢ NoTangent())
+end
 
-            # Setup
-            T = Float64
-            Re = T(1_000)
-            n = if D == 2
-                8
-            elseif D == 3
-                # 4^3 = 64 grid points
-                # 3*64 = 192 velocity components
-                # 192^2 = 36864 fininite difference pairs in convection/diffusion
-                # TODO: Check if `test_rrule` computes all combinations or only a subset
-                4
-            end
-            lims = T(0), T(1)
-            x = if D == 2
-                tanh_grid(lims..., n), tanh_grid(lims..., n, 1.3)
-            elseif D == 3
-                tanh_grid(lims..., n, 1.2), tanh_grid(lims..., n, 1.1), cosine_grid(lims..., n)
-            end
-            boundary_conditions = ntuple(d -> (DirichletBC(), DirichletBC()), D)
-            temperature = temperature_equation(;
-                Pr = T(0.71),
-                Ra = T(1e6),
-                Ge = T(1.0),
-                boundary_conditions,
-            )
-            setup = Setup(; x, boundary_conditions, Re, temperature)
-            psolver = default_psolver(setup)
-            u = ntuple(α -> randn(T, setup.grid.N), D)
-            p = randn(T, setup.grid.N)
-            temp = randn(T, setup.grid.N)
+@testitem "Pressuregradient" setup = [Case, ChainRulesStuff] begin
+    test_rrule_named(pressuregradient, Case.D2.p, Case.D2.setup ⊢ NoTangent())
+    test_rrule_named(pressuregradient, Case.D3.p, Case.D3.setup ⊢ NoTangent())
+end
 
-            # Tests
-            test_rrule_named(divergence, u, setup ⊢ NoTangent())
-            test_rrule_named(pressuregradient, p, setup ⊢ NoTangent())
-            test_rrule_named(poisson, psolver ⊢ NoTangent(), p)
-            test_rrule_named(convection, u, setup ⊢ NoTangent())
-            test_rrule_named(diffusion, u, setup ⊢ NoTangent())
+@testitem "Poisson" setup = [Case, ChainRulesStuff] begin
+    test_rrule_named(poisson, Case.D2.psolver ⊢ NoTangent(), Case.D2.p)
+    test_rrule_named(poisson, Case.D3.psolver ⊢ NoTangent(), Case.D3.p)
+end
 
-            @test_broken 1 == 2 # Just to identify location for broken rrule test
-            # test_rrule_named(bodyforce, u, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
+@testitem "Convection" setup = [Case, ChainRulesStuff] begin
+    test_rrule_named(convection, Case.D2.u, Case.D2.setup ⊢ NoTangent())
+    test_rrule_named(convection, Case.D3.u, Case.D3.setup ⊢ NoTangent())
+end
 
-            test_rrule_named(gravity, temp, setup ⊢ NoTangent())
+@testitem "Diffusion" setup = [Case, ChainRulesStuff] begin
+    test_rrule_named(diffusion, Case.D2.u, Case.D2.setup ⊢ NoTangent())
+    test_rrule_named(diffusion, Case.D3.u, Case.D3.setup ⊢ NoTangent())
+end
 
-            @test_broken 1 == 2 # Just to identify location for broken rrule test
-            # test_rrule_named(dissipation, u, setup ⊢ NoTangent())
-            # ChainRulesCore.rrule(dissipation, u, setup)[2](temp)[2][2]
+@testitem "Tensor basis" setup = [Case, ChainRulesStuff] begin
+    using IncompressibleNavierStokes.StaticArrays
+    using Random
+    test_rrule_named(tensorbasis, Case.D2.u, Case.D2.setup ⊢ NoTangent())
+    @test_broken false # TODO: 3D adjoint
+    # test_rrule_named(tensorbasis, Case.D3.u, Case.D3.setup ⊢ NoTangent())
+    T = eltype(Case.D2.u)
+    a = similar(Case.D2.u, size(Case.D2.u)..., 5) |> randn!
+    b = similar(Case.D2.u, SMatrix{2,2,T,4}, size(Case.D2.u)..., 5) |> randn!
+    test_rrule_named(
+        IncompressibleNavierStokes.lastdimcontract,
+        a,
+        b,
+        Case.D2.setup ⊢ NoTangent(),
+    )
+end
 
-            @test_broken 1 == 2 # Just to identify location for broken rrule test
-            # test_rrule_named(convection_diffusion_temp, u, temp, setup ⊢ NoTangent())
-        end
+@testitem "Temperature" setup = [Case, ChainRulesStuff] begin
+    for case in (Case.D2, Case.D3)
+        (; u, temp, setup) = case
+
+        @test_broken 1 == 2 # Just to identify location for broken rrule test
+        # test_rrule_named(bodyforce, u, T(0) ⊢ NoTangent(), setup ⊢ NoTangent())
+
+        test_rrule_named(gravity, temp, setup ⊢ NoTangent())
+
+        @test_broken 1 == 2 # Just to identify location for broken rrule test
+        # test_rrule_named(dissipation, u, setup ⊢ NoTangent())
+        # ChainRulesCore.rrule(dissipation, u, setup)[2](temp)[2][2]
+
+        @test_broken 1 == 2 # Just to identify location for broken rrule test
+        # test_rrule_named(convection_diffusion_temp, u, temp, setup ⊢ NoTangent())
     end
 end

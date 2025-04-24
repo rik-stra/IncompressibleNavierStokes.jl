@@ -130,7 +130,7 @@ function OU_get_force!(ou_setup, setup)
     (;Iu, dimension) = setup.grid
     D = dimension()
     for d in 1:D
-        setup.bodyforce[d][Iu[d]] = real(ou_setup.f[d])
+        setup.bodyforce[Iu[d],d] = real(ou_setup.f[d])
     end
     #apply_bc_u!(setup.bodyforce, t, setup)
 end

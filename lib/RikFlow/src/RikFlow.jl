@@ -30,17 +30,25 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, to_mode, ArrayType, setup, nstep, time_series_method = nothing)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep = nothing, time_series_method = nothing, tracking_noise = nothing, tracking_noise_seed = 56)
     T = typeof(setup.Re)
     masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
     N_qois = length(qois)
     to_setup = (; N_qois, qois, to_mode, masks, ∂, time_series_method)
+    if !isnothing(tracking_noise) && (tracking_noise == 0.0)
+        tracking_noise = nothing
+    end
 
     if to_mode in [:TRACK_REF, :ONLINE]
         V_i = get_vi_functions(to_setup)
         cij_masks = get_cij_masks(to_setup)
         outputs = allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
-        to_setup = (; to_setup..., V_i, cij_masks, outputs)
+        if !isnothing(tracking_noise)
+            tracking_rng = Xoshiro(tracking_noise_seed)
+        else
+            tracking_rng = nothing
+        end
+        to_setup = (; to_setup..., V_i, cij_masks, outputs, tracking_noise, tracking_rng)
     end
     return to_setup
 end
@@ -106,15 +114,6 @@ function allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
         dic = (; q_star)
     end
     (; dQ, tau, dic...)
-end
-
-function allocate_arrays_to(to_setup, setup, ArrayType) # not in use
-    (; Nu) = setup.grid
-    (; N_qois) = to_setup
-    d = length(Nu)
-    P_hat = ArrayType{ComplexF64}(undef, Nu[1][1], Nu[1][2], Nu[1][3], d, N_qois)
-    sgs_hat = ArrayType{ComplexF64}(undef, Nu[1][1], Nu[1][2], Nu[1][3], d)
-    return P_hat, sgs_hat
 end
 
 function get_cij_masks(to_setup)
@@ -199,12 +198,12 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
     N = size(u_hat)
     q = Array{typeof(setup.Re)}(undef, to_setup.N_qois)  # if slow make this into a CuArray
 
-    E = sum(abs2, u_hat, dims = 4)
-    Z = sum(abs2, w_hat, dims = 4)
     for i in 1:to_setup.N_qois
         if to_setup.qois[i][1] == "E"
+            E = sum(abs2, u_hat, dims = 4)
             q[i]= sum(E.*to_setup.masks[i])*(prod(L)/(2*prod(N[1:D])^2))
         elseif to_setup.qois[i][1] == "Z"
+            Z = sum(abs2, w_hat, dims = 4)
             q[i] = sum(Z.*to_setup.masks[i])*(prod(L)/(prod(N[1:D])^2))
         else
             error("QoI not recognized")
@@ -219,31 +218,42 @@ end
     get_u_hat(u::Tuple, setup)
 Compute the Fourier transform of the field. Returns an 4D array, velocity components stacked along last dimension.
 """
-function get_u_hat(u::Tuple, setup)
-    (; dimension, Iu) = setup.grid
+function get_u_hat(u, setup)
+    (; dimension) = setup.grid
     d = dimension()
     # interpolate u to cell centers
     #u_c = interpolate_u_p(u, setup)
-    u = stack([u[a][Iu[a]] for a=1:d], dims=4)
+    u = stack([u[select_physical_fourier_points(a, setup), a] for a=1:d], dims=4)
     u_hat = fft(u, [1,2,3])
     return u_hat
 end
+
+function select_physical_fourier_points(a, setup)
+    if eltype(setup.boundary_conditions[a]) == PeriodicBC
+        return setup.grid.Iu[a]
+    elseif eltype(setup.boundary_conditions[a]) == DirichletBC{Nothing}
+        return setup.grid.Ip
+    else
+        error("Boundary condition not recognized")
+    end
+end
+
 
 """
     get_w_hat(u::Tuple, setup)
 Compute the vorticity field, interpolate to cell centers and compute the Fourier transform of the field.
 """
-function get_w_hat(u::Tuple, setup)
-    (; Ip) = setup.grid
-    # compute vorticity
-    w = vorticity(u, setup)
-    # interpolate w to cell centers
-    w = interpolate_ω_p(w, setup) 
-    w = stack(w, dims=4)[Ip,:]
-    # compute Fourier transform
-    w_hat = fft(w, [1,2,3])
-    return w_hat
-end
+# function get_w_hat(u::Tuple, setup)
+#     (; Ip) = setup.grid
+#     # compute vorticity
+#     w = vorticity(u, setup)
+#     # interpolate w to cell centers
+#     w = interpolate_ω_p(w, setup) 
+#     w = stack(w, dims=4)[Ip,:]
+#     # compute Fourier transform
+#     w_hat = fft(w, [1,2,3])
+#     return w_hat
+# end
 
 """
     get_w_hat_from_u_hat(u_hat, to_setup)
@@ -267,7 +277,7 @@ qoisaver(; setup, to_setup, nupdate = 1) =
             u_hat = get_u_hat(state.u, setup)
             w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
             q = compute_QoI(u_hat, w_hat, to_setup,setup)
-            if any(q .> 1f5)
+            if any(q .> 1f7)
                 @warn "Unreasonable large QoI at n = $(state.n)"
                 setup.nans_detected[] = true
             end
@@ -282,11 +292,9 @@ qoisaver(; setup, to_setup, nupdate = 1) =
     
 """
 function to_sgs_term(u, setup, to_setup, stepper)
-
     # get u_hat v_hat
     u_hat = get_u_hat(u, setup);
     w_hat = get_w_hat_from_u_hat(u_hat, to_setup);
-    
     # get dQ
     if to_setup.to_mode == :TRACK_REF
         q_star = compute_QoI(u_hat, w_hat, to_setup,setup)
@@ -305,13 +313,19 @@ function to_sgs_term(u, setup, to_setup, stepper)
     dQ = Array(dQ)
     to_setup.outputs.dQ[:,stepper.n] = dQ
 
+    if to_setup.to_mode == :TRACK_REF && !isnothing(to_setup.tracking_noise)
+        if typeof(to_setup.tracking_noise)<:Sampleable
+            dQ += convert.(eltype(dQ),rand(to_setup.tracking_rng, to_setup.tracking_noise))
+        else
+            dQ += randn(to_setup.tracking_rng, eltype(dQ), size(dQ)).*to_setup.time_series_method.stds.*convert(eltype(dQ),to_setup.tracking_noise)
+        end
+    end
+
     # get V_i
     vi = [to_setup.V_i[i](u_hat, w_hat) for i in 1:to_setup.N_qois]
     vi = stack(vi, dims=5)
     # get T_i
     ti = copy(vi)
-
-
     # compute innerproducts (returns ip on CPU)
     ip = innerpoducts(vi,ti,setup)
     # compute c_ij
@@ -334,12 +348,13 @@ function innerpoducts(x,y,setup)
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
     N = size(x)[1:D]
-    ip = reshape(
-        sum(
-            x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end]))),
-             dims = (1,2,3,4)
-        ),
-        (size(y)[end],size(y)[end]))
+    # ip = reshape(
+    #     sum(
+    #         x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end]))),
+    #          dims = (1,2,3,4)
+    #     ),
+    #     (size(y)[end],size(y)[end]))
+    @tensor ip[e,f] := x[a,b,c,d,e]* conj(y)[a,b,c,d,f]
     Array(ip).*(prod(L)/(prod(N)^2))
 end
 
@@ -372,13 +387,13 @@ export TOMethod
 IncompressibleNavierStokes.create_stepper(method::TOMethod; setup, psolver, u, temp, t, n = 0) =
     create_stepper(method.rk_method; setup, psolver, u, temp, t, n)
 
-IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup, u, temp) =
- ode_method_cache(method.rk_method, setup, u, temp)
+IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup) =
+ ode_method_cache(method.rk_method, setup)
 
 function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ = nothing, cache)
     (; rk_method, to_setup) = method
     (; setup) = stepper
-    (; dimension, Iu) = setup.grid
+    (; dimension) = setup.grid
     D = dimension()
 
     # RK step
@@ -388,7 +403,7 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
     sgs = to_sgs_term(stepper.u, setup, to_setup, stepper)
     # add SGS term to u
     for a in 1:D
-        stepper.u[a][Iu[a]] .+= sgs[:,:,:,a]
+        stepper.u[select_physical_fourier_points(a, setup),a] .+= sgs[:,:,:,a]
     end
 
     apply_bc_u!(stepper.u, stepper.t, setup)
@@ -409,5 +424,9 @@ export track_ref
 export online_sgs
 
 include("ANN.jl")
+
+include("post_processing_funcs.jl")
+export ks_dist
+export energy_spectra_comparison
 
 end # module RikFlow

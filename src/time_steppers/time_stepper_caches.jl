@@ -22,31 +22,30 @@ function ode_method_cache(::AdamsBashforthCrankNicolsonMethod, setup, V, p)
     (; c₀, c₋₁, F, f, Δp, Rr, b, b₀, b₁, yDiff₀, yDiff₁, Gp₀)
 end
 
-function ode_method_cache(::OneLegMethod{T}, setup, u) where {T}
-    unew = zero.(u)
-    pnew = zero(u[1])
-    div = zero(u[1])
-    F = zero.(u)
-    Δp = zero(u[1])
+function ode_method_cache(::OneLegMethod, setup)
+    unew = vectorfield(setup)
+    F = vectorfield(setup)
+    pnew = scalarfield(setup)
+    div = scalarfield(setup)
+    Δp = scalarfield(setup)
     (; unew, pnew, F, div, Δp)
 end
 
-function ode_method_cache(method::ExplicitRungeKuttaMethod, setup, u, temp)
-    u₀ = zero.(u)
+function ode_method_cache(method::ExplicitRungeKuttaMethod, setup)
+    ustart = vectorfield(setup)
     ns = length(method.b)
-    ku = [zero.(u) for i = 1:ns]
-    div = zero(u[1])
-    p = zero(u[1])
-    if isnothing(temp)
-        temp₀ = nothing
+    ku = map(i -> vectorfield(setup), 1:ns)
+    p = scalarfield(setup)
+    if isnothing(setup.temperature)
+        tempstart = nothing
         ktemp = nothing
         diff = nothing
     else
-        temp₀ = copy(temp)
-        ktemp = [copy(temp) for i = 1:ns]
-        diff = zero.(u)
+        tempstart = scalarfield(setup)
+        ktemp = map(i -> scalarfield(setup), 1:ns)
+        diff = vectorfield(setup)
     end
-    (; u₀, ku, div, p, temp₀, ktemp, diff)
+    (; ustart, ku, p, tempstart, ktemp, diff)
 end
 
 function ode_method_cache(method::ImplicitRungeKuttaMethod{T}, setup, V, p) where {T}
@@ -123,4 +122,20 @@ function ode_method_cache(method::ImplicitRungeKuttaMethod{T}, setup, V, p) wher
         dfmom,
         Z,
     )
+end
+
+function ode_method_cache(::LMWray3, setup)
+    ustart = vectorfield(setup)
+    ku = vectorfield(setup)
+    p = scalarfield(setup)
+    if isnothing(setup.temperature)
+        tempstart = nothing
+        ktemp = nothing
+        diff = nothing
+    else
+        tempstart = scalarfield(setup)
+        ktemp = scalarfield(setup)
+        diff = vectorfield(setup)
+    end
+    (; ustart, ku, p, tempstart, ktemp, diff)
 end

@@ -35,12 +35,12 @@ println("Modules loaded. Time: $(t1-t0) s")
 #n_les = parse(Int,ARGS[2])
 #Re = parse(Float32,ARGS[3])
 
-n_dns = Int(512)
+n_dns = Int(512) #512
 n_les = Int(64)
 Re = Float32(2_000)
 ############################
 Δt = Float32(2.5e-4)
-tsim = Float32(10)
+tsim = Float32(0.5)
 #### -> 2,5 hours
 # forcing
 T_L = 0.01  # correlation time of the forcing
@@ -56,15 +56,23 @@ seeds = (;
 
 outdir = @__DIR__() *"/output/new"
 indir = @__DIR__() *"/output"
+checkpoints_dir = @__DIR__() *"/output/new/checkpoints"
 ispath(outdir) || mkpath(outdir)
+ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 
 # For running on a CUDA compatible GPU
 
 T = Float32
 ArrayType = CuArray
+backend = CUDABackend()
 #device = x -> adapt(CuArray, x)
-tburn = Float32(4)
-ustart = ArrayType.(load(indir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start"));
+tburn = Float32(4) #4
+ustart = load(indir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start");
+if ustart isa Tuple
+    ustart = stack(ArrayType.(ustart));
+elseif ustart isa Array{<:Number,4}
+    ustart = ArrayType(ustart);
+end
 
 # Parameters
 get_params(nlesscalar) = (;
@@ -78,12 +86,13 @@ get_params(nlesscalar) = (;
     ndns = (n -> (n, n, n))(n_dns), # DNS resolution
     filters = (FaceAverage(),),
     ArrayType,
+    backend,
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou ),
 )
 
 params_train = (; get_params([n_les])..., savefreq = 10, plotfreq = 1000);
 t3 = time()
-data_train = create_ref_data(; params_train..., ustart);
+data_train = create_ref_data(; params_train..., ustart, n_checkpoints = 1, checkpoint_name = checkpoints_dir);
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data
