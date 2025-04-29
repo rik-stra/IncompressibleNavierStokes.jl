@@ -19,7 +19,7 @@ n_les = Int(64)
 Re = Float32(2_000);
 ############################
 Δt = Float32(2.5e-3);
-tsim = Float32(10);
+tsim = Float32(100);
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -34,8 +34,8 @@ seeds = (;
 
 # inputs
 name = "MVG"
-track_file = "/output/new/data_track2_dns512_les64_Re2000.0_tsim10.0.jld2"
-n_replicas = 10
+track_file = "/paper_runs/output/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2"
+n_replicas = 5
 hist_len = 0
 
 out_dir = @__DIR__()*"/output/new/$(name)/"

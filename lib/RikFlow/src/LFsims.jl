@@ -16,63 +16,63 @@ function track_ref(;
     tracking_noise = 0.0,
     tracking_noise_seed = 56,
     kwargs...,
-)
-T = typeof(Re)
+    )
+    T = typeof(Re)
 
-# Build setup and assemble operators
+    # Build setup and assemble operators
 
-setup = 
-Setup(;
-    x = ntuple(α -> LinRange(lims[α]..., nles[1][α] + 1), D),
-    Re,
-    ArrayType,
-    ou_bodyforce,
-    backend,
-)
+    setup = 
+    Setup(;
+        x = ntuple(α -> LinRange(lims[α]..., nles[1][α] + 1), D),
+        Re,
+        ArrayType,
+        ou_bodyforce,
+        backend,
+    )
 
-# Number of time steps to save
-nt = round(Int, tsim / Δt)
+    # Number of time steps to save
+    nt = round(Int, tsim / Δt)
 
-to_setup_les = RikFlow.TO_Setup(; 
-        qois, 
-        to_mode = :TRACK_REF, 
-        ArrayType, 
-        setup, 
-        nstep=nt,
-        time_series_method = ref_reader,
-        tracking_noise = tracking_noise,
-        tracking_noise_seed = tracking_noise_seed)
+    to_setup_les = RikFlow.TO_Setup(; 
+            qois, 
+            to_mode = :TRACK_REF, 
+            ArrayType, 
+            setup, 
+            nstep=nt,
+            time_series_method = ref_reader,
+            tracking_noise = tracking_noise,
+            tracking_noise_seed = tracking_noise_seed)
 
-psolver = create_psolver(setup)
+    psolver = create_psolver(setup)
 
-# Solve
-@info "Solving LF sim (track ref)"
-println("setup.ou ", setup.ou_bodyforce)
-(; u, t), outputs =
-        solve_unsteady(; setup, 
-        ustart,
-        method = TOMethod(; to_setup = to_setup_les), 
-        tlims = (T(0), tsim),
-        Δt,
-        processors = (;
-            log = timelogger(; nupdate = 100),
-            fields = fieldsaver(; setup, nupdate = savefreq), # by calling this BEFORE qoisaver, we also save the field at t=0!
-            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
-            #vort = realtimeplotter(;
-            #    setup,
-            #    plot = vortplot,
-            #    nupdate = 10,
-            #    displayupdates = true,
-            #    displayfig = true,
-            #),
-        ),
-        psolver)
-q = stack(outputs.qoihist)
-dQ = to_setup_les.outputs.dQ
-tau = to_setup_les.outputs.tau
-q_star = to_setup_les.outputs.q_star
-fields = outputs.fields
-return (;dQ, tau, q, q_star, fields)
+    # Solve
+    @info "Solving LF sim (track ref)"
+    println("setup.ou ", setup.ou_bodyforce)
+    (; u, t), outputs =
+            solve_unsteady(; setup, 
+            ustart,
+            method = TOMethod(; to_setup = to_setup_les), 
+            tlims = (T(0), tsim),
+            Δt,
+            processors = (;
+                log = timelogger(; nupdate = 100),
+                fields = fieldsaver(; setup, nupdate = savefreq), # by calling this BEFORE qoisaver, we also save the field at t=0!
+                qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
+                #vort = realtimeplotter(;
+                #    setup,
+                #    plot = vortplot,
+                #    nupdate = 10,
+                #    displayupdates = true,
+                #    displayfig = true,
+                #),
+            ),
+            psolver)
+    q = stack(outputs.qoihist)
+    dQ = to_setup_les.outputs.dQ
+    tau = to_setup_les.outputs.tau
+    q_star = to_setup_les.outputs.q_star
+    fields = outputs.fields
+    return (;dQ, tau, q, q_star, fields)
 end
 
 
