@@ -103,4 +103,4 @@ psolver = psolver_spectral(setup);
 q = stack(outputs.qoihist);
 data_online = (;q, fields = outputs.fields);
 # Save tracking data
-jldsave("$outdir/data_no_sgs3_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+jldsave("$outdir/data_no_sgs_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);

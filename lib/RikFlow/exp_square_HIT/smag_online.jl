@@ -14,7 +14,7 @@ using RikFlow
 using IncompressibleNavierStokes
 using CUDA
 
-smag_vals = [0.055, 0.06, 0.08, 0.071]
+smag_vals = [0.05, 0.055, 0.06, 0.065, 0.07, 0.071, 0.072, 0.073, 0.075, 0.077, 0.08, 0.085, 0.09, 0.095, 0.1]
 n_dns = Int(512)
 n_les = Int(64)
 Re = Float32(2_000)
@@ -35,7 +35,7 @@ seeds = (;
 
 outdir = @__DIR__() *"/output/new"
 ispath(outdir) || mkpath(outdir)
-ispath(outdir*"/smag2") || mkpath(outdir*"/smag2")
+ispath(outdir*"/smag") || mkpath(outdir*"/smag")
 
 
 # For running on a CUDA compatible GPU
@@ -110,5 +110,5 @@ for c_s in smag_vals
     q = stack(outputs.qoihist);
     data_online = (;q, fields = outputs.fields);
     # Save tracking data
-    jldsave("$outdir/smag2/data_smag_$(c_s)_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+    jldsave("$outdir/smag/data_smag_$(c_s)_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
 end

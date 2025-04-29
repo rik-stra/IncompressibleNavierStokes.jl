@@ -130,9 +130,10 @@ time_index = 0:2.5e-3:t_sim
 # We now run track_ref.jl to track the reference trajectories of the qois
 #################################################################################
 # begin
-    fname = @__DIR__()*"/output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
+    #fname = @__DIR__()*"/output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
+    fname = @__DIR__()*"/paper_runs/output/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2"
     track_data = load(fname, "data_track");
-    #fname = @__DIR__()*"/output/new/data_track2_dns512_les64_Re2000.0_tsim10.0.jld2"
+    #fname = @__DIR__()*"/paper_runs/output/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica2.jld2"
     #track_data2 = load(fname, "data_track");
     # plot dQ data
     #trajectories
@@ -146,6 +147,7 @@ time_index = 0:2.5e-3:t_sim
             for i in 0:size(track_data.dQ, 1)-1]
         for i in 1:size(track_data.dQ, 1)
             lines!(axs[i], time_index[1:end-1], track_data.dQ[i, range])
+            #lines!(axs[i], time_index[1:end-1], track_data.dQ[i, range]-track_data2.dQ[i, range])
             #lines!(axs[i], track_data2.dQ[i, range], linestyle = :dash ,color = :red)
         end
         display(g)
@@ -244,7 +246,9 @@ time_index = 0:2.5e-3:t_sim
 ### no SGS ###
 ##############
 # begin
-    fname = @__DIR__()*"/output/new/data_no_sgs2_dns512_les64_Re2000.0_tsim100.0.jld2"
+    fig_folder = @__DIR__()*"/output/figures_paper/LF"
+    time_index = 0:2.5e-3:10
+    fname = @__DIR__()*"/output/new/data_no_sgs_dns512_les64_Re2000.0_tsim100.0.jld2"
     no_sgs_data = load(fname, "data_online");
 
 
@@ -267,19 +271,25 @@ time_index = 0:2.5e-3:t_sim
     let 
         g = Figure()
         axs = [Axis(g[i ÷ 2, i%2], 
-            title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+            title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
             for i in 0:size(no_sgs_data.q, 1)-1]
         for i in 1:size(no_sgs_data.q, 1)
             density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
             strokecolor = :black, strokewidth = 3, strokearound = false)
             density!(axs[i], no_sgs_data.q[i, :], label = "no model", color = (:red, 0.3),
-            strokecolor = :red, strokewidth = 3, strokearound = false)
+            strokecolor = :red, strokewidth = 3, linestyle=:dot, strokearound = false)
+            hideydecorations!(axs[i], label = false, ticks = false, grid = false)
             if i == size(no_sgs_data.q, 1) axislegend(axs[i], position = :rt) end
+            if i in [1,3,5]
+                axs[i].ylabel="Density"
+            end
         end
         display(g)
         save(fig_folder*"/lt_distr_q_nomodel_dns512_les64_Re2000.0_tsim100.png", g)
     end
-
+    ## print KS distance distributions
+    ks = [ks_dist(q_ref[i,:], no_sgs_data.q[i, :])[1] for i in 1:size(q_ref, 1)]
+    summed_ks = sum(ks, dims = 1)
     ## plot final field
     heatmap(no_sgs_data.fields[end].u[1,:,:,1])
     n = 64
@@ -294,8 +304,10 @@ time_index = 0:2.5e-3:t_sim
 ### SMAG  ###
 #############
 #begin
+    fig_folder = @__DIR__()*"/output/figures_paper/smag"
     let 
-        smag_vals = [0.05, 0.055, 0.06, 0.065, 0.07, 0.071, 0.072, 0.073, 0.074, 0.075, 0.08, 0.085, 0.09, 0.095,0.1]
+        
+        smag_vals = [0.05, 0.055, 0.06, 0.065, 0.07, 0.071, 0.072, 0.073, 0.075, 0.077, 0.08, 0.085, 0.09, 0.095, 0.1]
         smag_data = [load(
             @__DIR__()*"/output/new/smag/data_smag_$(c)_dns512_les64_Re2000.0_tsim100.0.jld2",
             "data_online").q for c in smag_vals];
@@ -376,11 +388,12 @@ time_index = 0:2.5e-3:t_sim
             for i in 0:size(smag_data[1], 1)-1]
         for i in 1:size(smag_data[1], 1)
             density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
-            strokecolor = :black, strokewidth = 3, strokearound = true)
+            strokecolor = :black, strokewidth = 3, strokearound = false)
             for j in 1:length(smag_vals)
                 density!(axs[i], smag_data[j][i, :], label = "smag $(smag_vals[j])", color = (:red, 0.3),
-                strokecolor = :red, strokewidth = 3, strokearound = true)
+                strokecolor = :red, strokewidth = 3, linestyle = :dot, strokearound = false)
             end
+            hideydecorations!(axs[i], label = false, ticks = false, grid = false)
             if i == size(smag_data[1], 1) axislegend(axs[i], position = :rt) end
             if i in [1,3,5]
                 axs[i].ylabel="Density"
