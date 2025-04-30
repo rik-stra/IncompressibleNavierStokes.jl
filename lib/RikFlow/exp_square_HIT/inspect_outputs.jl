@@ -419,6 +419,61 @@ time_index = 0:2.5e-3:t_sim
 #end
 
 
+#### TO online ###
+    linreg_data = [load(
+        @__DIR__()*"/paper_runs/output/online/LinReg1/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2",
+        "data_online").q for i in 1:5]
+    
+    # plot distrubution of QoIs
+    let 
+        fig_folder = @__DIR__()*"/output/figures_paper/TO"
+        for r in 1:5
+            g = Figure()
+            axs = [Axis(g[i ÷ 2, i%2], 
+                title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+                for i in 0:size(linreg_data[1], 1)-1]
+            for i in 1:size(linreg_data[1], 1)
+                density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
+                strokecolor = :black, strokewidth = 3, strokearound = false)
+                density!(axs[i], linreg_data[r][i, :], label = "TO", color = (:red, 0.3),
+                strokecolor = :red, strokewidth = 3, linestyle=:dot, strokearound = false)
+                hideydecorations!(axs[i], label = false, ticks = false, grid = false)
+                if i == size(linreg_data[1], 1) axislegend(axs[i], position = :rt) end
+                if i in [1,3,5]
+                    axs[i].ylabel="Density"
+                end
+            end
+            display(g)
+            save(fig_folder*"/lt_distr_q_TO_repl$(r).pdf", g)
+        end
+    end
+
+    let 
+        fig_folder = @__DIR__()*"/output/figures_paper/TO"
+        qs = cat(linreg_data..., dims = 2)
+        g = Figure()
+        axs = [Axis(g[i ÷ 2, i%2], 
+            title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+            for i in 0:size(linreg_data[1], 1)-1]
+        for i in 1:size(linreg_data[1], 1)
+            density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
+            strokecolor = :black, strokewidth = 3, strokearound = false)
+            density!(axs[i], qs[i, :], label = "TO", color = (:red, 0.3),
+            strokecolor = :red, strokewidth = 3, linestyle=:dot, strokearound = false)
+            hideydecorations!(axs[i], label = false, ticks = false, grid = false)
+            if i == size(linreg_data[1], 1) axislegend(axs[i], position = :rt) end
+            if i in [1,3,5]
+                axs[i].ylabel="Density"
+            end
+        end
+        display(g)
+        save(fig_folder*"/lt_distr_q_TO_ensemble.png", g)
+        
+    end
+
+
+
+
 ### Online SGS ###
 fname = @__DIR__()*"/output/new/data_online_samplingMVG_sampler_dns512_les64_Re2000.0_tsim10.0.jld2"
 online_data = load(fname, "data_online")
