@@ -131,6 +131,94 @@ time_index = 0:2.5e-3:t_sim
 #end
 
 
+## plot short term correlation
+#load data
+let
+fig_folder = @__DIR__()*"/output/figures_paper"
+to_data = [load(@__DIR__()*"/paper_runs/output/online/LinReg1/data_online_dns512_les64_Re2000.0_tsim100.0_replica$(i)_rand_initial_dQ.jld2")["data_online"].q for i in 1:5]
+fname = @__DIR__()*"/output/new/data_no_sgs_dns512_les64_Re2000.0_tsim100.0.jld2"
+nomodel_data = load(fname, "data_online").q;
+smag_data = load(
+            @__DIR__()*"/output/new/smag/data_smag_0.071_dns512_les64_Re2000.0_tsim100.0.jld2",
+            "data_online").q;
+fname = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
+ref_data = stack(load(fname, "data_train").data[1].qoi_hist);
+qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
+
+time_axis = 0:2.5e-3:100
+
+g = Figure()
+ax = [Axis(g[i ÷ 2, i%2], 
+    title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+    for i in 0:size(ref_data, 1)-1]
+for i in 1:size(ref_data, 1)
+    lines!(ax[i], time_axis[2000:6000], ref_data[i,2000:6000], color=:black, label = "ref")
+    lines!(ax[i], time_axis[2000:6000], nomodel_data[i,2000:6000], label = "no model")
+    lines!(ax[i], time_axis[2000:6000], smag_data[i,2000:6000], label = "smag")
+    #lines!(ax[i], to_data[1][i,1:4000], label = "TO model")
+end
+axislegend(ax[6], position=:rc)
+ax[5].xlabel="t"
+ax[6].xlabel="t"
+display(g)
+save(fig_folder*"/Qoi_trajectories_nomodel_smag.pdf", g)
+
+g = Figure()
+ax = [Axis(g[i ÷ 2, i%2], 
+    title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+    for i in 0:size(ref_data, 1)-1]
+l,r = nothing, nothing
+for i in 1:size(ref_data, 1)
+    
+    for r in 1:5
+        l=lines!(ax[i], time_axis[2000:6000], to_data[r][i,2000:6000], color=:blue, alpha = 0.3)
+    end
+    r=lines!(ax[i], time_axis[2000:6000], ref_data[i,2000:6000], color=:black, label = "ref")
+    
+end
+axislegend(ax[6],[r,l],["ref", "TO LRS"], position=:rc)
+ax[5].xlabel="t"
+ax[6].xlabel="t"
+display(g)
+save(fig_folder*"/Qoi_trajectories_TOh5.pdf", g)
+end
+
+function rolling_correlation(ref_data, model_data; window_size=40)
+    n_qois, n_total = size(ref_data)
+    n_windows = n_total-window_size
+    timepoints = collect(1:n_windows)
+    corr_over_time = zeros(n_windows)
+
+    for w in 1:n_windows
+        start_idx = w
+        stop_idx = w + window_size
+        corrs = zeros(n_qois)
+        for q in 1:n_qois
+            ref_segment = ref_data[q, start_idx:stop_idx]
+            model_segment = model_data[q, start_idx:stop_idx]
+            corrs[q] = cor(ref_segment, model_segment)
+        end
+        corr_over_time[w] = mean(corrs)
+    end
+
+    return timepoints, corr_over_time
+end
+
+# Compute rolling correlations
+t_nomodel, corr_nomodel = rolling_correlation(ref_data[:,1:1000], nomodel_data[:,1:1000])
+t_smag, corr_smag = rolling_correlation(ref_data[:,1:1000], smag_data[:,1:1000])
+t_to, corr_to = rolling_correlation(ref_data[:,1:1000], to_data[:,1:1000])
+
+# Plot
+fig = Figure()
+ax = Axis(fig[1, 1])
+lines!(ax,t_nomodel, corr_nomodel, label = "No model")
+lines!(ax,t_smag, corr_smag, label = "Smagorinsky")
+lines!(ax,t_to, corr_to, label = "TO model")
+axislegend(ax, position=:rb)
+display(fig)
+
+
 ## save VTK files
 # begin
     ## LinReg1 at t=100

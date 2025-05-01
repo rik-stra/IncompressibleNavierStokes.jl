@@ -101,3 +101,6 @@ inputs_df = DataFrame(inputs)
 # read inputs
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 inputs_df = DataFrame(inputs)
+
+# find linreg h = 10
+inputs_df[inputs_df.hist_len .== 10 .&& inputs_df.tracking_noise .== 0.0, :]
