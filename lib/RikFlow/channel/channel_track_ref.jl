@@ -89,7 +89,7 @@ ispath(outdir) || mkpath(outdir)
     processors = (;
         log = timelogger(; nupdate = 10),
         fields = fieldsaver(; setup, nupdate = 100),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
+        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
     ),
     psolver,
 );
