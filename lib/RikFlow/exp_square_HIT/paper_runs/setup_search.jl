@@ -94,6 +94,23 @@ for hist_len in hist_lens
     end
 end
 print("End small training data $(i)")
+train_range = (400, 3000)
+tracking_noise = 0.0
+hist_lens = [5, 10]
+labs = [0, 0.1, 0.01]
+print("Start extra training data $(i+1)")
+for hist_len in hist_lens
+        for lambda in labs
+            i += 1
+            push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len, tracking_noise, lambda, train_range)) 
+        end
+end
+train_range = (400, 4000)
+lambda = 0.1
+hist_len = 10
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len, tracking_noise, lambda, train_range)) 
+print("End extra training data $(i)")
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 
