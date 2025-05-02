@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -J LinReg_search
 #SBATCH -t 70:00
-#SBATCH --partition=gpu_mig
+#SBATCH --partition=gpu_a100
 #SBATCH --gpus=1
 #SBATCH --array=77-148
 
