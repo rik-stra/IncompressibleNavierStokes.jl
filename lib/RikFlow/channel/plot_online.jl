@@ -52,10 +52,12 @@ lines(yp, u_ave_NM)
 lines(yp, u_ave_TO)
 
 using DelimitedFiles
-data = readdlm(@__DIR__()*"/output/LM_Channel_0180_mean_prof.dat", comments=true, comment_char='%')
-cols = ["y/delta", "y^+", "U", "dU/dy", "W", "P"]
-yp_ref = data[2:end, 2]
-u_ave_ref = data[2:end, 3]
+#data = readdlm(@__DIR__()*"/output/LM_Channel_0180_mean_prof.dat", comments=true, comment_char='%')
+#cols = ["y/delta", "y^+", "U", "dU/dy", "W", "P"]
+data = readdlm(@__DIR__()*"/output/Chan180_FD2_all/Chan180_FD2_basic_u.txt", comments=true, comment_char='%')
+cols = ["y^+", "U", "rms(u)",  "<u'u'u'>",  "<u'u'u'u'>", "<u'u'v'>", "<u'w'>"]
+yp_ref = data[2:end, 1]
+u_ave_ref = data[2:end, 2]
 
 #log plot
 f = Figure()
