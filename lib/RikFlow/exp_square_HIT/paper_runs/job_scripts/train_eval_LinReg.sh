@@ -3,7 +3,7 @@
 #SBATCH -t 70:00
 #SBATCH --partition=gpu_a100
 #SBATCH --gpus=1
-#SBATCH --array=149-155
+#SBATCH --array=149-149
 
 export JULIA_DEPOT_PATH=$HOME/julia/julia_a100:
 

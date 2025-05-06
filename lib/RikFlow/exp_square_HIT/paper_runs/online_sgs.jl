@@ -81,7 +81,7 @@ for i in 1:n_replicas
             q_hist = cat(q_hist, q_hist, dims=1)
         end
     end
-    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(seeds.to+i), q_hist = q_hist, spinnup_data = ArrayType{T}(dQ_data));
+    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(seeds.to+i+2), q_hist = q_hist, spinnup_data = ArrayType{T}(dQ_data));
     
 # run the sim
     @info "Running sim $i out of $n_replicas"
