@@ -3,7 +3,7 @@ using DataFrames
 using IncompressibleNavierStokes
 using RikFlow
 
-index_range = [49,58]
+index_range = [149,155]
 linreg_params_table = DataFrame(load(@__DIR__()*"/inputs.jld2", "inputs"))[index_range[1]:index_range[2],:]
 # load reference data
 filename = @__DIR__()*"/../output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
