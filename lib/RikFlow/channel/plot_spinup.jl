@@ -39,24 +39,34 @@ u_ave = reshape(u_ave, :)
 u_ave = (u_ave[1:128] + u_ave[129:256][end:-1:1])/2
 
 yp = setup.grid.xu[1][2][2:Int(end//2)]*180
-lines(yp, u_ave)
+f = hlines([18.42, 18.25], color=:red) # centerline values from Vreman
+lines!(yp, u_ave)
+
+display(f)
 
 using DelimitedFiles
-data = readdlm(@__DIR__()*"/output/LM_Channel_0180_mean_prof.dat", comments=true, comment_char='%')
+data_MKM = readdlm(@__DIR__()*"/output/LM_Channel_0180_mean_prof.dat", comments=true, comment_char='%')
 cols = ["y/delta", "y^+", "U", "dU/dy", "W", "P"]
-yp_ref = data[2:end, 2]
-u_ave_ref = data[2:end, 3]
+yp_ref_MKM = data_MKM[2:end, 2]
+u_ave_ref_MKM = data_MKM[2:end, 3]
+
+data_Vre = readdlm(@__DIR__()*"/output/Chan180_FD2_all/Chan180_FD2_basic_u.txt", comments=true, comment_char='%')
+cols = ["y^+", "U", "rms(u)",  "<u'u'u'>",  "<u'u'u'u'>", "<u'u'v'>", "<u'w'>"]
+yp_ref_Vre = data_Vre[2:end, 1]
+u_ave_ref_Vre = data_Vre[2:end, 2]
 
 #log plot
 f = Figure()
 ax1 = Axis(f[1, 1], xscale = log10)
-lines!(ax1, yp_ref, u_ave_ref, color=:blue, linewidth=2)
+lines!(ax1, yp_ref_MKM, u_ave_ref_MKM, color=:blue, linewidth=2)
+lines!(ax1, yp_ref_Vre, u_ave_ref_Vre, color=:green, linewidth=2)
 lines!(ax1, yp, u_ave, color=:red)
 ylims!(ax1,0, 19)
 xlims!(ax1, 0.1, 180)
 
 ax1 = Axis(f[1, 2])
-lines!(ax1, yp_ref, u_ave_ref, color=:blue, linewidth=2)
+lines!(ax1, yp_ref_MKM, u_ave_ref_MKM, color=:blue, linewidth=2)
+lines!(ax1, yp_ref_Vre, u_ave_ref_Vre, color=:green, linewidth=2)
 lines!(ax1, yp, u_ave, color=:red)
 ylims!(ax1,0, 19)
 xlims!(ax1, 0.1, 180)
