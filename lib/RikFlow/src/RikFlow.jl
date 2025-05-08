@@ -243,6 +243,16 @@ end
     get_w_hat(u::Tuple, setup)
 Compute the vorticity field, interpolate to cell centers and compute the Fourier transform of the field.
 """
+function get_w_hat_from_w(w, setup)
+    (; dimension) = setup.grid
+    d = dimension()
+    # interpolate u to cell centers
+    #u_c = interpolate_u_p(u, setup)
+    w = stack([w[select_physical_fourier_points(a, setup), a] for a=1:d], dims=4)
+    w_hat = fft(w, [1,2,3])
+    return w_hat
+end
+
 # function get_w_hat(u::Tuple, setup)
 #     (; Ip) = setup.grid
 #     # compute vorticity

@@ -18,7 +18,7 @@ kwargs = (;
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
     ),
-    Re = 180,
+    Re = 180.0,
 )
 setup = Setup(;
     x = (
@@ -31,7 +31,84 @@ setup = Setup(;
 
 u_start = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start");
 u_ave = mean(u_start[:,:,:,1], dims=3)
-heatmap(u_start[:,:,20,1])
+y_ax = setup.grid.xu[1][2]
+x_ax = setup.grid.xu[1][1]
+
+f = Figure(size = (900, 200))
+ax1 = Axis(f[1, 1], aspect = DataAspect())
+heatmap!(ax1,x_ax, y_ax,u_start[:,:,20,1])
+display(f)
+save(@__DIR__()*"/output/figs/u_start.png", f)
+
+# plot spectrum
+scales = get_scale_numbers(u_start, setup)
+state = (;u = u_start, t=0., temp=0);
+fig = energy_spectrum_plot(state; setup, npoint = 100, sloperange = [1,1], slopeoffset = 50, plot_wavelength = false)
+display(fig)
+v = [scales.λ, scales.η, 1/n]
+v_labels = ["λ", "η", "Δx"]
+for i in 1:3
+    text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1e-12*1.2), align = (:left, :bottom), color = :black)
+end
+display(fig)
+save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
+
+# plot coarse spectrum
+ustart = Array(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].u[1]);
+# Grid
+nx = 64 
+ny = 64 
+nz = 32 
+kwargs = (;
+    boundary_conditions = (
+        (PeriodicBC(), PeriodicBC()),
+        (DirichletBC(), DirichletBC()),
+        (PeriodicBC(), PeriodicBC()),
+    ),
+    Re = 180.0,
+)
+setup = Setup(;
+    x = (
+        range(xlims..., nx + 1),
+        range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
+        range(zlims..., nz + 1)
+    ),
+    kwargs...,
+);
+
+u_ave = mean(ustart[:,:,:,1], dims=3)
+y_ax = setup.grid.xu[1][2]
+x_ax = setup.grid.xu[1][1]
+
+f = Figure(size = (900, 200))
+ax1 = Axis(f[1, 1], aspect = DataAspect())
+heatmap!(ax1,x_ax, y_ax,ustart[:,:,20,1])
+display(f)
+save(@__DIR__()*"/output/figs/u_start_coarse.png", f)
+
+# plot spectrum
+#scales = get_scale_numbers(u_start, setup)
+state = (;u = ustart, t=0., temp=0);
+fig = energy_spectrum_plot(state; setup, npoint = 100, sloperange = [1,1], slopeoffset = 50, plot_wavelength = false)
+display(fig)
+v = [scales.λ, scales.η, 1/n]
+v_labels = ["λ", "η", "Δx"]
+for i in 1:3
+    text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1e-12*1.2), align = (:left, :bottom), color = :black)
+end
+display(fig)
+save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
+
+
+
+
+
+
+
+
+
+
+
 
 # mean flow profile
 u_ave = mean(u_start[:,:,:,1], dims=[1,3])

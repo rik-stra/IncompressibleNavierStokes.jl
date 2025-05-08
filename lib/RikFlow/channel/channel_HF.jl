@@ -26,9 +26,9 @@ zlims = 0f, 4f / 3f * pi
 
 tsim = 100f
 # Grid
-nx = 256 
-ny = 256 
-nz = 128
+nx = 256      #-> highest wave number 128/4pi = 10.2
+ny = 256      #-> highest wave number 128/2 = 64
+nz = 128      #-> highest wave number 64/(4/3*pi) = 15.3
 Δt = 0.001f
 
 nx_les = 64
