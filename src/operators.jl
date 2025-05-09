@@ -1132,23 +1132,23 @@ end
 Compute Smagorinsky stress tensors `σ[I]` (in-place version).
 The Smagorinsky constant `θ` should be a scalar between `0` and `1`.
 """
-function smagtensor!(σ, u, θ, setup)
-    # TODO: Combine with normal diffusion tensor
-    (; grid, backend, workgroupsize) = setup
-    (; Np, Ip, Δ, Δu) = grid
-    @kernel function σ!(σ, u, I0)
-        I = @index(Global, Cartesian)
-        I = I + I0
-        ∇u = ∇(u, I, Δ, Δu)
-        S = (∇u + ∇u') / 2
-        d = gridsize(Δ, I)
-        eddyvisc = θ^2 * d^2 * sqrt(2 * sum(S .* S))
-        σ[I] = 2 * eddyvisc * S
-    end
-    I0 = getoffset(Ip)
-    σ!(backend, workgroupsize)(σ, u, I0; ndrange = Np)
-    σ
-end
+# function smagtensor!(σ, u, θ, setup)
+#     # TODO: Combine with normal diffusion tensor
+#     (; grid, backend, workgroupsize) = setup
+#     (; Np, Ip, Δ, Δu) = grid
+#     @kernel function σ!(σ, u, I0)
+#         I = @index(Global, Cartesian)
+#         I = I + I0
+#         ∇u = ∇(u, I, Δ, Δu)
+#         S = (∇u + ∇u') / 2
+#         d = gridsize(Δ, I)
+#         eddyvisc = θ^2 * d^2 * sqrt(2 * sum(S .* S))
+#         σ[I] = 2 * eddyvisc * S
+#     end
+#     I0 = getoffset(Ip)
+#     σ!(backend, workgroupsize)(σ, u, I0; ndrange = Np)
+#     σ
+# end
 
 divoftensor(σ, setup) = divoftensor!(vectorfield(setup), σ, setup)
 

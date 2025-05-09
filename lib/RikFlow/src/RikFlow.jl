@@ -30,11 +30,11 @@ The tuple stores
 - Relevant outputs (dQ, tau)
 - Pre allocated functions for V_i, masks for c_ij, which are needed for fast computation of the SGS term
 """
-function TO_Setup(; qois, to_mode, ArrayType, setup, nstep = nothing, time_series_method = nothing, tracking_noise = nothing, tracking_noise_seed = 56)
+function TO_Setup(; qois, to_mode, ArrayType, setup, nstep = nothing, time_series_method = nothing, tracking_noise = nothing, tracking_noise_seed = 56, mirror_y = false)
     T = typeof(setup.Re)
-    masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
+    masks, ∂ = get_masks_and_partials(qois, setup, ArrayType, mirror_y)
     N_qois = length(qois)
-    to_setup = (; N_qois, qois, to_mode, masks, ∂, time_series_method)
+    to_setup = (; N_qois, qois, to_mode, masks, ∂, time_series_method, mirror_y)
     if !isnothing(tracking_noise) && (tracking_noise == 0.0)
         tracking_noise = nothing
     end
@@ -53,43 +53,6 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep = nothing, time_serie
     return to_setup
 end
 
-
-function TO_Setup_old(; qois, to_mode, ArrayType, setup, nstep, qoi_refs_location = :none, sampling_method = :mvg ,dQ_data = :none, rng = :none)
-    T = typeof(setup.Re)
-    masks, ∂ = get_masks_and_partials(qois, setup, ArrayType)
-    N_qois = length(qois)
-    time_index = ones(Int)
-    to_setup = (; N_qois, qois, qoi_refs_location, to_mode, masks, ∂, time_index, rng)
-
-    if to_mode in [:TRACK_REF, :ONLINE]
-        dQ_distribution = :none
-        if to_mode == :TRACK_REF
-            Q_dQ_array = load_qois(qoi_refs_location) # use reference trajectories
-            to_setup.time_index[] = 2
-            sampler = TO_Setup -> read_next_from_Q_dQ_array(TO_Setup)
-        elseif to_mode == :ONLINE
-            if sampling_method == :mvg
-                Q_dQ_array = :none
-                dQ_distribution = fit(MvNormal, dQ_data)
-                sampler = TO_setup -> rand(TO_setup.rng, TO_setup.dQ_distribution)
-                
-            elseif sampling_method == :resample
-                ind = rand(rng, 1:size(dQ_data,2), nstep)
-                Q_dQ_array = dQ_data[:,ind]                         # use resampled dQ data
-                to_setup.time_index[] = 1
-                sampler = read_next_from_Q_dQ_array(TO_Setup)
-            else
-                error("Sampling mode not recognized")
-            end
-
-        end
-        V_i = get_vi_functions(to_setup)
-        cij_masks = get_cij_masks(to_setup)
-        outputs = allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
-        to_setup = (; to_setup..., Q_dQ_array, dQ_distribution, sampler, V_i, cij_masks, outputs)
-    end
-    return to_setup
-end
 
 function read_next_from_Q_dQ_array(to_setup)
     q = to_setup.Q_dQ_array[:,to_setup.time_index[]]
@@ -141,15 +104,23 @@ function get_vi_functions(to_setup)
     return vi
 end
 
-function get_masks_and_partials(QoIs, setup, ArrayType)
+function get_masks_and_partials(QoIs, setup, ArrayType, mirror_y)
     N = setup.grid.Np
+    Lx = setup.grid.xlims[1][2] - setup.grid.xlims[1][1]
+    Ly = setup.grid.xlims[2][2] - setup.grid.xlims[2][1]
+    Lz = setup.grid.xlims[3][2] - setup.grid.xlims[3][1]
+    if mirror_y
+        N = N.*[1,2,1]
+        Ly = Ly*2
+    end
+
     T = typeof(setup.Re)
-    xlims = setup.grid.xlims
-    k = convert.(T,fftfreq(N[1], N[1])./(xlims[1][2] - xlims[1][1]))
-    l = convert.(T,fftfreq(N[2], N[2])./(xlims[2][2] - xlims[2][1]))
-    m = convert.(T,fftfreq(N[3], N[3])./(xlims[3][2] - xlims[3][1]))
+    k = convert.(T,fftfreq(N[1], N[1])./Lx)
+    l = convert.(T,fftfreq(N[2], N[2])./Ly)
+    m = convert.(T,fftfreq(N[3], N[3])./Lz)
+    
     # create a list of bolean arrays
-    masks_list = [Array{Bool, length(N)}(undef,N) for i in 1:length(QoIs)]
+    masks_list = [Array{Bool, length(N)}(undef,N...) for i in 1:length(QoIs)]
     #println("masks_list: ", typeof(masks_list))
     for q in 1:length(QoIs)
         for r in 1:N[3], j in 1:N[2], i in 1:N[1]
@@ -195,6 +166,9 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
     ArrayType = setup.ArrayType
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
+    if to_setup.mirror_y
+        L[2] = L[2]*2
+    end
     N = size(u_hat)
     q = Array{typeof(setup.Re)}(undef, to_setup.N_qois)  # if slow make this into a CuArray
 
@@ -215,15 +189,29 @@ end
 
 
 """
-    get_u_hat(u::Tuple, setup)
+    get_u_hat(u::Tuple, setup, TO_Setup)
 Compute the Fourier transform of the field. Returns an 4D array, velocity components stacked along last dimension.
 """
-function get_u_hat(u, setup)
+function get_u_hat(u, setup, TO_Setup)
     (; dimension) = setup.grid
     d = dimension()
     # interpolate u to cell centers
     #u_c = interpolate_u_p(u, setup)
-    u = stack([u[select_physical_fourier_points(a, setup), a] for a=1:d], dims=4)
+    if TO_Setup.mirror_y
+        u1 = u[setup.grid.Iu[1], 1]
+        u1 = cat(u1, -1 .*reverse(u1, dims=2), dims= 2)
+        u2 = u[setup.grid.Iu[2], 2]
+        #z = zeros(typeof(setup.Re),size(u2)[1], 1, size(u2)[3])
+        z = fill!(similar(setup.grid.x[1], size(u2)[1], 1, size(u2)[3]), 0)
+        u2 = cat(u2, z, -1 .*reverse(u2, dims=2),z, dims= 2)
+        u3 = u[setup.grid.Iu[3], 3]
+        u3 = cat(u3, -1 .*reverse(u3, dims=2), dims= 2)
+
+        u = stack([u1, u2, u3], dims=4)
+    else
+        u = stack([u[select_physical_fourier_points(a, setup), a] for a=1:d], dims=4)
+    end
+
     u_hat = fft(u, [1,2,3])
     return u_hat
 end
@@ -284,7 +272,7 @@ qoisaver(; setup, to_setup, nupdate = 1, nan_limit = 1f5) =
         qoi_hist = fill(zeros(T,0), 0)
         on(state) do state
             state.n % nupdate == 0 || return
-            u_hat = get_u_hat(state.u, setup)
+            u_hat = get_u_hat(state.u, setup, to_setup)
             w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
             q = compute_QoI(u_hat, w_hat, to_setup,setup)
             if any(q .> nan_limit)
@@ -303,7 +291,7 @@ qoisaver(; setup, to_setup, nupdate = 1, nan_limit = 1f5) =
 """
 function to_sgs_term(u, setup, to_setup, stepper)
     # get u_hat v_hat
-    u_hat = get_u_hat(u, setup);
+    u_hat = get_u_hat(u, setup, to_setup);
     w_hat = get_w_hat_from_u_hat(u_hat, to_setup);
     # get dQ
     if to_setup.to_mode == :TRACK_REF
@@ -337,7 +325,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
     # get T_i
     ti = copy(vi)
     # compute innerproducts (returns ip on CPU)
-    ip = innerpoducts(vi,ti,setup)
+    ip = innerpoducts(vi,ti,setup; mirror_y = to_setup.mirror_y)
     # compute c_ij
     cij = compute_cij(ip, to_setup)
     src_Q = reshape(sum(-conj(cij).*ip, dims = 1),:)
@@ -350,13 +338,19 @@ function to_sgs_term(u, setup, to_setup, stepper)
     @tensor P_hat[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
     @tensor sgs_hat[b,c,d,e] := -tau[a] * P_hat[b,c,d,e,a]
     sgs = real(ifft(sgs_hat, [1,2,3]))
+    if to_setup.mirror_y
+        sgs = sgs[:,1:Int(end//2),:,:]
+    end
     return sgs
 end
 
-function innerpoducts(x,y,setup)
+function innerpoducts(x,y,setup, mirror_y = false)
     (; dimension, xlims) = setup.grid
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
+    if mirror_y
+        L[2] = L[2]*2
+    end
     N = size(x)[1:D]
     # ip = reshape(
     #     sum(
