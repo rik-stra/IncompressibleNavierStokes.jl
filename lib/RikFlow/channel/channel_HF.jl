@@ -24,7 +24,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 100f
+tsim = 10f
 # Grid
 nx = 256      #-> highest wave number 128/4pi = 10.2
 ny = 256      #-> highest wave number 128/2 = 64
@@ -78,10 +78,11 @@ to_setup_les =
     RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
     ArrayType, 
-    setup = les_setup,);
+    setup = les_setup,
+    mirror_y = true,);
 
 #determine checkpoints
-n_checkpoints = 3
+n_checkpoints = 1
 nt = round(Int, tsim / Δt)
 checkpoints= 0:round(nt/(n_checkpoints+1)):nt
 checkpoints = checkpoints[2:end-1]
@@ -117,7 +118,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 );
 close_amgx(amgx_objects)
 # Save filtered DNS data
-filename = "$outdir/HF_channel_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/HF_channel_mirror_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 jldsave(filename; outputs.f)
 
 exit()
