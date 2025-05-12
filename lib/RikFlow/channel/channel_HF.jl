@@ -14,6 +14,12 @@ using RikFlow
 using JLD2
 using LoggingExtras
 
+jobid = ENV["SLURM_JOB_ID"]
+#taskid = ENV["SLURM_ARRAY_TASK_ID"]
+logfile = joinpath(@__DIR__, "log_$(jobid).out")
+filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+logger = TeeLogger(global_logger(), filelogger)
+global_logger(logger)
 
 # Precision
 T = Float32
