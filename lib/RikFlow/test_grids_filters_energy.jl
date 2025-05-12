@@ -4,6 +4,7 @@ using CairoMakie
 using FFTW
 using CUDA
 using JLD2
+using LinearAlgebra
 
 # create square grid
 n = 16
@@ -58,9 +59,9 @@ ylims = 0, 2.
 zlims = 0, 4 / 3 * pi
 
 # Grid
-nx = 64 
-ny = 64 
-nz = 32
+nx = 16 
+ny = 16 
+nz = 8
 
 setup = Setup(;
     x = (
@@ -92,7 +93,7 @@ ustartfunc = let
             C * (1 - (y - Ly / 2)^8) +
             E * Lx / 2 * sinpi(y) * cospi(4 * x / Lx) * sinpi(2 * z / Lz)
         uy = -E * (1 - cospi(y)) * sinpi(4 * x / Lx) * sinpi(2 * z / Lz)
-        uz = -E * Lz / 2 * sinpi(4 * x / Lx) * sinpi(y) * cospi(2 * z / Lz)
+        uz = -E * Lz / 2 * sinpi(4 * x / Lx) * sinpi(y*0.75) * cospi(2 * z / Lz)
         (dim == 1) * ux + (dim == 2) * uy + (dim == 3) * uz
     end
 end
@@ -120,7 +121,12 @@ TO_setup = RikFlow.TO_Setup(; qois,
 TO_setup.masks[1][:,1,:]
 TO_setup.masks[2][:,:,1]
 
-u_hat = RikFlow.get_u_hat(ustart, setup);
+u_hat, u = RikFlow.get_u_hat(ustart, setup);
+size(u)
+heatmap(ustart[:,:,5,1])
+heatmap(u[:,:,5,1])
+scatter(u[2,:,5,3])
+
 w_hat = RikFlow.get_w_hat_from_u_hat(u_hat, TO_setup);
 E_hat = RikFlow.compute_QoI(u_hat, w_hat, TO_setup, setup)
 
@@ -195,11 +201,46 @@ qois = [["Z",0,100],["E", 0, 100]];
 TO_setup = RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
     ArrayType, 
-    setup = setup,);
+    setup = setup,
+    mirror_y = true,);
 
-u_hat = RikFlow.get_u_hat(ustart, setup);
+u_hat,u = RikFlow.get_u_hat(ustart, setup, TO_setup);
+
+heatmap(Array(ustart[:,:,5,1]))
+heatmap(Array(u[:,:,5,1]); colormap = :redblue)
+scatter(Array(u[2,:,5,3]))
+
+TO_setup2 = RikFlow.TO_Setup(; qois, 
+    to_mode = :CREATE_REF, 
+    ArrayType, 
+    setup = setup,
+    mirror_y = false,);
+
+u_hat2,u = RikFlow.get_u_hat(ustart, setup, TO_setup2);
+
+heatmap(Array(ustart[:,:,5,1]))
+heatmap(Array(u[:,:,5,1]); colormap = :redblue)
+scatter(Array(u[2,:,5,3]))
+
 w_hat = RikFlow.get_w_hat_from_u_hat(u_hat, TO_setup);
 E_hat = RikFlow.compute_QoI(u_hat, w_hat, TO_setup, setup)
+
+w_hat2 = RikFlow.get_w_hat_from_u_hat(u_hat2, TO_setup2);
+E_hat2 = RikFlow.compute_QoI(u_hat2, w_hat2, TO_setup2, setup)
+
+E_hat/2
+
+E = total_kinetic_energy(ustart, setup, interpolate_first = true)
+E = total_kinetic_energy(ustart, setup, interpolate_first = false)
+
+Z = IncompressibleNavierStokes.total_enstropy(ustart, setup)
+
+
+w = real(ifft(w_hat, [1,2,3]));
+z = sum(w.* w, dims = 4)
+heatmap(Array(w[:,:,5,1]); colormap = :redblue)
+heatmap(Array(z[:,:,5,1]))
+
 
 w_tilde = real(ifft(w_hat, [1,2,3]));
 w = IncompressibleNavierStokes.vorticity(ustart, setup);
@@ -268,7 +309,7 @@ E = total_kinetic_energy(ustart, setup, interpolate_first = false)
 E_hat[1]
 E_hat2[1]
 Z = IncompressibleNavierStokes.total_enstropy(ustart, setup)
-Z = IncompressibleNavierStokes.total_enstropy2(ustart, setup)
+#Z = IncompressibleNavierStokes.total_enstropy2(ustart, setup)
 
 diff = maximum(u_tilde-ustart)
 

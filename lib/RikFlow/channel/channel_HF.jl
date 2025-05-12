@@ -82,7 +82,7 @@ to_setup_les =
     mirror_y = true,);
 
 #determine checkpoints
-n_checkpoints = 1
+n_checkpoints = 3
 nt = round(Int, tsim / Δt)
 checkpoints= 0:round(nt/(n_checkpoints+1)):nt
 checkpoints = checkpoints[2:end-1]
@@ -107,7 +107,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
             (FaceAverage(),),
             [4,],
             [to_setup_les,];
-            nupdate = 10,
+            nupdate = 1,
             n_plot = 1000,
             checkpoints,
             checkpoint_name = checkpoints_dir,
@@ -118,7 +118,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 );
 close_amgx(amgx_objects)
 # Save filtered DNS data
-filename = "$outdir/HF_channel_mirror_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/HF_channel_mirror_1framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 jldsave(filename; outputs.f)
 
 exit()

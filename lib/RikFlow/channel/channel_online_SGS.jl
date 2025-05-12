@@ -63,13 +63,13 @@ psolver = default_psolver(setup)
 
 qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 
-ustart = ArrayType(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].u[1]);
-track_file = @__DIR__()*"/output/LF_track_channel_to_64_64_32_tsim10.0.jld2"
+ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
+track_file = @__DIR__()*"/output/LF_mirror_track_channel_to_64_64_32_tsim10.0.jld2"
 data_track = load(track_file, "data_train");
 dQ_data = data_track.dQ[:,1:100];
 
 nt = round(Int, tsim / Δt)
-outdir = @__DIR__() *"/output/online/$(name)/"
+outdir = @__DIR__() *"/output/online_mirror/$(name)/"
 ispath(outdir) || mkpath(outdir)
 
 for i in 1:n_replicas
@@ -92,7 +92,8 @@ for i in 1:n_replicas
         ArrayType, 
         setup,
         nstep=nt,
-        time_series_method = time_series_sampler,);
+        time_series_method = time_series_sampler,
+        mirror_y = true,);
 
     @info "Solving LES"
     # Solve DNS and store filtered quantities

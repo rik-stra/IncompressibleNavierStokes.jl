@@ -86,6 +86,35 @@ heatmap!(ax1,x_ax, y_ax,ustart[:,:,20,1])
 display(f)
 save(@__DIR__()*"/output/figs/u_start_coarse.png", f)
 
+# compute energy/enstrophy
+ArrayType = CuArray
+qois = [["Z",0,100],["E", 0, 100]];
+TO_setup = RikFlow.TO_Setup(; qois, 
+    to_mode = :CREATE_REF, 
+    ArrayType, 
+    setup = setup,
+    mirror_y = true,);
+
+u_hat,u = RikFlow.get_u_hat(ustart, setup, TO_setup);
+w_hat = RikFlow.get_w_hat_from_u_hat(ArrayType(u_hat), TO_setup);
+E = RikFlow.compute_QoI(ArrayType(u_hat), w_hat, TO_setup, setup)
+w = real(ifft(w_hat, [1,2,3]));
+z = sum(w.*w, dims=4)
+heatmap(Array(z[:,1:Int(end//2),5,1]))
+
+TO_setup = RikFlow.TO_Setup(; qois, 
+    to_mode = :CREATE_REF, 
+    ArrayType, 
+    setup = setup,
+    mirror_y = false,);
+
+u_hat,u = RikFlow.get_u_hat(ustart, setup, TO_setup);
+w_hat = RikFlow.get_w_hat_from_u_hat(ArrayType(u_hat), TO_setup);
+E = RikFlow.compute_QoI(ArrayType(u_hat), w_hat, TO_setup, setup)
+w = real(ifft(w_hat, [1,2,3]));
+z = sum(w.*w, dims=4)
+heatmap(Array(z[:,:,5,1]))
+
 # plot spectrum
 #scales = get_scale_numbers(u_start, setup)
 state = (;u = ustart, t=0., temp=0);

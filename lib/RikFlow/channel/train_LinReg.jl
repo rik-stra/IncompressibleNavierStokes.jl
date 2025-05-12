@@ -44,10 +44,10 @@ inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, hist_var, n_replicas, normalization, include_predictor, tracking_noise, train_range, indep_normals, lambda, fitted_qois, model_noise) = inputs[model_index]
 
 
-out_dir = @__DIR__()*"/output/online/$(name)/"
+out_dir = @__DIR__()*"/output/online_mirror/$(name)/"
 save(out_dir*"parameters.jld2", "parameters", (; name, hist_len, hist_var, n_replicas, normalization, include_predictor))
 
-track_file = @__DIR__()*"/output/LF_track_channel_to_64_64_32_tsim10.0.jld2"
+track_file = @__DIR__()*"/output/LF_mirror_track_channel_to_64_64_32_tsim10.0.jld2"
 
 data = load(track_file, "data_train");
 

@@ -23,7 +23,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
+tsim = 1.5f
 Δt = 0.01f
 
 nx_les = 64
@@ -59,8 +59,8 @@ psolver = default_psolver(setup)
 
 qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 
-ustart = ArrayType(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].u[1]);
-qoi_ref = stack(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].qoi_hist);
+ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
+qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
 ref_reader = Reference_reader(qoi_ref);
 
 nt = round(Int, tsim / Δt)
@@ -71,7 +71,8 @@ to_setup_les =
     ArrayType, 
     setup,
     nstep=nt,
-    time_series_method = ref_reader,);
+    time_series_method = ref_reader,
+    mirror_y = true,);
 
 outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
@@ -103,7 +104,7 @@ fields = outputs.fields
 data_train = (;dQ, tau, q, q_star, fields)
 
 # Save filtered DNS data
-filename = "$outdir/LF_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/LF_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 jldsave(filename; data_train)
 
 exit()

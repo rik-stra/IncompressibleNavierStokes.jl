@@ -24,7 +24,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 50f
+tsim = 10f
 Δt = 0.01f
 
 nx_les = 64
@@ -60,14 +60,15 @@ psolver = default_psolver(setup);
 qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 
 
-ustart = ArrayType(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].u[1]);
+ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
 
 
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
     ArrayType, 
-    setup = setup,);
+    setup = setup,
+    mirror_y = true,);
 
 #determine checkpoints
 outdir = @__DIR__() *"/output"
@@ -96,7 +97,7 @@ q = stack(outputs.qoihist)
 
 
 # Save filtered DNS data
-filename = "$outdir/LF_nomodel_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/LF_nomodel_mirror_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 jldsave(filename; outputs.fields, outputs.qoihist)
 
 exit()
