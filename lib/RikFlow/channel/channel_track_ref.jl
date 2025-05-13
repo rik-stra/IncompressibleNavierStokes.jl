@@ -23,8 +23,8 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 1.5f
-Δt = 0.01f
+tsim = 10f
+Δts = [0.01f, 0.005f, 0.004f, 0.002f, 0.001f]
 
 nx_les = 64
 ny_les = 64
@@ -59,54 +59,59 @@ psolver = default_psolver(setup)
 
 qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 
-ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
-qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
-ref_reader = Reference_reader(qoi_ref);
 
-nt = round(Int, tsim / Δt)
+for Δt in Δts
+    ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
+    #qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
+    qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_mirror_1framerate_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
+    sample_rate = Int(Δt/0.001)
+    qoi_ref = qoi_ref[:,1:sample_rate:end]
+    ref_reader = Reference_reader(qoi_ref);
 
-to_setup_les = 
-    RikFlow.TO_Setup(; qois, 
-    to_mode = :TRACK_REF, 
-    ArrayType, 
-    setup,
-    nstep=nt,
-    time_series_method = ref_reader,
-    mirror_y = true,);
+    nt = round(Int, tsim / Δt)
 
-outdir = @__DIR__() *"/output"
-ispath(outdir) || mkpath(outdir)
+    to_setup_les = 
+        RikFlow.TO_Setup(; qois, 
+        to_mode = :TRACK_REF, 
+        ArrayType, 
+        setup,
+        nstep=nt,
+        time_series_method = ref_reader,
+        mirror_y = true,);
+
+    outdir = @__DIR__() *"/output"
+    ispath(outdir) || mkpath(outdir)
 
 
-@info "Solving LES"
-# Solve DNS and store filtered quantities
-(; u, t), outputs = solve_unsteady(;
-    setup,
-    ustart,
-    docopy = false,
-    method = TOMethod(; to_setup = to_setup_les),
-    tlims = (0f, tsim),
-    Δt,
-    processors = (;
-        log = timelogger(; nupdate = 10),
-        fields = fieldsaver(; setup, nupdate = 100),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
-    ),
-    psolver,
-);
+    @info "Solving LES"
+    # Solve DNS and store filtered quantities
+    (; u, t), outputs = solve_unsteady(;
+        setup,
+        ustart,
+        docopy = false,
+        method = TOMethod(; to_setup = to_setup_les),
+        tlims = (0f, tsim),
+        Δt,
+        processors = (;
+            log = timelogger(; nupdate = Int(100/sample_rate)),
+            fields = fieldsaver(; setup, nupdate = Int(1000/sample_rate)),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
+        ),
+        psolver,
+    );
 
-#close_amgx(amgx_objects)
-q = stack(outputs.qoihist)
-dQ = to_setup_les.outputs.dQ
-tau = to_setup_les.outputs.tau
-q_star = to_setup_les.outputs.q_star
-fields = outputs.fields
-data_train = (;dQ, tau, q, q_star, fields)
+    #close_amgx(amgx_objects)
+    q = stack(outputs.qoihist)
+    dQ = to_setup_les.outputs.dQ
+    tau = to_setup_les.outputs.tau
+    q_star = to_setup_les.outputs.q_star
+    fields = outputs.fields
+    data_train = (;dQ, tau, q, q_star, fields)
 
-# Save filtered DNS data
-filename = "$outdir/LF_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
-jldsave(filename; data_train)
-
+    # Save filtered DNS data
+    filename = "$outdir/LF_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_dt$(Δt)_tsim$(tsim).jld2"
+    jldsave(filename; data_train)
+end
 exit()
 q = stack(outputs.qoihist)
 a = load(filename)

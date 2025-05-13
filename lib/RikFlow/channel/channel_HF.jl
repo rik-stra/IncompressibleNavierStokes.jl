@@ -75,7 +75,9 @@ les_setup = Setup(;
 amgx_objects = amgx_setup();
 psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
 
-qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
+#qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
+qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
+        ["Z",13,17],["E", 13, 17]];
 ArrayType = CuArray
 
 ustart = ArrayType(load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start"));
@@ -124,7 +126,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 );
 close_amgx(amgx_objects)
 # Save filtered DNS data
-filename = "$outdir/HF_channel_mirror_1framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/HF_channel_6qoi_mirror_1framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 jldsave(filename; outputs.f)
 
 exit()
