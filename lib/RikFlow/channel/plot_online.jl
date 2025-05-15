@@ -48,6 +48,15 @@ u_ave = reshape(u_ave, :)
 u_ave = (u_ave[1:end] + u_ave[end:-1:1])/2
 u_ave_NM = u_ave[2:33]
 
+data = load(@__DIR__()*"/output/LF_wale_mirror_channel_to_64_64_32_tsim10.0.jld2", "fields");
+u_fields = data[end-50:end];
+us = stack(map(x -> x.u, u_fields));
+# mean flow profile last 10 snapshots
+u_ave = mean(us[:,:,:,1,:], dims=[1,3,4])
+u_ave = reshape(u_ave, :)
+u_ave = (u_ave[1:end] + u_ave[end:-1:1])/2
+u_ave_wale = u_ave[2:33]
+
 yp = setup.grid.xu[1][2][2:Int(end//2)]*180
 lines(yp, u_ave_NM)
 lines(yp, u_ave_TO)
@@ -66,6 +75,7 @@ ax1 = Axis(f[1, 1], xscale = log10)
 scatter!(ax1, yp_ref, u_ave_ref, color=:blue, label = "Ref")
 scatter!(ax1, yp, u_ave_NM, color=:green, label = "No model")
 scatter!(ax1, yp, u_ave_TO, color=:red, label = "TO")
+scatter!(ax1, yp, u_ave_wale, color=:orange, label = "Wale")
 
 ylims!(ax1,0, 19)
 xlims!(ax1, 0.1, 180)
@@ -75,6 +85,7 @@ ax1 = Axis(f[1, 2])
 scatter!(ax1, yp_ref, u_ave_ref, color=:blue, label = "Ref")
 scatter!(ax1, yp, u_ave_NM, color=:green, label = "No model")
 scatter!(ax1, yp, u_ave_TO, color=:red, label = "TO")
+scatter!(ax1, yp, u_ave_wale, color=:orange, label = "Wale")
 ylims!(ax1,0, 19)
 xlims!(ax1, 0.1, 180)
 
