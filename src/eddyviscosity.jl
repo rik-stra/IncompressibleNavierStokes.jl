@@ -101,7 +101,7 @@ end
     I = @index(Global, Cartesian)
     I = I + I0
     ex, ey = unit_cartesian_indices(2)
-    d = gridsize_diag(Δ, I)
+    d = gridsize(Δ, I)
     Sxx2 = S.xx[I]^2
     Syy2 = S.yy[I]^2
     Sxy2 = (S.xy[I]^2 + S.xy[I-ex]^2 + S.xy[I-ey]^2 + S.xy[I-ex-ey]^2) / 4
@@ -112,7 +112,7 @@ end
     I = @index(Global, Cartesian)
     I = I + I0
     ex, ey, ez = unit_cartesian_indices(3)
-    d = gridsize_diag(Δ, I)
+    d = gridsize(Δ, I)
     Sxx2 = S.xx[I]^2
     Syy2 = S.yy[I]^2
     Szz2 = S.zz[I]^2
@@ -225,7 +225,7 @@ end
         G_split.zz[I],
     )
     
-    d = gridsize(Δ, I)
+    d = gridsize_vol(Δ, I)
     S = (G + G') / 2
     G2 = G * G
     Sd = (G2 + G2') / 2 - tr(G2) * one(G2) / 3
@@ -257,7 +257,7 @@ end
         G_split.zz[I],
     )
     S = (G + G') / 2
-    d = gridsize(Δ, I)
+    d = gridsize_vol(Δ, I)
     visc[I] = θ^2 * d^2 * sqrt(2 * dot(S, S))
 end
 
@@ -333,7 +333,7 @@ function smagorinsky_closure_natural(u, θ, stuff, setup)
     c
 end
 
-function get_closure_stuff(::typeof(wale_closure), setup)
+function get_closure_stuff(::Union{typeof(wale_closure), typeof(smagorinsky_closure), typeof(smagorinsky_closure_natural)}, setup)
     (; dimension, x, N) = setup.grid
     D = dimension()
     T = eltype(x[1])

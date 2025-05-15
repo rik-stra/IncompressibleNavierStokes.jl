@@ -1128,9 +1128,9 @@ end
 
 # @inline gridsize(Δ, I::CartesianIndex{2}) = sqrt(Δ[1][I[1]]^2 + Δ[2][I[2]]^2)
 # @inline gridsize(Δ, I::CartesianIndex{3}) = cbrt(Δ[1][I[1]]^2 + Δ[2][I[2]]^2 + Δ[3][I[3]]^2)
-@inline gridsize(Δ, I::CartesianIndex{2}) = sqrt(Δ[1][I[1]] * Δ[2][I[2]])
-@inline gridsize(Δ, I::CartesianIndex{3}) = cbrt(Δ[1][I[1]] * Δ[2][I[2]] * Δ[3][I[3]])
-@inline gridsize_diag(Δ, I::CartesianIndex{D}) where {D} = # Gridsize based on the length of the diagonal of the cell
+@inline gridsize_vol(Δ, I::CartesianIndex{2}) = sqrt(Δ[1][I[1]] * Δ[2][I[2]])
+@inline gridsize_vol(Δ, I::CartesianIndex{3}) = cbrt(Δ[1][I[1]] * Δ[2][I[2]] * Δ[3][I[3]])
+@inline gridsize(Δ, I::CartesianIndex{D}) where {D} = # Gridsize based on the length of the diagonal of the cell
     sqrt(sum(ntuple(α -> Δ[α][I[α]]^2, D)))
 
 
