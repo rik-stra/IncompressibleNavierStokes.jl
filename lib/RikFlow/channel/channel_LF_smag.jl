@@ -81,8 +81,8 @@ ispath(outdir) || mkpath(outdir)
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     # setup,
-    setup = (; setup..., closure_model = IncompressibleNavierStokes.wale_closure),
-    θ = T(0.6), 
+    setup = (; setup..., closure_model = IncompressibleNavierStokes.smagorinsky_closure),
+    θ = T(0.11), 
     ustart,
     tlims = (0f, tsim),
     Δt,
@@ -100,7 +100,7 @@ q = stack(outputs.qoihist)
 
 
 # Save filtered DNS data
-filename = "$outdir/LF_wale_mirror_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/LF_smag_mirror_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 jldsave(filename; outputs.fields, outputs.qoihist)
 
 exit()
