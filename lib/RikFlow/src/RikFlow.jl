@@ -187,6 +187,34 @@ function compute_QoI(u_hat, w_hat, to_setup, setup)
     return q
 end
 
+"""
+    Compute QoI densities from the Fourier transformed fields
+"""
+function compute_filtered_qoi_fields(u_hat, w_hat, to_setup, setup)
+    (; dimension, xlims) = setup.grid
+    ArrayType = setup.ArrayType
+    D = dimension()
+    L = [xlims[a][2] - xlims[a][1] for a in 1:D]
+    if to_setup.mirror_y
+        L[2] = L[2]*2
+    end
+    N = size(u_hat)
+    qs = []
+
+    for i in 1:to_setup.N_qois
+        if to_setup.qois[i][1] == "E"
+            
+            push!(qs, u_hat.*to_setup.masks[i]*(prod(L)/(2*prod(N[1:D])^2)))
+        elseif to_setup.qois[i][1] == "Z"
+            
+            push!(qs, w_hat.*to_setup.masks[i]*(prod(L)/(prod(N[1:D])^2)))
+        else
+            error("QoI not recognized")
+        end 
+    end
+    
+    return qs
+end
 
 """
     get_u_hat(u::Tuple, setup, TO_Setup)
@@ -338,6 +366,15 @@ function to_sgs_term(u, setup, to_setup, stepper)
     @tensor P_hat[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
     @tensor sgs_hat[b,c,d,e] := -tau[a] * P_hat[b,c,d,e,a]
     sgs = real(ifft(sgs_hat, [1,2,3]))
+
+    ## DEBUG
+    # u_tilde = u_hat .+ sgs_hat
+    # w_tilde = get_w_hat_from_u_hat(u_tilde, to_setup)
+    # q_tilde = compute_QoI(u_tilde, w_tilde, to_setup,setup)
+    # @show q_star
+    # @show q_ref
+    # @show q_tilde
+
     if to_setup.mirror_y
         sgs = sgs[:,1:Int(end//2),:,:]
     end
@@ -410,7 +447,20 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
         stepper.u[select_physical_fourier_points(a, setup),a] .+= sgs[:,:,:,a]
     end
 
+    ### debug ###
+    # u_hat = get_u_hat(stepper.u, setup, to_setup)
+    # w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
+    # q = compute_QoI(u_hat, w_hat, to_setup,setup)
+    # @show q
+
     apply_bc_u!(stepper.u, stepper.t, setup)
+    ### debug ###
+    # u_hat = get_u_hat(stepper.u, setup, to_setup)
+    # w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
+    # q2 = compute_QoI(u_hat, w_hat, to_setup,setup)
+    # @show q2
+    # @show ' '
+
     stepper
 end
 
