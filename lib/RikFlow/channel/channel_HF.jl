@@ -140,7 +140,11 @@ u_lf = a["f"].data[1].u[1]
 u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
 
 using CairoMakie
-heatmap(u_lf[:,:,1,1])
-heatmap(u_hf[:,:,1,1])
-
+using Statistics
+zlims
+mean(Array(setup.grid.xu[1][3][7:8]))
+Array(les_setup.grid.xu[1][3])
+heatmap(u_lf[:,:,3,1])
+heatmap(mean(u_hf[:,:,7:8,1], dims = 3)[:,:,1])
+mean(u_hf[:,:,7:8,1], dims = 3)
 total_kinetic_energy(ArrayType(u_hf), setup)

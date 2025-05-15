@@ -13,7 +13,7 @@ using RegularizedLeastSquares
 
 #parse input ARGS
 #model_index = parse(Int, ARGS[1])
-model_index = 1
+model_index = 2
 
 function create_history(hist_len, q_star, q, dQ; include_predictor = true)
     if hist_len == 0
@@ -44,14 +44,14 @@ inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, hist_var, n_replicas, normalization, include_predictor, tracking_noise, train_range, indep_normals, lambda, fitted_qois, model_noise) = inputs[model_index]
 
 
-out_dir = @__DIR__()*"/output/online_mirror/$(name)/"
+out_dir = @__DIR__()*"/output/online_mirror_6qoi/$(name)/"
 save(out_dir*"parameters.jld2", "parameters", (; name, hist_len, hist_var, n_replicas, normalization, include_predictor))
 
-track_file = @__DIR__()*"/output/LF_mirror_track_channel_to_64_64_32_tsim10.0.jld2"
+track_file = @__DIR__()*"/output/LF_6qoi_mirror_track_channel_to_64_64_32_dt0.01_tsim10.0.jld2"
 
 data = load(track_file, "data_train");
 
-qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
+
 
 q_scaled, in_scaling = RikFlow._normalise(data.q[:,train_range[1]:train_range[2]-1], normalization = normalization)
 q_star_scaled = RikFlow.scale_input(data.q_star[:,train_range[1]:train_range[2]-1], in_scaling)
@@ -150,6 +150,7 @@ function plot_time_series(data, qois, title; ref = nothing)
 end
 
 ## test the model
+qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 data_test = load(@__DIR__()*"/output/LF_track_channel_to_64_64_32_tsim10.0.jld2", "data_train");
 dir = @__DIR__()*"/output/online/LinReg1/"
 model = load(dir*"LinReg.jld2")

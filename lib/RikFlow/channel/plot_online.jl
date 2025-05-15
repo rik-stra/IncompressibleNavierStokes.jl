@@ -30,7 +30,7 @@ setup = Setup(;
 );
 
 #data = load(@__DIR__()*"/output/online_mirror/LinReg1/LF_online_channel_to_64_64_32_tsim50.0_repl_1.jld2", "data_train");
-data = load(@__DIR__()*"/output/online/LinReg1/LF_online_channel_to_64_64_32_tsim50.0_repl_1.jld2", "data_train");
+data = load(@__DIR__()*"/output/online_mirror_6qoi/LinReg2/LF_online_channel_to_64_64_32_tsim50.0_repl_1.jld2", "data_train");
 u_fields = data.fields[30:50];
 us = stack(map(x -> x.u, u_fields));
 # mean flow profile last 10 snapshots

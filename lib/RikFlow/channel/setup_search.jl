@@ -18,6 +18,8 @@ i = 0
 inputs = []
 i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters...))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., fitted_qois = [1,2,3,4,5,6]))
                 
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)

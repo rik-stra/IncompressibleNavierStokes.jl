@@ -57,13 +57,14 @@ setup = Setup(;
 #psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
 psolver = default_psolver(setup)
 
-qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
-
+#qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
+qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
+        ["Z",13,17],["E", 13, 17]];
 
 for Δt in Δts
     ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
     #qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
-    qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_mirror_1framerate_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
+    qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_6qoi_mirror_1framerate_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
     sample_rate = Int(Δt/0.001)
     qoi_ref = qoi_ref[:,1:sample_rate:end]
     ref_reader = Reference_reader(qoi_ref);
@@ -109,7 +110,7 @@ for Δt in Δts
     data_train = (;dQ, tau, q, q_star, fields)
 
     # Save filtered DNS data
-    filename = "$outdir/LF_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_dt$(Δt)_tsim$(tsim).jld2"
+    filename = "$outdir/LF_6qoi_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_dt$(Δt)_tsim$(tsim).jld2"
     jldsave(filename; data_train)
 end
 exit()

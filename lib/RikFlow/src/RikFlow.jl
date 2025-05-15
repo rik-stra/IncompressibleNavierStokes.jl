@@ -381,7 +381,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
     return sgs
 end
 
-function innerpoducts(x,y,setup, mirror_y = false)
+function innerpoducts(x,y,setup; mirror_y = false)
     (; dimension, xlims) = setup.grid
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]

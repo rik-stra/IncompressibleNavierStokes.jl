@@ -14,7 +14,7 @@ using RikFlow
 using JLD2
 using Random
 
-model_index = 1
+model_index = 2
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, n_replicas, hist_var,tracking_noise) = inputs[model_index]
 
@@ -61,15 +61,16 @@ setup = Setup(;
 #psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
 psolver = default_psolver(setup)
 
-qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
+qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
+        ["Z",13,17],["E", 13, 17]];
 
 ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
-track_file = @__DIR__()*"/output/LF_mirror_track_channel_to_64_64_32_tsim10.0.jld2"
+track_file = @__DIR__()*"/output/LF_6qoi_mirror_track_channel_to_64_64_32_dt0.01_tsim10.0.jld2"
 data_track = load(track_file, "data_train");
 dQ_data = data_track.dQ[:,1:100];
 
 nt = round(Int, tsim / Δt)
-outdir = @__DIR__() *"/output/online_mirror/$(name)/"
+outdir = @__DIR__() *"/output/online_mirror_6qoi/$(name)/"
 ispath(outdir) || mkpath(outdir)
 
 for i in 1:n_replicas
