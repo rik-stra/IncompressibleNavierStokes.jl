@@ -322,7 +322,12 @@ function energy_spectrum_plot(
     τ = 2π |> T
     C_K = 1.58 |> T
     kpoints = sloperange
-    slopepoints = @. C_K * scale_numbers.ϵ^T(2 / 3) * (τ * kpoints)^slope*slopeoffset
+    if isnothing(scale_numbers)
+        slopepoints = @. C_K ^T(2 / 3) * (τ * kpoints)^slope*slopeoffset
+    else
+        slopepoints = @. C_K * scale_numbers.ϵ^T(2 / 3) * (τ * kpoints)^slope*slopeoffset
+    end
+    
     if plot_wavelength
         l_points = dx./kpoints
     else
