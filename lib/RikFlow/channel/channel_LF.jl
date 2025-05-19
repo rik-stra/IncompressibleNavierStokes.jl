@@ -16,7 +16,7 @@ using LoggingExtras
 
 
 # Precision
-T = Float32
+T = Float64
 f = one(T)
 
 # Domain
@@ -55,12 +55,13 @@ setup = Setup(;
 
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
 #amgx_objects = amgx_setup();
-psolver = default_psolver(setup);
+#psolver = default_psolver(setup);
+psolver = psolver_transform(setup);
 
 qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 
 
-ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
+ustart = ArrayType(convert.(T,load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]));
 
 
 to_setup_les = 

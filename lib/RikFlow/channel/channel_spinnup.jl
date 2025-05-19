@@ -23,20 +23,19 @@ global_logger(logger)
 
 
 # Precision
-T = Float32
+T = Float64
 f = one(T)
-# f = one(Float64)
 
 # Domain
 xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = Float32(0.1)
+tsim = 0.1f  # 10f
 # Grid
-nx = 256 #512
-ny = 256 #512
-nz = 128 #256
+nx = 512
+ny = 512
+nz = 256
 
 @info "Grid size: $(nx) x $(ny) x $(nz)"
 
@@ -62,11 +61,10 @@ setup = Setup(;
 );
 
 @info "factorize psolver ..."
-flush(stdout)
-@time psolver = default_psolver(setup);
-#psolver = psolver_cg(setup);
+
+@time psolver = psolver_transform(setup);
+
 @info "factorize psolver done"
-flush(stdout)
 
 Re_tau = 180f
 Re_m = 2800f

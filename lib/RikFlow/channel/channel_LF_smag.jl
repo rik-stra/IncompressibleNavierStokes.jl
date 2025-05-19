@@ -24,8 +24,8 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
-Δt = 0.01f
+tsim = 50f
+Δt = 0.012f
 
 nx_les = 64
 ny_les = 64
@@ -87,7 +87,7 @@ ispath(outdir) || mkpath(outdir)
     tlims = (0f, tsim),
     Δt,
     processors = (;
-        log = timelogger(; nupdate = 100),
+        log = timelogger(; nupdate = 10),
         fields = fieldsaver(; setup, nupdate = 100),  # by calling this BEFORE qoisaver, we also save the field at t=0!
         qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
     ),
