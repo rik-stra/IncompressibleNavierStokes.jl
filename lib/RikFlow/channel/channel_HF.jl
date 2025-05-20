@@ -80,7 +80,7 @@ qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
         ["Z",13,17],["E", 13, 17]];
 ArrayType = CuArray
 
-ustart = ArrayType(load(@__DIR__()*"/output/u_start_512_512_265_tspin10.0.jld2", "u_start"));
+ustart = ArrayType(load(@__DIR__()*"/output/u_start_512_512_256_tspin10.0.jld2", "u_start"));
 
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
