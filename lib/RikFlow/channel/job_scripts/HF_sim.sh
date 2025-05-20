@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -J HFsim
-#SBATCH -t 60:00
+#SBATCH -t 120:00
 #SBATCH --partition=gpu_h100
 #SBATCH --gpus=1
 

@@ -32,10 +32,10 @@ zlims = 0f, 4f / 3f * pi
 
 tsim = 10f
 # Grid
-nx = 256      #-> highest wave number 128/4pi = 10.2
-ny = 256      #-> highest wave number 128/2 = 64
-nz = 128      #-> highest wave number 64/(4/3*pi) = 15.3
-Δt = 0.001f
+nx = 512      #-> highest wave number 128/4pi = 10.2
+ny = 512      #-> highest wave number 128/2 = 64
+nz = 256      #-> highest wave number 64/(4/3*pi) = 15.3
+Δt = 0.0005f
 
 nx_les = 64
 ny_les = 64
@@ -90,7 +90,7 @@ to_setup_les =
     mirror_y = true,);
 
 #determine checkpoints
-n_checkpoints = 3
+n_checkpoints = 1
 nt = round(Int, tsim / Δt)
 checkpoints= 0:round(nt/(n_checkpoints+1)):nt
 checkpoints = checkpoints[2:end-1]
@@ -113,9 +113,9 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
             setup,
             [les_setup,],
             (FaceAverage(),),
-            [4,],
+            [8,],
             [to_setup_les,];
-            nupdate = 1,
+            nupdate = 2,
             n_plot = 1000,
             checkpoints,
             checkpoint_name = checkpoints_dir,
@@ -126,7 +126,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 );
 close_amgx(amgx_objects)
 # Save filtered DNS data
-filename = "$outdir/HF_channel_6qoi_mirror_1framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/HF_channel_6qoi_mirror_2framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 jldsave(filename; outputs.f)
 
 exit()

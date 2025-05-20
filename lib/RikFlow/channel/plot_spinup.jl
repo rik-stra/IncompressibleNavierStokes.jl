@@ -9,9 +9,9 @@ xlims = 0, 4 * pi
 ylims = 0, 2
 zlims = 0, 4 / 3 * pi
 # Grid
-nx = 256 
-ny = 256 
-nz = 128 
+nx = 512 
+ny = 512 
+nz = 256 
 kwargs = (;
     boundary_conditions = (
         (PeriodicBC(), PeriodicBC()),
@@ -29,7 +29,7 @@ setup = Setup(;
     kwargs...,
 );
 
-u_start = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start");
+u_start = load(@__DIR__()*"/output/u_start_512_512_256_tspin10.0.jld2", "u_start");
 u_ave = mean(u_start[:,:,:,1], dims=3)
 y_ax = setup.grid.xu[1][2]
 x_ax = setup.grid.xu[1][1]
