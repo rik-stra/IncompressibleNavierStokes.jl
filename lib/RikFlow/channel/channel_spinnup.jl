@@ -31,7 +31,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f  # 10f
+tsim = 0.1f  # 10f
 # Grid
 nx = 512
 ny = 512
@@ -92,6 +92,7 @@ ustart = velocityfield(setup, ustartfunc; psolver);
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup,
+    Δt = 0.0005f,
     ustart,
     docopy = false,
     tlims = (0f, tsim),
@@ -112,12 +113,12 @@ ustart = velocityfield(setup, ustartfunc; psolver);
 outdir = @__DIR__()*"/output"
 ispath(outdir) || mkpath(outdir)
 
-filename = "$outdir/u_start_$(nx)_$(ny)_$(nz)_tspin$(tsim).jld2"
+filename = "$outdir/u_start_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).jld2"
 u_start = u |> Array;
 jldsave(filename; u_start);
 
 # Plot
-save(outdir*"/ehist_spinup_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
+save(outdir*"/ehist_spinup_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
 
 # a = load(filename, "u_start")
 # heatmap(a[10,:,:,3])

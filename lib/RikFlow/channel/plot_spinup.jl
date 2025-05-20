@@ -3,6 +3,7 @@ using CairoMakie
 using JLD2
 using LinearAlgebra
 using Statistics
+using CUDA
 
 # Domain
 xlims = 0, 4 * pi
@@ -54,7 +55,7 @@ display(fig)
 save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
 
 # plot coarse spectrum
-ustart = Array(load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2")["results"].data[1].u[1]);
+ustart = Array(load(@__DIR__()*"/output/checkpoint_n10000.jld2")["results"].data[1].u[1]);
 # Grid
 nx = 64 
 ny = 64 
@@ -87,7 +88,11 @@ display(f)
 save(@__DIR__()*"/output/figs/u_start_coarse.png", f)
 
 # compute energy/enstrophy
-ArrayType = CuArray
+using CUDA
+using IncompressibleNavierStokes
+using RikFlow
+using FFTW
+ArrayType = Array
 qois = [["Z",0,100],["E", 0, 100]];
 TO_setup = RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
@@ -95,7 +100,7 @@ TO_setup = RikFlow.TO_Setup(; qois,
     setup = setup,
     mirror_y = true,);
 
-u_hat,u = RikFlow.get_u_hat(ustart, setup, TO_setup);
+u_hat = RikFlow.get_u_hat(ustart, setup, TO_setup);
 w_hat = RikFlow.get_w_hat_from_u_hat(ArrayType(u_hat), TO_setup);
 E = RikFlow.compute_QoI(ArrayType(u_hat), w_hat, TO_setup, setup)
 w = real(ifft(w_hat, [1,2,3]));
@@ -108,7 +113,7 @@ TO_setup = RikFlow.TO_Setup(; qois,
     setup = setup,
     mirror_y = false,);
 
-u_hat,u = RikFlow.get_u_hat(ustart, setup, TO_setup);
+u_hat = RikFlow.get_u_hat(ustart, setup, TO_setup);
 w_hat = RikFlow.get_w_hat_from_u_hat(ArrayType(u_hat), TO_setup);
 E = RikFlow.compute_QoI(ArrayType(u_hat), w_hat, TO_setup, setup)
 w = real(ifft(w_hat, [1,2,3]));
@@ -136,13 +141,32 @@ save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png",
 
 
 
-
+# Grid
+nx = 512 
+ny = 512 
+nz = 256 
+kwargs = (;
+    boundary_conditions = (
+        (PeriodicBC(), PeriodicBC()),
+        (DirichletBC(), DirichletBC()),
+        (PeriodicBC(), PeriodicBC()),
+    ),
+    Re = 180.0,
+)
+setup = Setup(;
+    x = (
+        range(xlims..., nx + 1),
+        range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
+        range(zlims..., nz + 1)
+    ),
+    kwargs...,
+);
 
 
 # mean flow profile
 u_ave = mean(u_start[:,:,:,1], dims=[1,3])
 u_ave = reshape(u_ave, :)
-u_ave = (u_ave[1:128] + u_ave[129:256][end:-1:1])/2
+u_ave = (u_ave[1:256] + u_ave[257:512][end:-1:1])/2
 
 yp = setup.grid.xu[1][2][2:Int(end//2)]*180
 f = hlines([18.42, 18.25], color=:red) # centerline values from Vreman
