@@ -87,7 +87,7 @@ setup = Setup(;
 # end
 
 # ustart = velocityfield(setup, ustartfunc; psolver);
-
+ArrayType = CuArray
 ustart = ArrayType(load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start"));
 
 @info "Solving DNS"
