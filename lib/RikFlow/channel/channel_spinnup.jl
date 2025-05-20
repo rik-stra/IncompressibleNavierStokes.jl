@@ -31,7 +31,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 0.1f  # 10f
+tsim = 10f  # 10f
 # Grid
 nx = 512
 ny = 512
@@ -97,11 +97,11 @@ ustart = velocityfield(setup, ustartfunc; psolver);
     tlims = (0f, tsim),
     
     processors = (;
-        log = timelogger(; nupdate = 1),
+        log = timelogger(; nupdate = 100),
         ehist = realtimeplotter(;
                 setup,
                 plot = energy_history_plot,
-                nupdate = 10,
+                nupdate = 100,
                 displayupdates = false,
                 displayfig = false,
             ),
