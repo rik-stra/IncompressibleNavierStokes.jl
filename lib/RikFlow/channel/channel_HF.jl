@@ -72,8 +72,8 @@ les_setup = Setup(;
 );
 @info "Grid size HF: $(nx) x $(ny) x $(nz)"
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
-amgx_objects = amgx_setup();
-psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
+#amgx_objects = amgx_setup();
+psolver = psolver_transform(setup);
 
 #qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
