@@ -30,7 +30,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
+tsim = 2f
 # Grid
 nx = 512      #-> highest wave number 128/4pi = 10.2
 ny = 512      #-> highest wave number 128/2 = 64
@@ -80,7 +80,7 @@ qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
         ["Z",13,17],["E", 13, 17]];
 ArrayType = CuArray
 
-ustart = ArrayType(load(@__DIR__()*"/output/u_start_512_512_256_tspin10.0.jld2", "u_start"));
+ustart = ArrayType(load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start"));
 
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
@@ -124,10 +124,11 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
     ),
     psolver,
 );
-close_amgx(amgx_objects)
+
 # Save filtered DNS data
 filename = "$outdir/HF_channel_6qoi_mirror_2framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
-jldsave(filename; outputs.f)
+u_final = u |> Array
+jldsave(filename; outputs.f, u_final)
 
 exit()
 
