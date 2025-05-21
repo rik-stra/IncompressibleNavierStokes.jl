@@ -121,14 +121,15 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
             checkpoint_name = checkpoints_dir,
         ),
         log = timelogger(; nupdate = 100),
+        fields = fieldsaver(; nupdate = round(Int,nt/4), setup),
     ),
     psolver,
 );
 
 # Save filtered DNS data
 filename = "$outdir/HF_channel_6qoi_mirror_2framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
-u_final = u |> Array
-jldsave(filename; outputs.f, u_final)
+
+jldsave(filename; outputs.f, outputs.fields)
 
 exit()
 
