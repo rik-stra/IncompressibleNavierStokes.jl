@@ -30,7 +30,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim =0.2f
+tsim =20f
 # Grid
 nx = 512      #-> highest wave number 128/4pi = 10.2
 ny = 512      #-> highest wave number 128/2 = 64
