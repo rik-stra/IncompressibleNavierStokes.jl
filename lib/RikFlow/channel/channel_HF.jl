@@ -30,7 +30,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 0.7f
+tsim =0.2f
 # Grid
 nx = 512      #-> highest wave number 128/4pi = 10.2
 ny = 512      #-> highest wave number 128/2 = 64
@@ -80,7 +80,7 @@ qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
         ["Z",13,17],["E", 13, 17]];
 ArrayType = CuArray
 
-ustart = ArrayType(load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start"));
+ustart = ArrayType(load(@__DIR__()*"/output/HF/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start").u);
 
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
@@ -116,20 +116,24 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
             [8,],
             [to_setup_les,];
             nupdate = 2,
-            n_plot = 1000,
+            n_plot = 2000,
             checkpoints,
             checkpoint_name = checkpoints_dir,
         ),
-        log = timelogger(; nupdate = 100),
-        fields = fieldsaver(; nupdate = round(Int,nt/4), setup),
-    ),
+        log = timelogger(; nupdate = 400),
+        fields = fieldsaver(; nupdate = round(Int,nt/3), setup),  # 1.6 GB per snapshot!
+        ),
     psolver,
 );
 
-# Save filtered DNS data
-filename = "$outdir/HF_channel_6qoi_mirror_2framerate_new_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+# #save Plot
+# save(outdir*"/ehist_HF_cont_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
 
-jldsave(filename; outputs.f, outputs.fields)
+# Save filtered DNS data
+filename = "$outdir/HF_channel_6qoi_mirror_2framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+
+jldsave(filename; outputs.f)
+#jldsave(filename; outputs.f, outputs.fields)
 
 exit()
 
@@ -143,6 +147,37 @@ u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
 
 using CairoMakie
 using Statistics
+using LinearAlgebra
+
+ustart = ArrayType(load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start"));
+heatmap(Array(ustart[:,:,3,1]))
+D = divergence(ustart, setup)
+maximum(D)
+heatmap(Array(D[:,:,3,1]))
+total_kinetic_energy(ustart, setup)
+
+ustart = ArrayType(load(@__DIR__()*"/output/u_start_512_512_256_tspin10.0.jld2", "u_start"));
+heatmap(Array(ustart[:,:,3,1]))
+D = divergence(ustart, setup)
+maximum(D)
+heatmap(Array(D[:,:,3,1]))
+total_kinetic_energy(ustart, setup)
+
+setup = Setup(;
+    x = (
+        range(xlims..., 256 + 1),
+        range(ylims..., 256 + 1), # tanh_grid(ylims..., ny + 1),
+        range(zlims..., 128 + 1)
+    ),
+    kwargs...,
+);
+ustart = ArrayType(load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start"));
+heatmap(Array(ustart[:,:,3,1]))
+D = divergence(ustart, setup)
+maximum(D)
+heatmap(Array(D[:,:,3,1]))
+total_kinetic_energy(ustart, setup)
+
 zlims
 mean(Array(setup.grid.xu[1][3][7:8]))
 Array(les_setup.grid.xu[1][3])

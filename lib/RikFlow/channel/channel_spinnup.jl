@@ -66,29 +66,29 @@ setup = Setup(;
 
 @info "factorize psolver done"
 
-# Re_tau = 180f
-# Re_m = 2800f
-# Re_ratio = Re_m / Re_tau
+Re_tau = 180f
+Re_m = 2800f
+Re_ratio = Re_m / Re_tau
 
-# ustartfunc = let
-#     Lx = xlims[2] - xlims[1]
-#     Ly = ylims[2] - ylims[1]
-#     Lz = zlims[2] - zlims[1]
-#     C = 9f / 8 * Re_ratio
-#     E = 1f / 10 * Re_ratio # 10% of average mean velocity
-#     function icfunc(dim, x, y, z)
-#         ux =
-#             C * (1 - (y - Ly / 2)^8) +
-#             E * Lx / 2 * sinpi(y) * cospi(4 * x / Lx) * sinpi(2 * z / Lz)
-#         uy = -E * (1 - cospi(y)) * sinpi(4 * x / Lx) * sinpi(2 * z / Lz)
-#         uz = -E * Lz / 2 * sinpi(4 * x / Lx) * sinpi(y) * cospi(2 * z / Lz)
-#         (dim == 1) * ux + (dim == 2) * uy + (dim == 3) * uz
-#     end
-# end
+ustartfunc = let
+    Lx = xlims[2] - xlims[1]
+    Ly = ylims[2] - ylims[1]
+    Lz = zlims[2] - zlims[1]
+    C = 9f / 8 * Re_ratio
+    E = 1f / 10 * Re_ratio # 10% of average mean velocity
+    function icfunc(dim, x, y, z)
+        ux =
+            C * (1 - (y - Ly / 2)^8) +
+            E * Lx / 2 * sinpi(y) * cospi(4 * x / Lx) * sinpi(2 * z / Lz)
+        uy = -E * (1 - cospi(y)) * sinpi(4 * x / Lx) * sinpi(2 * z / Lz)
+        uz = -E * Lz / 2 * sinpi(4 * x / Lx) * sinpi(y) * cospi(2 * z / Lz)
+        (dim == 1) * ux + (dim == 2) * uy + (dim == 3) * uz
+    end
+end
 
-# ustart = velocityfield(setup, ustartfunc; psolver);
+ustart = velocityfield(setup, ustartfunc; psolver);
 ArrayType = CuArray
-ustart = ArrayType(load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start"));
+#ustart = ArrayType(load(@__DIR__()*"/output/u_start_cont_constdt_128_128_64_tspin10.0.jld2", "fields")[3].u);
 
 @info "Solving DNS"
 # Solve DNS and store filtered quantities
@@ -101,6 +101,7 @@ ustart = ArrayType(load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.
     
     processors = (;
         log = timelogger(; nupdate = 100),
+        #fields = fieldsaver(; nupdate = 1000, setup),
         ehist = realtimeplotter(;
                 setup,
                 plot = energy_history_plot,
@@ -118,6 +119,8 @@ ispath(outdir) || mkpath(outdir)
 filename = "$outdir/u_start_cont_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).jld2"
 u_start = u |> Array;
 jldsave(filename; u_start);
+#fields = outputs.fields |> Array;
+#jldsave(filename; u_start, fields);
 
 # Plot
 save(outdir*"/ehist_spinup_cont_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)

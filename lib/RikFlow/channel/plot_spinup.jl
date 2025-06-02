@@ -30,7 +30,7 @@ setup = Setup(;
     kwargs...,
 );
 
-u_start = load(@__DIR__()*"/output/u_start_512_512_256_tspin10.0.jld2", "u_start");
+u_start = load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start");
 u_ave = mean(u_start[:,:,:,1], dims=3)
 y_ax = setup.grid.xu[1][2]
 x_ax = setup.grid.xu[1][1]
