@@ -30,7 +30,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim =20f
+tsim =0.02f
 # Grid
 nx = 512      #-> highest wave number 128/4pi = 10.2
 ny = 512      #-> highest wave number 128/2 = 64
@@ -90,7 +90,7 @@ to_setup_les =
     mirror_y = true,);
 
 #determine checkpoints
-n_checkpoints = 1
+n_checkpoints = 0
 nt = round(Int, tsim / Δt)
 checkpoints= 0:round(nt/(n_checkpoints+1)):nt
 checkpoints = checkpoints[2:end-1]
@@ -133,6 +133,12 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 filename = "$outdir/HF_channel_6qoi_mirror_2framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 
 jldsave(filename; outputs.f)
+
+# save final field
+filename = "$outdir/u_start_T15_$(nx)_$(ny)_$(nz).jld2"
+u_start = u |> Array;
+jldsave(filename; u_start);
+
 #jldsave(filename; outputs.f, outputs.fields)
 
 exit()
