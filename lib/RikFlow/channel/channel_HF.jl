@@ -30,7 +30,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 5f
+tsim = 15f
 # Grid
 nx = 512      #-> highest wave number 128/4pi = 10.2
 ny = 512      #-> highest wave number 128/2 = 64
@@ -76,11 +76,11 @@ les_setup = Setup(;
 psolver = psolver_transform(setup);
 
 #qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
+        ["Z",11,17],["E", 11, 17]];
 ArrayType = CuArray
 
-ustart = ArrayType(load(@__DIR__()*"/output/HF/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start"));
+ustart = ArrayType(load(@__DIR__()*"/output/u_start_T15_512_512_256.jld2", "u_start"));
 
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
@@ -130,14 +130,14 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 # save(outdir*"/ehist_HF_cont_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
 
 # Save filtered DNS data
-filename = "$outdir/HF_channel_6qoi_mirror_2framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
+filename = "$outdir/HF_channel_6qoinew_mirror_2framerate_$(nx)_$(ny)_$(nz)_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
 
 jldsave(filename; outputs.f)
 
 # save final field
-filename = "$outdir/u_start_T15_$(nx)_$(ny)_$(nz).jld2"
-u_start = u |> Array;
-jldsave(filename; u_start);
+#filename = "$outdir/u_start_T15_$(nx)_$(ny)_$(nz).jld2"
+#u_start = u |> Array;
+#jldsave(filename; u_start);
 
 #jldsave(filename; outputs.f, outputs.fields)
 
