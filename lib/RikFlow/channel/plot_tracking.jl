@@ -291,11 +291,11 @@ plot_xflow(u_fields)
 
 ##### PLOT energy / enstrophy density
 
-u_start = load(@__DIR__()*"/output/HF_channel_mirror_1framerate_256_256_128_to_64_64_32_tsim10.0.jld2", "f").data[1].u[1];
-heatmap(u_start[:,:,20,3])
+u_start = load(@__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_T15_T30_512_512_256_to_64_64_32.jld2", "u")[10];
+heatmap(u_start[:,2,:,3])
 
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
+        ["Z",11,17],["E", 11, 17]];
 to_setup = 
         RikFlow.TO_Setup(; qois, 
         to_mode = :TRACK_REF, 
@@ -310,17 +310,38 @@ qd = RikFlow.compute_filtered_qoi_fields(u_hat, w_hat, to_setup, setup);
 
 let
 g = Figure(size = (800, 700));
+axs = [Axis(g[i ÷ 2, i%2][1,1], 
+        title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+    for i in 0:size(qois, 1)-1]
+
+for i in 1:size(qois, 1)
+    hm = heatmap!(axs[i], sum(abs2,real(ifft(qd[i],[1,2,3])),dims = 4)[:,1:Int(end/2),5])
+    #hm = heatmap!(axs[i], real(ifft(qd[i],[1,2,3]))[:,4,:,1])
+    Colorbar(g[(i-1) ÷ 2, (i-1)%2][1,2],hm)
+end
+display(g)
+end
+
+
+let
+g = Figure(size = (800, 700));
 axs = [Axis(g[i ÷ 2, i%2], 
         title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
     for i in 0:size(qois, 1)-1]
 
 for i in 1:size(qois, 1)
-    heatmap!(axs[i], sum(abs2,real(ifft(qd[i],[1,2,3])),dims = 4)[:,1:Int(end/2),30])
+    heatmap!(axs[i], qd[i][:,:,2])
 end
 display(g)
 end
 
 
 
+
+
 heatmap(sum(abs2,real(ifft(qd[4],[1,2,3])),dims = 4)[:,:,20])
 
+a = 3 - 5im 
+
+a*a
+a*conj(a)

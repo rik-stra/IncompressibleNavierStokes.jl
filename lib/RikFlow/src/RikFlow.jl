@@ -132,6 +132,11 @@ function get_masks_and_partials(QoIs, setup, ArrayType, mirror_y)
         end
     end
     masks_list = ArrayType.(masks_list)
+    #set nyquist frequency to 0
+    iseven(size(k,1)) && (k[Int(end/2)+1] = 0)
+    iseven(size(l,1)) && (l[Int(end/2)+1] = 0)
+    iseven(size(m,1)) && (m[Int(end/2)+1] = 0)
+
     ∂ = [convert(T,2*pi).*reshape(k,(:,1,1))*1im,
     convert(T,2*pi).*reshape(l,(1,:,1))*1im,
     convert(T,2*pi).*reshape(m,(1,1,:))*1im]
@@ -153,6 +158,11 @@ function curl(x, to_setup)
             ∂[3].*x[:,:,:,1] .- ∂[1].*x[:,:,:,3],
             ∂[1].*x[:,:,:,2] .- ∂[2].*x[:,:,:,1],
         ),
+        # (
+        #     ∂[2].*x[:,:,:,2] ,
+        #     zeros(eltype(x), size(x,1), size(x,2), size(x,3)), # zero in y direction
+        #     zeros(eltype(x), size(x,1), size(x,2), size(x,3)) # zero in z direction
+        # ),
         dims = 4
     )
 end
@@ -203,11 +213,10 @@ function compute_filtered_qoi_fields(u_hat, w_hat, to_setup, setup)
 
     for i in 1:to_setup.N_qois
         if to_setup.qois[i][1] == "E"
-            
-            push!(qs, u_hat.*to_setup.masks[i]*(prod(L)/(2*prod(N[1:D])^2)))
+            push!(qs, u_hat.*to_setup.masks[i])
         elseif to_setup.qois[i][1] == "Z"
             
-            push!(qs, w_hat.*to_setup.masks[i]*(prod(L)/(prod(N[1:D])^2)))
+            push!(qs, w_hat.*to_setup.masks[i])
         else
             error("QoI not recognized")
         end 

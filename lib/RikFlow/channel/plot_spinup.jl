@@ -30,16 +30,21 @@ setup = Setup(;
     kwargs...,
 );
 
-u_start = load(@__DIR__()*"/output/u_start_constdt_512_512_256_tspin10.0.jld2", "u_start");
+u_start = load(@__DIR__()*"/output/HF/u_start_T15_512_512_256.jld2", "u_start");
 u_ave = mean(u_start[:,:,:,1], dims=3)
 y_ax = setup.grid.xu[1][2]
 x_ax = setup.grid.xu[1][1]
 
-f = Figure(size = (900, 200))
-ax1 = Axis(f[1, 1], aspect = DataAspect())
-heatmap!(ax1,x_ax, y_ax,u_start[:,:,20,1])
+let
+f = Figure(size = (900, 200));
+ax1 = Axis(f[1, 1], aspect = DataAspect(), xlabel = "x", ylabel = "y")
+heatmap!(ax1,x_ax[1:end-2], y_ax, (u_start[1:end-2,:,1,1]+ u_start[1:end-2,:,2,1])/2)
+#contourf!(ax1,x_ax[1:end-2], y_ax, (u_start[1:end-2,:,1,1]+ u_start[1:end-2,:,2,1])/2, levels=20)
 display(f)
-save(@__DIR__()*"/output/figs/u_start.png", f)
+name = @__DIR__()*"/output/figs/u_start.png"
+save(name, f)
+run(`magick $name -trim $name`)
+end
 
 # plot spectrum
 scales = get_scale_numbers(u_start, setup)
@@ -55,7 +60,7 @@ display(fig)
 save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
 
 # plot coarse spectrum
-ustart = Array(load(@__DIR__()*"/output/checkpoint_n10000.jld2")["results"].data[1].u[1]);
+ustart = Array(load(@__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_T15_T30_512_512_256_to_64_64_32.jld2")["u"][1]);
 # Grid
 nx = 64 
 ny = 64 
@@ -81,11 +86,18 @@ u_ave = mean(ustart[:,:,:,1], dims=3)
 y_ax = setup.grid.xu[1][2]
 x_ax = setup.grid.xu[1][1]
 
-f = Figure(size = (900, 200))
-ax1 = Axis(f[1, 1], aspect = DataAspect())
-heatmap!(ax1,x_ax, y_ax,ustart[:,:,20,1])
+let
+f = Figure(size = (900, 200));
+ax1 = Axis(f[1, 1], aspect = DataAspect(), xlabel = "x", ylabel = "y")
+heatmap!(ax1,x_ax[1:end-2], y_ax, (ustart[1:end-2,:,1,1] + ustart[1:end-2,:,1,1])/2)
+#contourf!(ax1,x_ax[1:end-2], y_ax, (ustart[1:end-2,:,1,1] + ustart[1:end-2,:,1,1])/2, levels=20)
 display(f)
-save(@__DIR__()*"/output/figs/u_start_coarse.png", f)
+name = @__DIR__()*"/output/figs/u_start_coarse.png"
+save(name, f)
+run(`magick $name -trim $name`)
+end
+
+
 
 # compute energy/enstrophy
 using CUDA
