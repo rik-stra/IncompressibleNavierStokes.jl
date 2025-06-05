@@ -32,8 +32,11 @@ y_ax = setup.grid.xu[1][2]
 x_ax = setup.grid.xu[1][1]
 
 #u = Array(load(@__DIR__()*"/output/HF_channel_6qoi_mirror_2framerate_new_128_128_64_to_64_64_32_tsim20.0.jld2")["f"].data[1].u[:]);
-u = Array(load(@__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_T15_T30_512_512_256_to_64_64_32.jld2")["u"]);
+u = Array(load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[:]);
 #u = Array(load(@__DIR__()*"/output/checkpoint_n10000.jld2")["results"].data[1].u[:]);
+
+u_ave = mean(stack(u[2:11])[1:end-2, 2:end-1, 1:end-2, 1, :])
+
 
 for t in 1:size(u,1)
     f = Figure(size = (900, 200));
@@ -80,46 +83,13 @@ xlims!(ax1, 0.1, 180)
 
 display(f)
 
-# q = stack(load(@__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_512_512_256_to_64_64_32_tsim20.0.jld2")["f"].data[1].qoi_hist)
 
-# file = load(@__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_512_512_256_to_64_64_32_tsim20.0.jld2")
-# us_new = file["f"].data[1].u[6:end]
-# qs_new = file["f"].data[1].qoi_hist[5001:end]
-# file_name_new = @__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_T15_T30_512_512_256_to_64_64_32.jld2"
-# jldsave(file_name_new; u = us_new, qoi_hist = qs_new)
 
 let
-q = stack(load(@__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_T15_T30_512_512_256_to_64_64_32.jld2")["qoi_hist"])
-#q2 = stack(load(@__DIR__()*"/output/HF/HF_channel_6qoi_mirror_2framerate_512_512_256_to_64_64_32_tsim5.0.jld2")["f"].data[1].qoi_hist)
+q = stack(load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].qoi_hist)
 qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
         ["Z",13,17],["E", 13, 17]];
 time_index = 0:0.001:15
-#time_index2 = 0:0.001:5
-#let
-g = Figure(size = (800, 700));
-
-axs = [Axis(g[i ÷ 2, i%2], 
-        title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
-    for i in 0:size(q, 1)-1]
-
-for i in 1:size(q, 1)
-
-    lines!(axs[i],time_index, q[i,:])
-    #lines!(axs[i],time_index2, q2[i,:], linestyle=:dash ,color = :red)
-
-    #ylims!(axs[i],(0, maximum(q_ref[i,:])*2)) 
-end
-#Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(linreg_params.tracking_noise[1]), $\eta =$ %$(linreg_params.model_noise_str[1]), hist $=$ %$(linreg_params.hist_len[1]), $\lambda =$ %$(linreg_params.lambda[1])", fontsize = 20)
-
-display(g)
-end
-
-
-let
-q = stack(load(@__DIR__()*"/output/checkpoint_n10000.jld2")["results"].data[1].qoi_hist)
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
-time_index = 0:0.001:5
 #let
 g = Figure(size = (800, 700));
 
@@ -139,77 +109,3 @@ end
 display(g)
 end
 
-
-
-
-let
-q = stack(load(@__DIR__()*"/output/HF_channel_6qoi_mirror_2framerate_512_512_256_to_64_64_32_tsim2.0.jld2")["f"].data[1].qoi_hist)
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
-time_index = 0:0.001:2
-#let
-g = Figure(size = (800, 700));
-
-axs = [Axis(g[i ÷ 2, i%2], 
-        title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
-    for i in 0:size(q, 1)-1]
-
-for i in 1:size(q, 1)
-    
-            
-    lines!(axs[i],time_index, q[i,:])
-
-    #ylims!(axs[i],(0, maximum(q_ref[i,:])*2)) 
-end
-#Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(linreg_params.tracking_noise[1]), $\eta =$ %$(linreg_params.model_noise_str[1]), hist $=$ %$(linreg_params.hist_len[1]), $\lambda =$ %$(linreg_params.lambda[1])", fontsize = 20)
-
-display(g)
-end
-
-let
-q = stack(load(@__DIR__()*"/output/HF_channel_6qoi_mirror_1framerate_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist)
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
-time_index = 0:0.001:10
-#let
-g = Figure(size = (800, 700));
-
-axs = [Axis(g[i ÷ 2, i%2], 
-        title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
-    for i in 0:size(q, 1)-1]
-
-for i in 1:size(q, 1)
-    
-            
-    lines!(axs[i],time_index, q[i,:])
-
-    #ylims!(axs[i],(0, maximum(q_ref[i,:])*2)) 
-end
-#Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(linreg_params.tracking_noise[1]), $\eta =$ %$(linreg_params.model_noise_str[1]), hist $=$ %$(linreg_params.hist_len[1]), $\lambda =$ %$(linreg_params.lambda[1])", fontsize = 20)
-
-display(g)
-end
-
-let
-q = stack(load(@__DIR__()*"/output/HF_channel_6qoi_mirror_2framerate_new_128_128_64_to_64_64_32_tsim20.0.jld2")["f"].data[1].qoi_hist)
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
-time_index = 0:0.004:20
-#let
-g = Figure(size = (800, 700));
-
-axs = [Axis(g[i ÷ 2, i%2], 
-        title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
-    for i in 0:size(q, 1)-1]
-
-for i in 1:size(q, 1)
-    
-            
-    lines!(axs[i],time_index, q[i,:])
-
-    #ylims!(axs[i],(0, maximum(q_ref[i,:])*2)) 
-end
-#Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(linreg_params.tracking_noise[1]), $\eta =$ %$(linreg_params.model_noise_str[1]), hist $=$ %$(linreg_params.hist_len[1]), $\lambda =$ %$(linreg_params.lambda[1])", fontsize = 20)
-
-display(g)
-end

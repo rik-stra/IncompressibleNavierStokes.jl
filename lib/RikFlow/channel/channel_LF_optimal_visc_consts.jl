@@ -60,8 +60,48 @@ psolver = psolver_transform(setup);
 target_u_ave = 15.647
 
 
-    c = 0.52
-    println("c: $c, upper_u_ave: $upper_u_ave, lower_u_ave: $lower_u_ave")
+
+c_s = 0.1:0.005:0.2
+u_aves_smag = []
+
+for c in c_s
+    @info "c: $c"
+
+    hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+    ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
+
+    @info "Solving LES"
+    # Solve DNS and store filtered quantities
+    (; u, t), outputs = solve_unsteady(;
+        # setup,
+        setup = (; setup..., closure_model = IncompressibleNavierStokes.smagorinsky_closure),
+        θ = T(c), 
+        ustart,
+        tlims = (0f, tsim),
+        Δt,
+        processors = (;
+            log = timelogger(; nupdate = 100),
+            fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+        ),
+        psolver,
+    );
+
+    u_fields = outputs.fields[2:end];
+    us = stack(map(x -> x.u, u_fields));
+    u_ave = mean(us[1:end-2, 2:end-1, 1:end-2, 1, :])
+
+    push!(u_aves_smag, u_ave)
+
+end
+
+filename = @__DIR__()*"/output/smag/optimize_smag.jld2"
+jldsave(filename; c_s , u_aves_smag)
+
+c_w = 0.5:0.005:0.54
+u_aves_WALE = []
+
+for c in c_w
+    @info "c: $c"
 
     hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
     ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
@@ -82,39 +122,19 @@ target_u_ave = 15.647
         psolver,
     );
 
-    #close_amgx(amgx_objects)
     u_fields = outputs.fields[2:end];
     us = stack(map(x -> x.u, u_fields));
     u_ave = mean(us[1:end-2, 2:end-1, 1:end-2, 1, :])
+
+    push!(u_aves_WALE, u_ave)
+
+end
+
+filename = @__DIR__()*"/output/WALE/optimize_WALE.jld2"
+jldsave(filename; c_w, u_aves_WALE)
 
 
 # u_ave target   15.647
 # theta = 0.5 -> u_ave 15.622711
 # theta = 0.6 -> u_ave 15.774
 
-using CairoMakie
-fig = Figure(size = (600, 400))
-ax = Axis(fig[1, 1])
-scatter!(c_s, u_aves)
-lines!([0.51, 0.6], [15.647, 15.647], color = :red, linewidth = 2)
-display(fig)
-
-# Save filtered DNS data
-filename = "$outdir/LF_wale_mirror_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
-jldsave(filename; outputs.fields, outputs.qoihist)
-
-exit()
-
-a = load(filename)
-keys(a["f"].data[1])
-a["f"].data[1].qoi_hist
-
-# u_start low fidelity
-u_lf = a["f"].data[1].u[1]
-u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
-
-using CairoMakie
-heatmap(u_lf[:,:,1,1])
-heatmap(u_hf[:,:,1,1])
-
-total_kinetic_energy(ArrayType(u_hf), setup)

@@ -8,14 +8,14 @@ end
 using IncompressibleNavierStokes
 #using CairoMakie
 using CUDA
-using CUDSS
-using AMGX
+#using CUDSS
+#using AMGX
 using RikFlow
 using JLD2
 
 
 # Precision
-T = Float32
+T = Float64
 f = one(T)
 
 # Domain
@@ -24,8 +24,8 @@ ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
 tsim = 10f
-Δts = [0.01f, 0.005f, 0.004f, 0.002f, 0.001f]
-
+Δts = [0.005f]
+hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
 nx_les = 64
 ny_les = 64
 nz_les = 32
@@ -53,18 +53,16 @@ setup = Setup(;
 );
 
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
-#amgx_objects = amgx_setup();
-#psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
-psolver = default_psolver(setup)
 
-#qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
+psolver = psolver_transform(setup)
+
+
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
+        ["Z",11,17],["E", 11, 17]];
 
 for Δt in Δts
-    ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
-    #qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
-    qoi_ref = stack(load(@__DIR__()*"/output/HF_channel_6qoi_mirror_1framerate_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].qoi_hist);
+    ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
+    qoi_ref = stack(load(hf_file)["f"].data[1].qoi_hist[1:10001]);
     sample_rate = Int(Δt/0.001)
     qoi_ref = qoi_ref[:,1:sample_rate:end]
     ref_reader = Reference_reader(qoi_ref);
@@ -101,7 +99,6 @@ for Δt in Δts
         psolver,
     );
 
-    #close_amgx(amgx_objects)
     q = stack(outputs.qoihist)
     dQ = to_setup_les.outputs.dQ
     tau = to_setup_les.outputs.tau
@@ -110,9 +107,10 @@ for Δt in Δts
     data_train = (;dQ, tau, q, q_star, fields)
 
     # Save filtered DNS data
-    filename = "$outdir/LF_6qoi_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_dt$(Δt)_tsim$(tsim).jld2"
+    filename = "$outdir/track/LF_6qoinew_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_dt$(Δt)_tsim$(tsim).jld2"
     jldsave(filename; data_train)
 end
+
 exit()
 q = stack(outputs.qoihist)
 a = load(filename)
