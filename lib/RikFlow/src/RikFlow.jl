@@ -13,12 +13,11 @@ using KernelAbstractions
 using Statistics
 using Distributions
 using Random
-
+using Adapt
 using MLUtils
 using Lux, LuxCUDA
 using Optimisers, Zygote
-const dev = gpu_device()
-const cpu = cpu_device()
+
 
 include("time_series_methods.jl")
 """
