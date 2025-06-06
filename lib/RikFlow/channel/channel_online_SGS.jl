@@ -6,20 +6,17 @@ if false
 end
 
 using IncompressibleNavierStokes
-#using CairoMakie
 using CUDA
-using CUDSS
-#using AMGX
 using RikFlow
 using JLD2
 using Random
 
-model_index = 2
+model_index = 3
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, n_replicas, hist_var,tracking_noise) = inputs[model_index]
 
 # Precision
-T = Float32
+T = Float64
 f = one(T)
 
 # Domain
@@ -27,8 +24,8 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 50f
-Δt = 0.01f
+tsim = 10f
+Δt = 0.005f
 
 nx_les = 64
 ny_les = 64
@@ -57,24 +54,23 @@ setup = Setup(;
 );
 
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
-#amgx_objects = amgx_setup();
-#psolver = psolver_cg_AMGX(setup; stuff=amgx_objects);
-psolver = default_psolver(setup)
 
-qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
-        ["Z",13,17],["E", 13, 17]];
+psolver = psolver_transform(setup);
 
-ustart = ArrayType(load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]);
-track_file = @__DIR__()*"/output/LF_6qoi_mirror_track_channel_to_64_64_32_dt0.01_tsim10.0.jld2"
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
+        ["Z",11,17],["E", 11, 17]];
+
+track_file = @__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.005_tsim10.0.jld2"
 data_track = load(track_file, "data_train");
+ustart = ArrayType(data_track.fields[1].u);
+
 dQ_data = data_track.dQ[:,1:100];
 
 nt = round(Int, tsim / Δt)
-outdir = @__DIR__() *"/output/online_mirror_6qoi/$(name)/"
-ispath(outdir) || mkpath(outdir)
+outdir = @__DIR__() *"/output/online_TOnew/$(name)/"
 
-for i in 1:n_replicas
-
+#for i in 1:n_replicas
+    i=1
     LinReg_file_name = outdir*"LinReg.jld2"
     if hist_len == 0
         q_hist = nothing
@@ -84,7 +80,7 @@ for i in 1:n_replicas
             q_hist = cat(q_hist, q_hist, dims=1)
         end
     end
-    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(i), q_hist = q_hist, spinnup_data = ArrayType{T}(dQ_data));
+    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(i), ArrayType, q_hist = q_hist, spinnup_data = ArrayType{T}(dQ_data));
     
 
     to_setup_les = 
@@ -101,44 +97,30 @@ for i in 1:n_replicas
     (; u, t), outputs = solve_unsteady(;
         setup,
         ustart,
-        docopy = false,
+        docopy = true,
         method = TOMethod(; to_setup = to_setup_les),
         tlims = (0f, tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 10),
-            fields = fieldsaver(; setup, nupdate = 100),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
+            log = timelogger(; nupdate = 200),
+            fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1e8),
         ),
         psolver,
     );
 
 
-    #close_amgx(amgx_objects)
     q = stack(outputs.qoihist)
     dQ = to_setup_les.outputs.dQ
     tau = to_setup_les.outputs.tau
     fields = outputs.fields
-    data_train = (;dQ, tau, q, fields)
+    data = (;dQ, tau, q, fields)
 
     # Save filtered DNS data
     filename = "$outdir/LF_online_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim)_repl_$(i).jld2"
-    jldsave(filename; data_train)
-end
-exit()
-q = stack(outputs.qoihist)
-a = load(filename)
-keys(a["f"].data[1])
-a["f"].data[1].qoi_hist
-
-# u_start low fidelity
-u_lf = a["f"].data[1].u[1]
-u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
+    jldsave(filename; data)
+#end
 
 using CairoMakie
-_, _, cb = heatmap(outputs.fields[1].u[:,:,16,1], colorrange = (-20, 20))
-
-heatmap(u_lf[:,:,1,1])
-heatmap(u_hf[:,:,64,1], colorrange = (-20, 20))
-
-total_kinetic_energy(ArrayType(u_hf), setup)
+q = stack(outputs.qoihist)
+lines(q[6,1:200])

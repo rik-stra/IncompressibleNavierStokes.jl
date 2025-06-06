@@ -6,13 +6,11 @@ if false
 end
 
 using IncompressibleNavierStokes
-#using CairoMakie
+
 using CUDA
-using CUDSS
-#using AMGX
 using RikFlow
 using JLD2
-using LoggingExtras
+
 
 
 # Precision
@@ -24,8 +22,8 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
-Δt = 0.01f
+tsim = 100f
+Δt = 0.005f
 
 nx_les = 64
 ny_les = 64
@@ -54,26 +52,20 @@ setup = Setup(;
 );
 
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
-#amgx_objects = amgx_setup();
-#psolver = default_psolver(setup);
 psolver = psolver_transform(setup);
 
-qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
+#qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
 
 
-ustart = ArrayType(convert.(T,load(@__DIR__()*"/output/HF_channel_mirror_256_256_128_to_64_64_32_tsim10.0.jld2")["f"].data[1].u[1]));
+hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 
-
-to_setup_les = 
-    RikFlow.TO_Setup(; qois, 
-    to_mode = :CREATE_REF, 
-    ArrayType, 
-    setup = setup,
-    mirror_y = true,);
-
-#determine checkpoints
-outdir = @__DIR__() *"/output"
-ispath(outdir) || mkpath(outdir)
+# to_setup_les = 
+#     RikFlow.TO_Setup(; qois, 
+#     to_mode = :CREATE_REF, 
+#     ArrayType, 
+#     setup = setup,
+#     mirror_y = true,);
 
 
 @info "Solving LES"
@@ -85,34 +77,15 @@ ispath(outdir) || mkpath(outdir)
     tlims = (0f, tsim),
     Δt,
     processors = (;
-        log = timelogger(; nupdate = 10),
-        fields = fieldsaver(; setup, nupdate = 100),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
+        log = timelogger(; nupdate = 200),
+        fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+        #qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
     ),
     psolver,
 );
 
-#close_amgx(amgx_objects)
-
-q = stack(outputs.qoihist)
-
-
-# Save filtered DNS data
-filename = "$outdir/LF_nomodel_mirror_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
-jldsave(filename; outputs.fields, outputs.qoihist)
+outdir = @__DIR__()*"/output"
+filename = "$outdir/LF_nomodel_mirror_channel_to_tsim$(tsim).jld2"
+jldsave(filename; outputs.fields)
 
 exit()
-
-a = load(filename)
-keys(a["f"].data[1])
-a["f"].data[1].qoi_hist
-
-# u_start low fidelity
-u_lf = a["f"].data[1].u[1]
-u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
-
-using CairoMakie
-heatmap(u_lf[:,:,1,1])
-heatmap(u_hf[:,:,1,1])
-
-total_kinetic_energy(ArrayType(u_hf), setup)

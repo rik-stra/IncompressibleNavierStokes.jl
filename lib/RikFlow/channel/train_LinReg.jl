@@ -10,10 +10,10 @@ using CairoMakie
 using Distributions
 using LinearAlgebra
 using RegularizedLeastSquares
-
+ 
 #parse input ARGS
 #model_index = parse(Int, ARGS[1])
-model_index = 2
+model_index = 3
 
 function create_history(hist_len, q_star, q, dQ; include_predictor = true)
     if hist_len == 0
@@ -44,10 +44,10 @@ inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, hist_var, n_replicas, normalization, include_predictor, tracking_noise, train_range, indep_normals, lambda, fitted_qois, model_noise) = inputs[model_index]
 
 
-out_dir = @__DIR__()*"/output/online_mirror_6qoi/$(name)/"
+out_dir = @__DIR__()*"/output/online_TOnew/$(name)/"
 save(out_dir*"parameters.jld2", "parameters", (; name, hist_len, hist_var, n_replicas, normalization, include_predictor))
 
-track_file = @__DIR__()*"/output/LF_6qoi_mirror_track_channel_to_64_64_32_dt0.01_tsim10.0.jld2"
+track_file = @__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.005_tsim10.0.jld2"
 
 data = load(track_file, "data_train");
 
@@ -150,9 +150,11 @@ function plot_time_series(data, qois, title; ref = nothing)
 end
 
 ## test the model
-qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
-data_test = load(@__DIR__()*"/output/LF_track_channel_to_64_64_32_tsim10.0.jld2", "data_train");
-dir = @__DIR__()*"/output/online/LinReg1/"
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
+track_file = @__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.005_tsim10.0.jld2"
+data_test = load(track_file, "data_train");
+
+dir = @__DIR__()*"/output/online_TOnew/LinReg3/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 include_predictor = model["include_predictor"]

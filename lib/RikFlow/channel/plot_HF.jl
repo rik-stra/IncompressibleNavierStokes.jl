@@ -35,6 +35,7 @@ x_ax = setup.grid.xu[1][1]
 u = Array(load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[:]);
 #u = Array(load(@__DIR__()*"/output/checkpoint_n10000.jld2")["results"].data[1].u[:]);
 
+u_ave_center = mean(stack(u[2:11])[1:end-2, Int(end/2):Int(end/2)+1, 1:end-2, 1, :])
 u_ave = mean(stack(u[2:11])[1:end-2, 2:end-1, 1:end-2, 1, :])
 
 

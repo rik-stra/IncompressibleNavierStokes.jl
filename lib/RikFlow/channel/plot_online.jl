@@ -31,44 +31,44 @@ setup = Setup(;
 
 #data = load(@__DIR__()*"/output/online_mirror/LinReg1/LF_online_channel_to_64_64_32_tsim50.0_repl_1.jld2", "data_train");
 data = load(@__DIR__()*"/output/online_mirror_6qoi/LinReg2/LF_online_channel_to_64_64_32_tsim50.0_repl_1.jld2", "data_train");
-u_fields = data.fields[30:50];
+u_fields = data.fields[2:50];
 us = stack(map(x -> x.u, u_fields));
 # mean flow profile last 10 snapshots
-u_ave = mean(us[:,:,:,1,:], dims=[1,3,4])
+u_ave = mean(us[1:end-2,:,1:end-2,1,:], dims=[1,3,4])
 u_ave = reshape(u_ave, :)
 u_ave = (u_ave[1:end] + u_ave[end:-1:1])/2
 u_ave_TO = u_ave[2:33]
 
-data = load(@__DIR__()*"/output/LF_nomodel_channel_to_64_64_32_tsim50.0.jld2", "fields");
-u_fields = data[30:50];
+data = load(@__DIR__()*"/output/LF_nomodel_mirror_channel_to_tsim100.0.jld2", "fields");
+u_fields = data[1:100];
 us = stack(map(x -> x.u, u_fields));
 # mean flow profile last 10 snapshots
-u_ave = mean(us[:,:,:,1,:], dims=[1,3,4])
+u_ave = mean(us[1:end-2,:,1:end-2,1,:], dims=[1,3,4])
 u_ave = reshape(u_ave, :)
 u_ave = (u_ave[1:end] + u_ave[end:-1:1])/2
 u_ave_NM = u_ave[2:33]
 
-data = load(@__DIR__()*"/output/LF_wale_mirror_channel_to_64_64_32_tsim50.0.jld2", "fields");
-u_fields = data[30:50];
+data = load(@__DIR__()*"/output/WALE/LF_wale_mirror_channel_to_0.53_tsim100.0.jld2", "fields");
+u_fields = data[1:100];
 us = stack(map(x -> x.u, u_fields));
 # mean flow profile last 10 snapshots
-u_ave = mean(us[:,:,:,1,:], dims=[1,3,4])
+u_ave = mean(us[1:end-2,:,1:end-2,1,:], dims=[1,3,4])
 u_ave = reshape(u_ave, :)
 u_ave = (u_ave[1:end] + u_ave[end:-1:1])/2
 u_ave_wale = u_ave[2:33]
 
-data = load(@__DIR__()*"/output/LF_smag_mirror_channel_to_64_64_32_tsim50.0.jld2", "fields");
-u_fields = data[30:50];
+data = load(@__DIR__()*"/output/smag/LF_smag_mirror_channel_to_0.13_tsim100.0.jld2", "fields");
+u_fields = data[1:100];
 us = stack(map(x -> x.u, u_fields));
 # mean flow profile last 10 snapshots
-u_ave = mean(us[:,:,:,1,:], dims=[1,3,4])
+u_ave = mean(us[1:end-2,:,1:end-2,1,:], dims=[1,3,4])
 u_ave = reshape(u_ave, :)
 u_ave = (u_ave[1:end] + u_ave[end:-1:1])/2
 u_ave_smag = u_ave[2:33]
 
 yp = setup.grid.xu[1][2][2:Int(end//2)]*180
-lines(yp, u_ave_NM)
-lines(yp, u_ave_TO)
+#lines(yp, u_ave_NM)
+#lines(yp, u_ave_TO)
 
 using DelimitedFiles
 #data = readdlm(@__DIR__()*"/output/LM_Channel_0180_mean_prof.dat", comments=true, comment_char='%')
@@ -79,7 +79,7 @@ yp_ref = data[2:end, 1]
 u_ave_ref = data[2:end, 2]
 
 #log plot
-f = Figure(size=(800,500))
+f = Figure(size=(800,500));
 ax1 = Axis(f[1, 1], xscale = log10)
 scatter!(ax1, yp_ref, u_ave_ref, color=:blue, label = "Ref")
 scatter!(ax1, yp, u_ave_NM, color=:green, label = "No model")

@@ -13,7 +13,6 @@ using JLD2
 using Statistics
 
 
-
 # Precision
 T = Float64
 f = one(T)
@@ -23,8 +22,9 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
+tsim = 100f
 Δt = 0.005f
+c = 0.53
 
 nx_les = 64
 ny_les = 64
@@ -54,67 +54,30 @@ setup = Setup(;
 
 
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
-#amgx_objects = amgx_setup();
 psolver = psolver_transform(setup);
 
-target_u_ave = 15.647
+hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 
-
-    c = 0.52
-    println("c: $c, upper_u_ave: $upper_u_ave, lower_u_ave: $lower_u_ave")
-
-    hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
-    ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
-
-    @info "Solving LES"
-    # Solve DNS and store filtered quantities
-    (; u, t), outputs = solve_unsteady(;
-        # setup,
-        setup = (; setup..., closure_model = IncompressibleNavierStokes.wale_closure),
-        θ = T(c), 
-        ustart,
-        tlims = (0f, tsim),
-        Δt,
-        processors = (;
-            log = timelogger(; nupdate = 100),
-            fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-        ),
-        psolver,
-    );
-
-    #close_amgx(amgx_objects)
-    u_fields = outputs.fields[2:end];
-    us = stack(map(x -> x.u, u_fields));
-    u_ave = mean(us[1:end-2, 2:end-1, 1:end-2, 1, :])
-
-
-# u_ave target   15.647
-# theta = 0.5 -> u_ave 15.622711
-# theta = 0.6 -> u_ave 15.774
-
-using CairoMakie
-fig = Figure(size = (600, 400))
-ax = Axis(fig[1, 1])
-scatter!(c_s, u_aves)
-lines!([0.51, 0.6], [15.647, 15.647], color = :red, linewidth = 2)
-display(fig)
+@info "Solving LES"
+# Solve DNS and store filtered quantities
+(; u, t), outputs = solve_unsteady(;
+    # setup,
+    setup = (; setup..., closure_model = IncompressibleNavierStokes.wale_closure),
+    θ = T(c), 
+    ustart,
+    tlims = (0f, tsim),
+    Δt,
+    processors = (;
+        log = timelogger(; nupdate = 100),
+        fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+    ),
+    psolver,
+);
 
 # Save filtered DNS data
-filename = "$outdir/LF_wale_mirror_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim).jld2"
-jldsave(filename; outputs.fields, outputs.qoihist)
+outdir = @__DIR__()*"/output"
+filename = "$outdir/WALE/LF_wale_mirror_channel_to_$(c)_tsim$(tsim).jld2"
+jldsave(filename; outputs.fields)
 
 exit()
-
-a = load(filename)
-keys(a["f"].data[1])
-a["f"].data[1].qoi_hist
-
-# u_start low fidelity
-u_lf = a["f"].data[1].u[1]
-u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
-
-using CairoMakie
-heatmap(u_lf[:,:,1,1])
-heatmap(u_hf[:,:,1,1])
-
-total_kinetic_energy(ArrayType(u_hf), setup)

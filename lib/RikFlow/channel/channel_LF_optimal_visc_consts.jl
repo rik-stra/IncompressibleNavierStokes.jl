@@ -57,11 +57,12 @@ setup = Setup(;
 #amgx_objects = amgx_setup();
 psolver = psolver_transform(setup);
 
-target_u_ave = 15.647
+target_u_ave = 18.2665
 
 
 
-c_s = 0.1:0.005:0.2
+#c_s = 0.1:0.005:0.2
+c_s = 0.125:0.005:0.145
 u_aves_smag = []
 
 for c in c_s
@@ -88,16 +89,18 @@ for c in c_s
 
     u_fields = outputs.fields[2:end];
     us = stack(map(x -> x.u, u_fields));
-    u_ave = mean(us[1:end-2, 2:end-1, 1:end-2, 1, :])
-
+    u_ave = mean(us[1:end-2, Int(end/2):Int(end/2)+1, 1:end-2, 1, :])
+    @info "u_ave: $u_ave"
     push!(u_aves_smag, u_ave)
 
 end
 
-filename = @__DIR__()*"/output/smag/optimize_smag.jld2"
+filename = @__DIR__()*"/output/smag/optimize_smag_centerv2.jld2"
 jldsave(filename; c_s , u_aves_smag)
 
-c_w = 0.5:0.005:0.54
+exit()
+
+c_w = 0.49:0.005:0.55
 u_aves_WALE = []
 
 for c in c_w
@@ -124,13 +127,13 @@ for c in c_w
 
     u_fields = outputs.fields[2:end];
     us = stack(map(x -> x.u, u_fields));
-    u_ave = mean(us[1:end-2, 2:end-1, 1:end-2, 1, :])
-
+    u_ave = mean(us[1:end-2, Int(end/2):Int(end/2)+1, 1:end-2, 1, :])
+    @info "u_ave: $u_ave"
     push!(u_aves_WALE, u_ave)
 
 end
 
-filename = @__DIR__()*"/output/WALE/optimize_WALE.jld2"
+filename = @__DIR__()*"/output/WALE/optimize_WALE_centerv.jld2"
 jldsave(filename; c_w, u_aves_WALE)
 
 
@@ -138,3 +141,32 @@ jldsave(filename; c_w, u_aves_WALE)
 # theta = 0.5 -> u_ave 15.622711
 # theta = 0.6 -> u_ave 15.774
 
+exit()
+
+filename_WALE = @__DIR__()*"/output/WALE/optimize_WALE_centerv.jld2"
+filename_smag = @__DIR__()*"/output/smag/optimize_smag_centerv.jld2"
+filename_smag2 = @__DIR__()*"/output/smag/optimize_smag_centerv2.jld2"
+WALE_data = load(filename_WALE)
+smag_data = load(filename_smag)
+smag_data2 = load(filename_smag2)
+
+smag_cs = cat(smag_data["c_s"], smag_data2["c_s"], dims=1)
+smag_u_aves = cat(smag_data["u_aves_smag"], smag_data2["u_aves_smag"], dims=1)
+
+target = 18.2665
+
+using CairoMakie
+fig = Figure(size = (1200, 600));
+ax1 = Axis(fig[1, 1], title = "WALE")
+lines!(ax1, WALE_data["c_w"], WALE_data["u_aves_WALE"], color = :blue, label = "WALE")
+lines!(ax1, [WALE_data["c_w"][1], WALE_data["c_w"][end]], [target, target], color = :black, linestyle = :dash, label = "Target u_ave")
+ax2 = Axis(fig[1, 2], title = "Smagorinsky")
+lines!(ax2, smag_cs, smag_u_aves, color = :red, label = "Smagorinsky")
+lines!(ax2, [smag_cs[1], smag_cs[end]], [target, target], color = :black, linestyle = :dash, label = "Target u_ave")
+display(fig)
+
+collect(WALE_data["c_w"])
+WALE_data["u_aves_WALE"]
+
+smag_cs
+smag_u_aves
