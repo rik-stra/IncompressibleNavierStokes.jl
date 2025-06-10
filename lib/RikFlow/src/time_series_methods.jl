@@ -148,9 +148,7 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             pred[time_series_method.fitted_qois,:] += time_series_method.c * data
             
             pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
-            pred = max.(pred, 0)
-            @show q_star
-            @show pred
+
             if time_series_method.target == :dq
                 dQ = pred
             elseif time_series_method.target == :q
@@ -176,7 +174,7 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
         end
         pred[time_series_method.fitted_qois,:] += time_series_method.c * data
         pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
-        pred = max.(pred, 0)
+        
         if time_series_method.target == :dq
             dQ = pred
         elseif time_series_method.target == :q
