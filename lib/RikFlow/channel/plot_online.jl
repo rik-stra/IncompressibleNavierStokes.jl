@@ -30,8 +30,8 @@ setup = Setup(;
 );
 
 #data = load(@__DIR__()*"/output/online_mirror/LinReg1/LF_online_channel_to_64_64_32_tsim50.0_repl_1.jld2", "data_train");
-data = load(@__DIR__()*"/output/online_mirror_6qoi/LinReg2/LF_online_channel_to_64_64_32_tsim50.0_repl_1.jld2", "data_train");
-u_fields = data.fields[2:50];
+data = load(@__DIR__()*"/output/online_TOnew/LinReg6/LF_online_channel_to_64_64_32_tsim100.0_repl_1.jld2", "data");
+u_fields = data.fields[2:100];
 us = stack(map(x -> x.u, u_fields));
 # mean flow profile last 10 snapshots
 u_ave = mean(us[1:end-2,:,1:end-2,1,:], dims=[1,3,4])
@@ -102,6 +102,42 @@ ylims!(ax1,0, 19)
 xlims!(ax1, 0.1, 180)
 
 display(f)
+
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 7, 10], ["Z",11,17],["E", 11, 17]];
+n_replicas = 1
+time_index = 0:0.005:100
+
+data = [load(@__DIR__()*"/output/online_TOnew/LinReg6/LF_online_channel_to_64_64_32_tsim100.0_repl_$(i).jld2", "data")
+        for i in 1:n_replicas]
+q_rep = map(x -> x.q, data)
+hf_data = load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2");
+q_ref = stack(hf_data["f"].data[1].qoi_hist)
+nomodel_data = load(@__DIR__()*"/output/LF_nomodel_channel_to_64_64_32_tsim50.0.jld2","qoihist");
+q_NM = stack(nomodel_data)
+
+let
+g = Figure(size = (800, 700))
+best, ref, no_model, model= nothing, nothing, nothing, nothing
+axs = [Axis(g[i ÷ 2, i%2], 
+        title = "$(qois[i+1][1])_[$(qois[i+1][2]), $(qois[i+1][3])]")
+    for i in 0:size(q_ref, 1)-1]
+
+for i in 1:size(q_ref, 1)
+    for j in 1:n_replicas
+            
+            model=lines!(axs[i],time_index, q_rep[j][i,:], color = (:blue, 0.3))
+        
+    end
+    xlim_right = min(maximum(size.(q_rep,2)), size(time_index,1))
+    ref = lines!(axs[i], time_index[1:3001], q_ref[i,1:5:end], color = :black)
+    #no_model = lines!(axs[i], time_index, q_NM[i,:], color = (:red, 0.6))
+    #ylims!(axs[i],(0, maximum(q_ref[i,:])*2)) 
+end
+#Label(g[-1, :], text = L"$\sigma_\epsilon =$ %$(linreg_params.tracking_noise[1]), $\eta =$ %$(linreg_params.model_noise_str[1]), hist $=$ %$(linreg_params.hist_len[1]), $\lambda =$ %$(linreg_params.lambda[1])", fontsize = 20)
+#Legend(g[0,2], [ref, no_model, model], ["Reference", "No model", "Online"], fontsize = 12)
+display(g)
+end
+
 
 
 qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];

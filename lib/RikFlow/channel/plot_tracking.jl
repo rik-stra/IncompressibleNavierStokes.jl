@@ -123,6 +123,29 @@ g = Figure();
     u_fields = data.fields[2:11];
     plot_xflow(u_fields, "6qoi_new")
 
+    g = Figure();
+        axs = [Axis(g[i ÷ 2, i%2], 
+        title = L"d%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+            for i in 0:5];
+        for i in 1:6
+            #lines!(axs[i], time_index, q_ref[i, 1:size(time_index,1)], label = "ref", color = :black)
+            #lines!(axs[i], time_index, q_LF[i, 1:size(time_index,1)], label = "nomodel")
+            #lines!(axs[i],time_index[1:end-1], data.q_star[i, 1:size(time_index,1)-1], label = "q_star")
+            lines!(axs[i],time_index, data.dQ[i, 1:size(time_index,1)], label = "track")
+            #lines!(axs[i],time_index, data.q_star[i, 1:size(time_index,1)] .+ data.dQ[i, 1:size(time_index,1)], label = "track")
+
+            if i == 4 axislegend(axs[i], position = :rt) end
+            
+            if i in [5,6]
+                axs[i].xlabel=L"t"
+            end
+            for i in [1, 2]
+                hidexdecorations!(axs[i], ticks = false, grid = false)
+            end
+        end
+        display(g)
+
+
 # plot trajectories dt 0.002 6QOI NEW
 data = load(@__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.002_tsim10.0.jld2", "data_train");
 #q_LF = stack(load(@__DIR__()*"/output/LF_nomodel_mirror_channel_to_64_64_32_tsim50.0.jld2", "qoihist"))

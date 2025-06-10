@@ -13,7 +13,7 @@ using RegularizedLeastSquares
  
 #parse input ARGS
 #model_index = parse(Int, ARGS[1])
-model_index = 3
+model_index = 6
 
 function create_history(hist_len, q_star, q, dQ; include_predictor = true)
     if hist_len == 0
@@ -154,15 +154,16 @@ qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]]
 track_file = @__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.005_tsim10.0.jld2"
 data_test = load(track_file, "data_train");
 
-dir = @__DIR__()*"/output/online_TOnew/LinReg3/"
+dir = @__DIR__()*"/output/online_TOnew/LinReg6/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 include_predictor = model["include_predictor"]
 
 # scale inputs and outputs
-q_test = RikFlow.scale_input(data_test.q[:,1:1000], model["scaling"].in_scaling)
-q_star_test = RikFlow.scale_input(data_test.q_star[:,1:1000], model["scaling"].in_scaling)
-dQ_test = RikFlow.scale_input(data_test.q[:,2:1001], model["scaling"].out_scaling)
+q_test = RikFlow.scale_input(data_test.q[:,1:2000], model["scaling"].in_scaling)
+q_star_test = RikFlow.scale_input(data_test.q_star[:,1:2000], model["scaling"].in_scaling)
+dQ_test = RikFlow.scale_input(data_test.q[:,2:2001], model["scaling"].out_scaling)
+dQ_scaled = data_test.dQ[:,1:2000]./ model["scaling"].out_scaling.sigma
 
 inputs_test,outputs_test = create_history(model["hist_len"], q_star_test, q_test, dQ_test, hist_var; include_predictor)
 
@@ -170,16 +171,17 @@ inputs_test,outputs_test = create_history(model["hist_len"], q_star_test, q_test
 inp = cat(inputs_test',ones(eltype(inputs_test), (size(inputs_test,2),1)),dims=2)
 rng = Xoshiro(12)
 rand_part = rand(rng, model["stoch_distr"], size(inputs_test,2))'
-
+rp = copy(rand_part)
 rand_unsc = RikFlow.scale_output(rand_part', model["scaling"].out_scaling)
 
 preds = rand_part'
 preds[fitted_qois,:] += model["c"] * inp'
+preds_unsc = RikFlow.scale_output(preds, model["scaling"].out_scaling)
 
 plot_time_series(preds, qois, "preds", ref = outputs_test)
-
-plot_time_series(rand_unsc, qois, "rand_part", ref=stds_ref_data.*tracking_noise.*randn(6,1000))
+plot_time_series(preds-q_star_test[:,6:end], qois, "preds", ref = dQ_scaled[:,:])
+plot_time_series(rp', qois, "rand_part", ref=tracking_noise.*randn(6,1000))
 
 # plot original time series
-preds_unsc = RikFlow.scale_output(preds, model["scaling"].out_scaling)
+
 plot_time_series(preds_unsc, qois, "preds_unsc", ref = data_test.q[:,model["hist_len"]+1:1000])

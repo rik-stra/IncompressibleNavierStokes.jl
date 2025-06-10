@@ -22,7 +22,12 @@ i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters..., fitted_qois = [1,2,3,4,5,6]))
 i += 1
 push!(inputs, (name = "LinReg$i", fixed_parameters..., fitted_qois = [1,2,3,4,5,6], train_range = (100,2000), n_replicas = 1))
-                
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., lambda = 0.01, fitted_qois = [1,2,3,4,5,6], train_range = (100,2000), n_replicas = 1))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., lambda = 0.0, fitted_qois = [1,3,4,5,6], train_range = (100,2000), n_replicas = 1))
+i += 1
+push!(inputs, (name = "LinReg$i", fixed_parameters..., normalization = :normal, lambda = 0.000001, fitted_qois = [1,2,3,4,5,6], train_range = (100,2000), n_replicas = 1))
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 
