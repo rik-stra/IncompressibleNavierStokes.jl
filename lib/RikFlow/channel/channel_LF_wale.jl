@@ -52,6 +52,12 @@ setup = Setup(;
     kwargs...,
 );
 
+to_setup_les = 
+    RikFlow.TO_Setup(; qois, 
+    to_mode = :CREATE_REF, 
+    ArrayType, 
+    setup = setup,
+    mirror_y = true,);
 
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
 psolver = psolver_transform(setup);
@@ -71,6 +77,7 @@ ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
     processors = (;
         log = timelogger(; nupdate = 100),
         fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f8),
     ),
     psolver,
 );
@@ -78,6 +85,6 @@ ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 # Save filtered DNS data
 outdir = @__DIR__()*"/output"
 filename = "$outdir/WALE/LF_wale_mirror_channel_to_$(c)_tsim$(tsim).jld2"
-jldsave(filename; outputs.fields)
+jldsave(filename; outputs.fields, outputs.qoihist)
 
 exit()

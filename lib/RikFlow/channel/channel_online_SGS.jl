@@ -11,10 +11,10 @@ using RikFlow
 using JLD2
 using Random
 
-model_index = 3
+model_index = 6
 inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, n_replicas, hist_var,tracking_noise) = inputs[model_index]
-
+n_replicas = 7
 # Precision
 T = Float64
 f = one(T)
@@ -24,7 +24,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
+tsim = 100f
 Δt = 0.005f
 
 nx_les = 64
@@ -69,8 +69,8 @@ dQ_data = data_track.dQ[:,1:100];
 nt = round(Int, tsim / Δt)
 outdir = @__DIR__() *"/output/online_TOnew/$(name)/"
 
-#for i in 1:n_replicas
-    i=1
+for i in 1:n_replicas
+    
     LinReg_file_name = outdir*"LinReg.jld2"
     if hist_len == 0
         q_hist = nothing
@@ -80,7 +80,7 @@ outdir = @__DIR__() *"/output/online_TOnew/$(name)/"
             q_hist = cat(q_hist, q_hist, dims=1)
         end
     end
-    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(i), ArrayType, q_hist = q_hist, spinnup_data = ArrayType{T}(dQ_data));
+    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(i+1), ArrayType, q_hist = q_hist, spinnup_data = ArrayType{T}(dQ_data));
     
 
     to_setup_les = 
@@ -117,10 +117,6 @@ outdir = @__DIR__() *"/output/online_TOnew/$(name)/"
     data = (;dQ, tau, q, fields)
 
     # Save filtered DNS data
-    filename = "$outdir/LF_online_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim)_repl_$(i).jld2"
+    filename = "$outdir/LF_online_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_tsim$(tsim)_repl_$(i+1).jld2"
     jldsave(filename; data)
-#end
-
-using CairoMakie
-q = stack(outputs.qoihist)
-lines(q[6,1:200])
+end

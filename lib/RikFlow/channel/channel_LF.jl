@@ -60,12 +60,12 @@ psolver = psolver_transform(setup);
 hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
 ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 
-# to_setup_les = 
-#     RikFlow.TO_Setup(; qois, 
-#     to_mode = :CREATE_REF, 
-#     ArrayType, 
-#     setup = setup,
-#     mirror_y = true,);
+to_setup_les = 
+    RikFlow.TO_Setup(; qois, 
+    to_mode = :CREATE_REF, 
+    ArrayType, 
+    setup = setup,
+    mirror_y = true,);
 
 
 @info "Solving LES"
@@ -79,13 +79,13 @@ ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
     processors = (;
         log = timelogger(; nupdate = 200),
         fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-        #qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
+        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f8),
     ),
     psolver,
 );
 
 outdir = @__DIR__()*"/output"
 filename = "$outdir/LF_nomodel_mirror_channel_to_tsim$(tsim).jld2"
-jldsave(filename; outputs.fields)
+jldsave(filename; outputs.fields, outputs.qoihist)
 
 exit()
