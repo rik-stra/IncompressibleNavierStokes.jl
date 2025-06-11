@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH -J LinReg_search
-#SBATCH -t 2:30:00
+#SBATCH -t 3:00:00
 #SBATCH --partition=gpu_h100
 #SBATCH --gpus=1
-#SBATCH --array=1-1
+#SBATCH --array=1-10
 
 export JULIA_DEPOT_PATH=$HOME/julia/julia_h100:
 
