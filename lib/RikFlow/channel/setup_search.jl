@@ -26,6 +26,16 @@ for hist_len in hist_lens
     end
 end
 
+hist_lens = [5,10]
+lambdas = [1e-4, 1e-3]
+
+for hist_len in hist_lens
+    for lambda in lambdas
+        i += 1
+        push!(inputs, (name = "LinReg$i", fixed_parameters..., hist_len = hist_len, lambda = lambda))
+    end
+end
+
 save(@__DIR__()*"/inputs.jld2", "inputs", inputs)
 inputs_df = DataFrame(inputs)
 

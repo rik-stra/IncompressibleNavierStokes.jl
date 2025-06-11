@@ -3,11 +3,11 @@ using DataFrames
 using IncompressibleNavierStokes
 using RikFlow
 
-index_range = [1,10]
+index_range = [2,10]
 linreg_params_table = DataFrame(load(@__DIR__()*"/inputs.jld2", "inputs"))[index_range[1]:index_range[2],:]
 # load reference data
 hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
-qoi_ref = stack(load(hf_file)["f"].data[1].qoi_hist[1:5:10001]);
+q_ref = stack(load(hf_file)["f"].data[1].qoi_hist[1:5:10001]);
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 
 
@@ -27,9 +27,9 @@ for (name, n_replicas) in zip(linreg_params_table.name, linreg_params_table.n_re
         end
     end
     
-    q_rep = [load(@__DIR__()*"/output/online/$(name)/LF_online_channel_to_64_64_32_tsim10.0_repl_$(i).jld2", "data_online").q for i in stable_sims]    
+    q_rep = [load(@__DIR__()*"/output/online_TOpaper/$(name)/LF_online_channel_to_64_64_32_tsim10.0_repl_$(i).jld2", "data").q for i in stable_sims]    
     qs = cat(q_rep..., dims = 2)
-    
+   
     # check if sim was stable for full lenght
     
     for i = 1:length(stable_sims)

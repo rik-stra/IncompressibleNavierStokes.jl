@@ -103,18 +103,19 @@ xlims!(ax1, 0.1, 180)
 
 display(f)
 
+let
 qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10], ["Z",11,17],["E", 11, 17]];
 n_replicas = 5
-time_index = 0:0.005:100
+time_index = 0:0.005:10
 
-data = [load(@__DIR__()*"/output/online_TOnew/LinReg6/LF_online_channel_to_64_64_32_tsim100.0_repl_$(i).jld2", "data")
+data = [load(@__DIR__()*"/output/online_TOpaper/LinReg8/LF_online_channel_to_64_64_32_tsim10.0_repl_$(i).jld2", "data")
         for i in 1:n_replicas];
 q_rep = map(x -> x.q ./2, data)
 hf_data = load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2");
 q_ref = stack(hf_data["f"].data[1].qoi_hist)./2
 
 
-let
+
 g = Figure(size = (800, 700))
 ref, model= nothing, nothing
 axs = [Axis(g[i ÷ 2, i%2], 

@@ -24,7 +24,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
+tsim = 100f
 Δt = 0.005f
 
 nx_les = 64
