@@ -51,7 +51,7 @@ setup = Setup(;
     ),
     kwargs...,
 );
-
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
