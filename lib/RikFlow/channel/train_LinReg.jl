@@ -12,8 +12,8 @@ using LinearAlgebra
 using RegularizedLeastSquares
  
 #parse input ARGS
-#model_index = parse(Int, ARGS[1])
-model_index = 6
+model_index = parse(Int, ARGS[1])
+#model_index = 6
 
 function create_history(hist_len, q_star, q, dQ; include_predictor = true)
     if hist_len == 0
@@ -44,13 +44,14 @@ inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, hist_var, n_replicas, normalization, include_predictor, tracking_noise, train_range, indep_normals, lambda, fitted_qois, model_noise) = inputs[model_index]
 
 
-out_dir = @__DIR__()*"/output/online_TOnew/$(name)/"
+out_dir = @__DIR__()*"/output/online_TOpaper/$(name)/"
+if !isdir(out_dir)
+    mkpath(out_dir)
+end
 save(out_dir*"parameters.jld2", "parameters", (; name, hist_len, hist_var, n_replicas, normalization, include_predictor))
 
 track_file = @__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.005_tsim10.0.jld2"
-
 data = load(track_file, "data_train");
-
 
 
 q_scaled, in_scaling = RikFlow._normalise(data.q[:,train_range[1]:train_range[2]-1], normalization = normalization)
@@ -59,7 +60,6 @@ dQ_scaled     = RikFlow.scale_input(data.q[:,train_range[1]+1:train_range[2]], i
 scaling = (in_scaling = in_scaling, out_scaling = in_scaling)
 
 inputs, outputs = create_history(hist_len, q_star_scaled, q_scaled, dQ_scaled, hist_var; include_predictor)
-
 
 
 function fit_model(inputs, outputs, fitted_qois; indep_normals = false, lambda = 0.0, regularizer = :l2)
@@ -113,19 +113,6 @@ if model_noise == :tracking_noise
 elseif model_noise == :no_noise
     stoch_distr = nothing
 end
-
-#inp = cat(inputs',ones(eltype(inputs), (size(inputs,2),1)),dims=2)
-#x = c' * inp'
-
-#outputs
-
-# g = Figure();
-# ax,hm = heatmap(g[1,1], c, 
-# #colormap = :grays, colorrange = (-5, 5), highclip = :red, lowclip = :blue)
-# colormap = :balance, colorrange = (-25,25))
-# Colorbar(g[1, 2], hm)
-# Label(g[0,:], text = "lambda $(lambda)", fontsize = 20)
-# display(g)
 
 ## save model
 save(out_dir*"/LinReg.jld2", "c", c', "stoch_distr", stoch_distr, 
