@@ -329,3 +329,46 @@ let
     save(@__DIR__()*"/output/figs/Channel_eddyvisc_q_trajectories.pdf", g)
 
 end
+
+
+
+xlims = 0, 4 * pi
+ylims = 0, 2
+zlims = 0, 4 / 3 * pi
+# Grid
+nx = 64 
+ny = 64 
+nz = 32 
+kwargs = (;
+    boundary_conditions = (
+        (PeriodicBC(), PeriodicBC()),
+        (DirichletBC(), DirichletBC()),
+        (PeriodicBC(), PeriodicBC()),
+    ),
+    Re = 180,
+)
+setup = Setup(;
+    x = (
+        range(xlims..., nx + 1),
+        range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
+        range(zlims..., nz + 1)
+    ),
+    kwargs...,
+);
+
+# save VTK files
+f = load(@__DIR__()*"/output/online_TOpaper/LinReg11/LF_online_channel_to_64_64_32_tsim100.0_repl_2.jld2", "data").fields[end];
+save_vtk(f; setup, filename = @__DIR__()*"/output/vtks/LinReg11_T100_R2", fieldnames = (:velocity, :Qfield))
+
+f = load(@__DIR__()*"/output/LF_nomodel_mirror_channel_to_tsim100.0.jld2", "fields")[end];
+save_vtk(f; setup, filename = @__DIR__()*"/output/vtks/LF_nomodel_T100", fieldnames = (:velocity, :Qfield))
+
+f = load(@__DIR__()*"/output/WALE/LF_wale_mirror_channel_to_0.53_tsim100.0.jld2", "fields")[end];
+save_vtk(f; setup, filename = @__DIR__()*"/output/vtks/LF_wale_T100", fieldnames = (:velocity, :Qfield))
+
+data = load(@__DIR__()*"/output/smag/LF_smag_mirror_channel_to_0.13_tsim100.0.jld2", "fields")[end];
+save_vtk(data; setup, filename = @__DIR__()*"/output/vtks/LF_smag_T100", fieldnames = (:velocity, :Qfield))
+
+f = load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2", "f").data[1].u[11];
+state = (;u = f, t=0., temp=0);
+save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/HF_T10", fieldnames = (:velocity, :Qfield))
