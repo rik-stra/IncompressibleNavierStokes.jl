@@ -302,6 +302,7 @@ function energy_spectrum_plot(
     v_lines = nothing,
     scale_numbers = nothing,
     plot_wavelength = false,
+    figure_size = (600, 400),
     kwargs...,
 )
     state isa Observable || (state = Observable(state))
@@ -356,7 +357,7 @@ function energy_spectrum_plot(
         logmax = round(Int, log2(kmax + 1))
         xticks = (T(2) .^ (0:logmax))
     end
-    fig = Figure(size=(600,400))
+    fig = Figure(size=figure_size)
     fig[1,1] = ax = Axis(
         fig;
         xlabel,
