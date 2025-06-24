@@ -28,8 +28,8 @@ WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 cuTENSOR = "011b41b2-24ef-40a8-b3eb-fa098493e9e1"
 
 [weakdeps]
-CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"
 AMGX = "c963dde9-0319-47f5-bf0c-b07d3c80ffa6"
+CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"
 
 [extensions]
 IncompressibleNavierStokesAMGXExt = ["AMGX"]
@@ -41,7 +41,7 @@ AMGX = "0.2.0"
 Adapt = "4"
 Atomix = "1"
 CUDA = "5"
-CUDSS = "0.4"
+CUDSS = "0.5"
 ChainRulesCore = "1"
 DocStringExtensions = "0.9"
 EnzymeCore = "0.8"
