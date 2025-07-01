@@ -109,3 +109,28 @@ let
         display(g)
         save(fig_folder*"/lt_distr_q_poster.pdf", g)
 end
+
+
+    fname = @__DIR__()*"/output/new/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
+    q_ref = stack(load(fname, "data_train").data[1].qoi_hist);
+    fname = @__DIR__()*"/paper_runs/output/tracking/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2"
+    track_data = load(fname, "data_track");
+    qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
+    let 
+        interval = 3850:3893
+        time_index = interval*2.5e-3
+        g = Figure(size = (350,250))
+        axs = Axis(g[1,1], 
+            xlabel = "t",
+            limits = ((9.63, 9.85),(2.31, 2.46)),
+            )
+            
+        
+        lines!(axs, time_index, q_ref[2, interval], color=(:black, 1), label = L"Q_{ref}", linewidth = 2)
+        #lines!(axs, time_index, track_data.q_star[i, interval], label = "*")
+        lines!(axs, time_index, track_data.q[2, interval], color=:teal, linestyle = :dash, label = L"Q_{LES}", linewidth = 2)
+        
+        axislegend(position = :rt)
+        display(g)
+        save(fig_folder*"/tracking.pdf", g)
+    end
