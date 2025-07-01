@@ -41,6 +41,14 @@ function solve_unsteady(;
         cflbuf = scalarfield(setup)
     end
 
+    # Get cache for closure model
+    if isnothing(setup.closure_model)
+        closure_stuff = nothing
+    else
+        closure_stuff = get_closure_stuff(setup.closure_model, setup)
+    end
+    cache = (; cache..., closure_stuff)
+
     # Time stepper
     stepper =
         create_stepper(method; setup, psolver, u = ustart, temp = tempstart, t = tstart)
@@ -53,12 +61,12 @@ function solve_unsteady(;
     if !isnothing(setup.ou_bodyforce)
         OU_forcing_step!(; setup.ou_setup, Δt=Δt*setup.ou_bodyforce.freeze)
         OU_get_force!(setup.ou_setup, setup)
-        @info "ou random state 1: $(setup.ou_setup.state[1:2])", typeof(setup.ou_setup.state)
-        @info "ou force corner $(Array(setup.bodyforce[:,:,:,1])[end-1,end-1,end-1])"
-        @info "ou force 1 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-2,end-2])"
-        @info "ou force 2 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-3,end-3])"
-        @info "ou force 4 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-5,end-5])"
-        @info "ou force 8 cel from corner  $(Array(setup.bodyforce[:, :, :, 1])[end-1,end-9,end-9])"
+        # @info "ou random state 1: $(setup.ou_setup.state[1:2])", typeof(setup.ou_setup.state)
+        # @info "ou force corner $(Array(setup.bodyforce[:,:,:,1])[end-1,end-1,end-1])"
+        # @info "ou force 1 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-2,end-2])"
+        # @info "ou force 2 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-3,end-3])"
+        # @info "ou force 4 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-5,end-5])"
+        # @info "ou force 8 cel from corner  $(Array(setup.bodyforce[:, :, :, 1])[end-1,end-9,end-9])"
     end
 
     if isadaptive

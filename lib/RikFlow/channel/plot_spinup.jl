@@ -1,24 +1,27 @@
 using IncompressibleNavierStokes
+using RikFlow
 using CairoMakie
 using JLD2
 using LinearAlgebra
 using Statistics
+using CUDA
+using FFTW
 
 # Domain
 xlims = 0, 4 * pi
 ylims = 0, 2
 zlims = 0, 4 / 3 * pi
 # Grid
-nx = 256 
-ny = 256 
-nz = 128 
+nx = 512 
+ny = 512 
+nz = 256 
 kwargs = (;
     boundary_conditions = (
         (PeriodicBC(), PeriodicBC()),
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
     ),
-    Re = 180,
+    Re = 180.0,
 )
 setup = Setup(;
     x = (
@@ -29,78 +32,122 @@ setup = Setup(;
     kwargs...,
 );
 
-u_start = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start");
+u_start = load(@__DIR__()*"/output/HF/u_start_T15_512_512_256.jld2", "u_start");
 u_ave = mean(u_start[:,:,:,1], dims=3)
-heatmap(u_start[:,:,20,1])
+y_ax = setup.grid.xu[1][2]
+x_ax = setup.grid.xu[1][1]
 
-# mean flow profile
-u_ave = mean(u_start[:,:,:,1], dims=[1,3])
-u_ave = reshape(u_ave, :)
-u_ave = (u_ave[1:128] + u_ave[129:256][end:-1:1])/2
-
-yp = setup.grid.xu[1][2][2:Int(end//2)]*180
-f = hlines([18.42, 18.25], color=:red) # centerline values from Vreman
-lines!(yp, u_ave)
-
+let
+f = Figure(size = (900, 200));
+ax1 = Axis(f[1, 1], aspect = DataAspect(), xlabel = "x", ylabel = "y")
+heatmap!(ax1,x_ax[1:end-2], y_ax, (u_start[1:end-2,:,1,1]+ u_start[1:end-2,:,2,1])/2)
+#contourf!(ax1,x_ax[1:end-2], y_ax, (u_start[1:end-2,:,1,1]+ u_start[1:end-2,:,2,1])/2, levels=20)
 display(f)
+name = @__DIR__()*"/output/figs/u_start.png"
+save(name, f)
+run(`magick $name -trim $name`)
+end
 
-using DelimitedFiles
-data_MKM = readdlm(@__DIR__()*"/output/LM_Channel_0180_mean_prof.dat", comments=true, comment_char='%')
-cols = ["y/delta", "y^+", "U", "dU/dy", "W", "P"]
-yp_ref_MKM = data_MKM[2:end, 2]
-u_ave_ref_MKM = data_MKM[2:end, 3]
+# plot spectrum
+# scales = get_scale_numbers(u_start, setup)
+# state = (;u = u_start, t=0., temp=0);
+# fig = energy_spectrum_plot(state; setup, npoint = 100, sloperange = [1,1], slopeoffset = 50, plot_wavelength = false)
+# display(fig)
+# v = [scales.λ, scales.η, 1/n]
+# v_labels = ["λ", "η", "Δx"]
+# for i in 1:3
+#     text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1e-12*1.2), align = (:left, :bottom), color = :black)
+# end
+# display(fig)
+# save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
 
-data_Vre = readdlm(@__DIR__()*"/output/Chan180_FD2_all/Chan180_FD2_basic_u.txt", comments=true, comment_char='%')
-cols = ["y^+", "U", "rms(u)",  "<u'u'u'>",  "<u'u'u'u'>", "<u'u'v'>", "<u'w'>"]
-yp_ref_Vre = data_Vre[2:end, 1]
-u_ave_ref_Vre = data_Vre[2:end, 2]
+# plot coarse spectrum
+ustart = Array(load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[1]);
+# Grid
+nx = 64 
+ny = 64 
+nz = 32 
+kwargs = (;
+    boundary_conditions = (
+        (PeriodicBC(), PeriodicBC()),
+        (DirichletBC(), DirichletBC()),
+        (PeriodicBC(), PeriodicBC()),
+    ),
+    Re = 180.0,
+)
+setup = Setup(;
+    x = (
+        range(xlims..., nx + 1),
+        range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
+        range(zlims..., nz + 1)
+    ),
+    kwargs...,
+);
 
-#log plot
-f = Figure()
-ax1 = Axis(f[1, 1], xscale = log10)
-lines!(ax1, yp_ref_MKM, u_ave_ref_MKM, color=:blue, linewidth=2)
-lines!(ax1, yp_ref_Vre, u_ave_ref_Vre, color=:green, linewidth=2)
-lines!(ax1, yp, u_ave, color=:red)
-ylims!(ax1,0, 19)
-xlims!(ax1, 0.1, 180)
+u_ave = mean(ustart[:,:,:,1], dims=3)
+y_ax = setup.grid.xu[1][2]
+x_ax = setup.grid.xu[1][1]
 
-ax1 = Axis(f[1, 2])
-lines!(ax1, yp_ref_MKM, u_ave_ref_MKM, color=:blue, linewidth=2)
-lines!(ax1, yp_ref_Vre, u_ave_ref_Vre, color=:green, linewidth=2)
-lines!(ax1, yp, u_ave, color=:red)
-ylims!(ax1,0, 19)
-xlims!(ax1, 0.1, 180)
+let
+f = Figure(size = (900, 200));
+ax1 = Axis(f[1, 1], aspect = DataAspect(), xlabel = "x", ylabel = "y")
+heatmap!(ax1,x_ax[1:end-2], y_ax, (ustart[1:end-2,:,1,1] + ustart[1:end-2,:,1,1])/2)
+#contourf!(ax1,x_ax[1:end-2], y_ax, (ustart[1:end-2,:,1,1] + ustart[1:end-2,:,1,1])/2, levels=20)
 display(f)
+name = @__DIR__()*"/output/figs/u_start_coarse.png"
+save(name, f)
+run(`magick $name -trim $name`)
+end
 
-bulk_mean_velocity = mean(u_ave[1:128]*2)
-Rem = bulk_mean_velocity*180
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
+        ["Z",11,17],["E", 11, 17]];
+to_setup = 
+        RikFlow.TO_Setup(; qois, 
+        to_mode = :TRACK_REF, 
+        ArrayType=Array, 
+        setup,
+        nstep=10,
+        mirror_y = true,);
+u_hat = RikFlow.get_u_hat(ustart, setup, to_setup);
+w_hat = RikFlow.get_w_hat_from_u_hat(u_hat, to_setup);
+qd = RikFlow.compute_filtered_qoi_fields(u_hat, w_hat, to_setup, setup);
 
-### plot HF ref ###
-hf_data = load(@__DIR__()*"/output/checkpoints/checkpoint_n50000.jld2");
-keys(hf_data)
-hf_u = hf_data["u_cpu"];
-heatmap(hf_u[:,:,1,1])
 
-lf_u = hf_data["results"].data[1].u[end]
-heatmap(lf_u[:,:,1,1])
+let
+g = Figure(size = (1000, 500));
+axs = [Axis(g[i ÷ 2, i%2][1,1],
+        #xlabel = "x", ylabel = "y",
+        aspect = DataAspect(), )
+        #title = L"||R_{[%$(qois[i+1][2]), %$(qois[i+1][3])]} \omega ||")
+    for i in 0:size(qois, 1)-1]
 
-q_ref = stack(hf_data["results"].data[1].qoi_hist)
-#plot the time series in q_ref in 4 different axes
-f = Figure()
-ax1 = Axis(f[1, 1])
-ax2 = Axis(f[1, 2])
-ax3 = Axis(f[2, 1])
-ax4 = Axis(f[2, 2])
-lines!(ax1, q_ref[1,:], color=:blue)
-lines!(ax1, q[1,:], color=:red)
-lines!(ax2, q_ref[2,:], color=:blue)
-lines!(ax2, q[2,:], color=:red)
-lines!(ax3, q_ref[3,:], color=:blue)
-lines!(ax3, q[3,:], color=:red)
-lines!(ax4, q_ref[4,:], color=:blue)
-lines!(ax4, q[4,:], color=:red)
-display(f)
+for i in 1:size(qois, 1)
+    hm = heatmap!(axs[i],x_ax[1:end-2], y_ax[2:end-1], sum(abs2,real(ifft(qd[i],[1,2,3])),dims = 4)[1:end,1:Int(end/2),5])
+    #hm = heatmap!(axs[i], real(ifft(qd[i],[1,2,3]))[:,4,:,1])
+    #Colorbar(g[(i-1) ÷ 2, (i-1)%2][1,2],hm)
+end
+display(g)
+end
 
-heatmap(outputs.fields[7].u[:,:,1,1])
+let
+for i in 1:size(qois, 1)
+    g = Figure(size = (600, 200));
+    if i in [5,6]
+        axs = Axis(g[1,1][1,1],
+        ylabel = "y", xlabel = "x",
+        aspect = DataAspect(), )
+    else
+        axs = Axis(g[1,1][1,1],
+            ylabel = "y",
+            aspect = DataAspect(), )
+    end
+    hm = heatmap!(axs,x_ax[1:end-2], y_ax[2:end-1], sum(abs2,real(ifft(qd[i],[1,2,3])),dims = 4)[1:end,1:Int(end/2),5])
+    #hm = heatmap!(axs[i], real(ifft(qd[i],[1,2,3]))[:,4,:,1])
+    #Colorbar(g[1,1][1,2],hm)
+    display(g)
+    name = @__DIR__()*"/output/figs/u_filtered_R$(i).png"
+    save(name, g)
+    run(`magick $name -trim $name`)
+end
 
-keys(outputs.fields[end])
+end

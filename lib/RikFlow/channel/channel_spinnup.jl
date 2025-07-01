@@ -23,20 +23,19 @@ global_logger(logger)
 
 
 # Precision
-T = Float32
+T = Float64
 f = one(T)
-# f = one(Float64)
 
 # Domain
 xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = Float32(0.1)
+tsim = 5f  # 10f
 # Grid
-nx = 256 #512
-ny = 256 #512
-nz = 128 #256
+nx = 512
+ny = 512
+nz = 256
 
 @info "Grid size: $(nx) x $(ny) x $(nz)"
 
@@ -62,11 +61,10 @@ setup = Setup(;
 );
 
 @info "factorize psolver ..."
-flush(stdout)
-@time psolver = default_psolver(setup);
-#psolver = psolver_cg(setup);
+
+@time psolver = psolver_transform(setup);
+
 @info "factorize psolver done"
-flush(stdout)
 
 Re_tau = 180f
 Re_m = 2800f
@@ -89,21 +87,25 @@ ustartfunc = let
 end
 
 ustart = velocityfield(setup, ustartfunc; psolver);
+ArrayType = CuArray
+#ustart = ArrayType(load(@__DIR__()*"/output/u_start_cont_constdt_128_128_64_tspin10.0.jld2", "fields")[3].u);
 
 @info "Solving DNS"
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup,
+    Δt = 0.0005f,
     ustart,
     docopy = false,
     tlims = (0f, tsim),
     
     processors = (;
-        log = timelogger(; nupdate = 1),
+        log = timelogger(; nupdate = 100),
+        #fields = fieldsaver(; nupdate = 1000, setup),
         ehist = realtimeplotter(;
                 setup,
                 plot = energy_history_plot,
-                nupdate = 10,
+                nupdate = 100,
                 displayupdates = false,
                 displayfig = false,
             ),
@@ -114,12 +116,14 @@ ustart = velocityfield(setup, ustartfunc; psolver);
 outdir = @__DIR__()*"/output"
 ispath(outdir) || mkpath(outdir)
 
-filename = "$outdir/u_start_$(nx)_$(ny)_$(nz)_tspin$(tsim).jld2"
+filename = "$outdir/u_start_cont_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).jld2"
 u_start = u |> Array;
 jldsave(filename; u_start);
+#fields = outputs.fields |> Array;
+#jldsave(filename; u_start, fields);
 
 # Plot
-save(outdir*"/ehist_spinup_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
+save(outdir*"/ehist_spinup_cont_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
 
 # a = load(filename, "u_start")
 # heatmap(a[10,:,:,3])

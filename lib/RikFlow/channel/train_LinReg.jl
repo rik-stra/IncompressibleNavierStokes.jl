@@ -10,10 +10,10 @@ using CairoMakie
 using Distributions
 using LinearAlgebra
 using RegularizedLeastSquares
-
+ 
 #parse input ARGS
-#model_index = parse(Int, ARGS[1])
-model_index = 1
+model_index = parse(Int, ARGS[1])
+#model_index = 6
 
 function create_history(hist_len, q_star, q, dQ; include_predictor = true)
     if hist_len == 0
@@ -44,14 +44,15 @@ inputs = load(@__DIR__()*"/inputs.jld2", "inputs")
 (; name, hist_len, hist_var, n_replicas, normalization, include_predictor, tracking_noise, train_range, indep_normals, lambda, fitted_qois, model_noise) = inputs[model_index]
 
 
-out_dir = @__DIR__()*"/output/online/$(name)/"
+out_dir = @__DIR__()*"/output/online_TOpaper/$(name)/"
+if !isdir(out_dir)
+    mkpath(out_dir)
+end
 save(out_dir*"parameters.jld2", "parameters", (; name, hist_len, hist_var, n_replicas, normalization, include_predictor))
 
-track_file = @__DIR__()*"/output/LF_track_channel_to_64_64_32_tsim10.0.jld2"
-
+track_file = @__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.005_tsim10.0.jld2"
 data = load(track_file, "data_train");
 
-qois = [["Z",0,6],["E", 0, 6],["Z",7,16],["E", 7, 16]];
 
 q_scaled, in_scaling = RikFlow._normalise(data.q[:,train_range[1]:train_range[2]-1], normalization = normalization)
 q_star_scaled = RikFlow.scale_input(data.q_star[:,train_range[1]:train_range[2]-1], in_scaling)
@@ -59,7 +60,6 @@ dQ_scaled     = RikFlow.scale_input(data.q[:,train_range[1]+1:train_range[2]], i
 scaling = (in_scaling = in_scaling, out_scaling = in_scaling)
 
 inputs, outputs = create_history(hist_len, q_star_scaled, q_scaled, dQ_scaled, hist_var; include_predictor)
-
 
 
 function fit_model(inputs, outputs, fitted_qois; indep_normals = false, lambda = 0.0, regularizer = :l2)
@@ -114,19 +114,6 @@ elseif model_noise == :no_noise
     stoch_distr = nothing
 end
 
-#inp = cat(inputs',ones(eltype(inputs), (size(inputs,2),1)),dims=2)
-#x = c' * inp'
-
-#outputs
-
-# g = Figure();
-# ax,hm = heatmap(g[1,1], c, 
-# #colormap = :grays, colorrange = (-5, 5), highclip = :red, lowclip = :blue)
-# colormap = :balance, colorrange = (-25,25))
-# Colorbar(g[1, 2], hm)
-# Label(g[0,:], text = "lambda $(lambda)", fontsize = 20)
-# display(g)
-
 ## save model
 save(out_dir*"/LinReg.jld2", "c", c', "stoch_distr", stoch_distr, 
     "scaling", scaling, "hist_var", hist_var, "hist_len", hist_len, "include_predictor", include_predictor, "fitted_qois", fitted_qois)
@@ -150,16 +137,20 @@ function plot_time_series(data, qois, title; ref = nothing)
 end
 
 ## test the model
-data_test = load(@__DIR__()*"/output/LF_track_channel_to_64_64_32_tsim10.0.jld2", "data_train");
-dir = @__DIR__()*"/output/online/LinReg1/"
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
+track_file = @__DIR__()*"/output/track/LF_6qoinew_mirror_track_channel_to_64_64_32_dt0.005_tsim10.0.jld2"
+data_test = load(track_file, "data_train");
+
+dir = @__DIR__()*"/output/online_TOnew/LinReg6/"
 model = load(dir*"LinReg.jld2")
 hist_var = model["hist_var"]
 include_predictor = model["include_predictor"]
 
 # scale inputs and outputs
-q_test = RikFlow.scale_input(data_test.q[:,1:1000], model["scaling"].in_scaling)
-q_star_test = RikFlow.scale_input(data_test.q_star[:,1:1000], model["scaling"].in_scaling)
-dQ_test = RikFlow.scale_input(data_test.q[:,2:1001], model["scaling"].out_scaling)
+q_test = RikFlow.scale_input(data_test.q[:,1:2000], model["scaling"].in_scaling)
+q_star_test = RikFlow.scale_input(data_test.q_star[:,1:2000], model["scaling"].in_scaling)
+dQ_test = RikFlow.scale_input(data_test.q[:,2:2001], model["scaling"].out_scaling)
+dQ_scaled = data_test.dQ[:,1:2000]./ model["scaling"].out_scaling.sigma
 
 inputs_test,outputs_test = create_history(model["hist_len"], q_star_test, q_test, dQ_test, hist_var; include_predictor)
 
@@ -167,16 +158,17 @@ inputs_test,outputs_test = create_history(model["hist_len"], q_star_test, q_test
 inp = cat(inputs_test',ones(eltype(inputs_test), (size(inputs_test,2),1)),dims=2)
 rng = Xoshiro(12)
 rand_part = rand(rng, model["stoch_distr"], size(inputs_test,2))'
-
+rp = copy(rand_part)
 rand_unsc = RikFlow.scale_output(rand_part', model["scaling"].out_scaling)
 
 preds = rand_part'
 preds[fitted_qois,:] += model["c"] * inp'
+preds_unsc = RikFlow.scale_output(preds, model["scaling"].out_scaling)
 
 plot_time_series(preds, qois, "preds", ref = outputs_test)
-
-plot_time_series(rand_unsc, qois, "rand_part", ref=stds_ref_data.*tracking_noise.*randn(6,1000))
+plot_time_series(preds-q_star_test[:,6:end], qois, "preds", ref = dQ_scaled[:,:])
+plot_time_series(rp', qois, "rand_part", ref=tracking_noise.*randn(6,1000))
 
 # plot original time series
-preds_unsc = RikFlow.scale_output(preds, model["scaling"].out_scaling)
+
 plot_time_series(preds_unsc, qois, "preds_unsc", ref = data_test.q[:,model["hist_len"]+1:1000])

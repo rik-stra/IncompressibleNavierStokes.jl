@@ -6,11 +6,11 @@ if false
 end
 
 using IncompressibleNavierStokes
-
+#using CairoMakie
 using CUDA
 using RikFlow
 using JLD2
-
+using Statistics
 
 
 # Precision
@@ -24,6 +24,7 @@ zlims = 0f, 4f / 3f * pi
 
 tsim = 100f
 Δt = 0.005f
+c = 0.53
 
 nx_les = 64
 ny_les = 64
@@ -50,15 +51,7 @@ setup = Setup(;
     ),
     kwargs...,
 );
-
-@info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
-psolver = psolver_transform(setup);
-
 qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
-
-hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
-ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
-
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
@@ -66,25 +59,32 @@ to_setup_les =
     setup = setup,
     mirror_y = true,);
 
+@info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
+psolver = psolver_transform(setup);
+
+hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 
 @info "Solving LES"
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
-    setup,
+    # setup,
+    setup = (; setup..., closure_model = IncompressibleNavierStokes.wale_closure),
+    θ = T(c), 
     ustart,
-    docopy = false,
     tlims = (0f, tsim),
     Δt,
     processors = (;
-        log = timelogger(; nupdate = 200),
+        log = timelogger(; nupdate = 100),
         fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
         qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f8),
     ),
     psolver,
 );
 
+# Save filtered DNS data
 outdir = @__DIR__()*"/output"
-filename = "$outdir/LF_nomodel_mirror_channel_to_tsim$(tsim).jld2"
+filename = "$outdir/WALE/LF_wale_mirror_channel_to_$(c)_tsim$(tsim).jld2"
 jldsave(filename; outputs.fields, outputs.qoihist)
 
 exit()

@@ -96,11 +96,15 @@ struct LinReg
     fitted_qois
     target
     rng
-    function LinReg(file_name, rng; q_hist = nothing, spinnup_data = nothing)
+    ArrayType
+
+    function LinReg(file_name, rng, ArrayType; q_hist = nothing, spinnup_data = nothing)
+
         c, stoch_distr, scaling, hist_var, include_predictor, fitted_qois = load(file_name, "c", "stoch_distr", "scaling", "hist_var", "include_predictor", "fitted_qois")
         target = :q
-        scaling = scaling |> dev
-        c= c |> dev
+        scaling = adapt(ArrayType, scaling)
+        c= adapt(ArrayType, c)
+
         counter = zeros(Int)
         if !isnothing(q_hist)
             @assert size(spinnup_data, 2) >= size(q_hist, 2) "Need spinnup data to fill history"
@@ -108,7 +112,7 @@ struct LinReg
         if !isnothing(spinnup_data) && isnothing(q_hist)
             @error "Spinnup not implemented without history"
         end
-        new(c, stoch_distr, scaling, q_hist, spinnup_data, counter, hist_var, include_predictor, fitted_qois, target,rng)
+        new(c, stoch_distr, scaling, q_hist, spinnup_data, counter, hist_var, include_predictor, fitted_qois, target, rng, ArrayType)
     end
 end
 
@@ -136,13 +140,15 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             
             data = vcat(input,ones(eltype(input), (1,1)))
             if !isnothing(time_series_method.stoch_distr)
-                pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
+                pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> adapt(time_series_method.ArrayType)
             else
-                pred = zeros(eltype(input), (n_qoi,1)) |> dev
+                pred = zeros(eltype(input), (n_qoi,1)) |> adapt(time_series_method.ArrayType)
             end
+            
             pred[time_series_method.fitted_qois,:] += time_series_method.c * data
             
             pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+
             if time_series_method.target == :dq
                 dQ = pred
             elseif time_series_method.target == :q
@@ -162,12 +168,13 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
         input = q_star
         data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
         if !isnothing(time_series_method.stoch_distr)
-            pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> dev
+            pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> adapt(time_series_method.ArrayType)
         else
             pred = zeros(eltype(input), n_qoi)
         end
         pred[time_series_method.fitted_qois,:] += time_series_method.c * data
         pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
+        
         if time_series_method.target == :dq
             dQ = pred
         elseif time_series_method.target == :q
