@@ -1,9 +1,9 @@
+# High fidelity reference simulation of homogeneous isotropic turbulence (HIT).
+# Collects qoi reference trajectories.
+
 if false                                               #src
     include("../src/RikFlow.jl")                  #src
-    #include("../NeuralClosure/src/NeuralClosure.jl")   #src
     include("../../../src/IncompressibleNavierStokes.jl") #src
-    using .SymmetryClosure                             #src
-    #using .NeuralClosure                               #src
     using .IncompressibleNavierStokes                  #src
 end     
 
@@ -21,27 +21,28 @@ using CUDA
 t1 = time()
 
 # Write output to file, as the default SLURM file is not updated often enough
-jobid = ENV["SLURM_JOB_ID"]
-#taskid = ENV["SLURM_ARRAY_TASK_ID"]
-logfile = joinpath(@__DIR__, "log_$(jobid).out")
-filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
-logger = TeeLogger(global_logger(), filelogger)
-global_logger(logger)
+# jobid = ENV["SLURM_JOB_ID"]
+# logfile = joinpath(@__DIR__, "log_$(jobid).out")
+# filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+# logger = TeeLogger(global_logger(), filelogger)
+# global_logger(logger)
 
-
-println("Modules loaded. Time: $(t1-t0) s")
-
-#n_dns = parse(Int,ARGS[1])
-#n_les = parse(Int,ARGS[2])
-#Re = parse(Float32,ARGS[3])
-
-n_dns = Int(512) #512
+## full simulation
+n_dns = Int(512) 
 n_les = Int(64)
 Re = Float32(2_000)
-############################
 Δt = Float32(2.5e-4)
-tsim = Float32(0.5)
-#### -> 2,5 hours
+tsim = Float32(100)
+tburn = Float32(4)
+
+## small test parameters
+# n_dns = Int(128)
+# n_les = Int(64)
+# Re = Float32(2_000)
+# Δt = Float32(2.5e-4)
+# tsim = Float32(0.5)
+# tburn = Float32(0.2)
+
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -54,9 +55,9 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-outdir = @__DIR__() *"/output/new"
+outdir = @__DIR__() *"/output"
 indir = @__DIR__() *"/output"
-checkpoints_dir = @__DIR__() *"/output/new/checkpoints"
+checkpoints_dir = @__DIR__() *"/output/checkpoints"
 ispath(outdir) || mkpath(outdir)
 ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 
@@ -65,12 +66,11 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
 T = Float32
 ArrayType = CuArray
 backend = CUDABackend()
-#device = x -> adapt(CuArray, x)
-tburn = Float32(4) #4
+
 ustart = load(indir*"/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2", "u_start");
-if ustart isa Tuple
+if ustart isa Tuple # old INS data format
     ustart = stack(ArrayType.(ustart));
-elseif ustart isa Array{<:Number,4}
+elseif ustart isa Array{<:Number,4} # new INS data format
     ustart = ArrayType(ustart);
 end
 

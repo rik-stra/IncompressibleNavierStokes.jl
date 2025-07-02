@@ -1,10 +1,6 @@
 if false                                               #src
     include("../src/RikFlow.jl")                  #src
-    #include("../NeuralClosure/src/NeuralClosure.jl")   #src
     include("../../../src/IncompressibleNavierStokes.jl") #src
-    using .SymmetryClosure                             #src
-    #using .NeuralClosure                               #src
-    using .IncompressibleNavierStokes                  #src
 end
 
 using Random
@@ -32,18 +28,16 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-outdir = @__DIR__() *"/output/new"
+outdir = @__DIR__() *"/output"
 ispath(outdir) || mkpath(outdir)
 
 # For running on a CUDA compatible GPU
-
 T = Float32
 ArrayType = CuArray
 
-# load reference data
+# load data from tracking simulation -- we use the same parameter settings and initial condition.
 track_file = @__DIR__()*"/paper_runs/output/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2"
 params_track = load(track_file, "params_track");
-#track_file = @__DIR__()*"/../output/new/data_track2_dns512_les64_Re2000.0_tsim100.0.jld2"
 data_track = load(track_file, "data_track");
 
 # get initial condition

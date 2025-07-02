@@ -1,18 +1,10 @@
-if false                                               #src
-    include("../src/RikFlow.jl")                  #src
-    #include("../NeuralClosure/src/NeuralClosure.jl")   #src
-    include("../../../src/IncompressibleNavierStokes.jl") #src
-    using .SymmetryClosure                             #src
-    #using .NeuralClosure                               #src
-    using .IncompressibleNavierStokes                  #src
-end     
+# This script performs a high-fidelity simulation of homogeneous isotropic turbulence (HIT), 
+# it saves the final turbulent field and a plot of the energy over the simulation time.
 
 
-
-# perfom a HF simulation
 println("Loading modules...")
 t0 = time()
-using LoggingExtras
+#using LoggingExtras
 using Random
 using CairoMakie
 using JLD2
@@ -22,27 +14,29 @@ using CUDA
 t1 = time()
 
 # Write output to file, as the default SLURM file is not updated often enough
-jobid = ENV["SLURM_JOB_ID"]
-#taskid = ENV["SLURM_ARRAY_TASK_ID"]
-logfile = joinpath(@__DIR__, "log_$(jobid).out")
-filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
-logger = TeeLogger(global_logger(), filelogger)
-global_logger(logger)
+# jobid = ENV["SLURM_JOB_ID"]
+# logfile = joinpath(@__DIR__, "log_$(jobid).out")
+# filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+# logger = TeeLogger(global_logger(), filelogger)
+# global_logger(logger)
 
 
 println("Modules loaded. Time: $(t1-t0) s")
 
-n_dns = Int(800)
+# full size simulation
+n_dns = Int(512)
 n_les = Int(64)
 Re = Float32(2_000)
 tburn = Float32(4)
 Δt = Float32(0.00025)
 
-#n_dns = Int(128)
-#n_les = Int(64)
-#Re = Float32(2_000)
-#tburn = Float32(0.2)
-#Δt = 0.001
+# small test parameters
+n_dns = Int(128)
+n_les = Int(64)
+Re = Float32(2_000)
+tburn = Float32(0.2)
+Δt = Float32(0.00025)
+
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -87,4 +81,3 @@ jldsave(filename; u_start)
 
 # Plot
 save(outdir*"/ehist2_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tburn).png",ehist)
-#save(outdir*"/espec_$(n_dns)_Re$(Re)_tsim$(params_train.tburn).png",espec)
