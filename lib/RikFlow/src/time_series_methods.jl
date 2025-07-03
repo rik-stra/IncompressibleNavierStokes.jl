@@ -140,7 +140,7 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             
             data = vcat(input,ones(eltype(input), (1,1)))
             if !isnothing(time_series_method.stoch_distr)
-                pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> adapt(time_series_method.ArrayType)
+                pred = rand(time_series_method.rng, time_series_method.stoch_distr).|> Float32 |> adapt(time_series_method.ArrayType)
             else
                 pred = zeros(eltype(input), (n_qoi,1)) |> adapt(time_series_method.ArrayType)
             end

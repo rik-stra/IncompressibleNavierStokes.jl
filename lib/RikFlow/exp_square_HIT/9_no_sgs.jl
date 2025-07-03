@@ -4,23 +4,30 @@ if false                                               #src
 end
 
 using Random
-using CairoMakie
 using JLD2
 using RikFlow
 using IncompressibleNavierStokes
 using CUDA
 
-n_dns = Int(512)
-n_les = Int(64)
-Re = Float32(2_000)
-############################
-Δt = Float32(2.5f-3)
-tsim = Float32(100)
+no_model_folder = @__DIR__()*"/output/no_model"
+track_file = @__DIR__()*"/output/data_track_tsim10.0.jld2" #we will take some parameters and the initial field from here
+ispath(no_model_folder) || mkpath(no_model_folder)
+
+# simulation parameters
+Re = Float32(2_000);
+Δt = Float32(2.5e-3);
+tsim = Float32(100);
 # forcing
-T_L = 0.01f0  # correlation time of the forcing
-e_star = 0.1f0 # energy injection rate
+T_L = 0.01  # correlation time of the forcing
+e_star = 0.1 # energy injection rate
 k_f = sqrt(2) # forcing wavenumber  
 freeze = 1 # number of time steps to freeze the forcing
+
+# For running on a CUDA compatible GPU
+T = Float32
+ArrayType = CuArray
+backend = CUDABackend()
+
 
 seeds = (;
     dns = 123, # DNS initial condition
@@ -28,17 +35,10 @@ seeds = (;
     to = 234, # TO method online sampling
 )
 
-outdir = @__DIR__() *"/output"
-ispath(outdir) || mkpath(outdir)
 
-# For running on a CUDA compatible GPU
-T = Float32
-ArrayType = CuArray
-
-# load data from tracking simulation -- we use the same parameter settings and initial condition.
-track_file = @__DIR__()*"/paper_runs/output/tracking/data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2"
-params_track = load(track_file, "params_track");
+# load reference data
 data_track = load(track_file, "data_track");
+params_track = load(track_file, "params_track");
 
 # get initial condition
 if data_track.fields[1].u isa Tuple
@@ -47,7 +47,6 @@ elseif data_track.fields[1].u isa Array{<:Number,4}
     ustart = ArrayType(data_track.fields[1].u);
 end
 
-
 params = (;
     params_track...,
     tsim,
@@ -55,7 +54,7 @@ params = (;
     ArrayType,
     ustart, 
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
-    savefreq = 100);
+    savefreq = 1000);
 
 # Build setup and assemble operators
 setup = Setup(;
@@ -71,7 +70,7 @@ nt = round(Int, params.tsim / params.Δt)
 
 to_setup_les = RikFlow.TO_Setup(; 
          params.qois, 
-         to_mode = :CREATE_REF,
+         to_mode = :CREATE_REF,  # allows us to save the scale-aware QoIs during the simulation
          params.ArrayType, 
          setup,
          nstep=nt);
@@ -97,4 +96,4 @@ psolver = psolver_spectral(setup);
 q = stack(outputs.qoihist);
 data_online = (;q, fields = outputs.fields);
 # Save tracking data
-jldsave("$outdir/data_no_sgs_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_online, params);
+jldsave(no_model_folder*"/data_no_sgs_tsim$(tsim).jld2"; data_online, params);
