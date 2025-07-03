@@ -69,4 +69,4 @@ maximum(abs, erel)
 #@assert(maximum(abs, erel)<1e-2)
 
 # Save tracking data
-jldsave("$outdir/data_track_dns$(n_dns)_les$(n_les)_Re$(Re)_tsim$(tsim).jld2"; data_track, params_track);
+jldsave("$outdir/data_track_tsim$(tsim).jld2"; data_track, params_track);
