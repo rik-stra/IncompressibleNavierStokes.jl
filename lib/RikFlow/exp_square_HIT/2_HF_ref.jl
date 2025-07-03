@@ -8,7 +8,6 @@ if false                                               #src
 end     
 
 
-# perfom a HF simulation
 println("Loading modules...")
 t0 = time()
 using LoggingExtras
@@ -36,12 +35,12 @@ tsim = Float32(100)
 tburn = Float32(4)
 
 ## small test parameters
-# n_dns = Int(128)
-# n_les = Int(64)
-# Re = Float32(2_000)
-# Δt = Float32(2.5e-4)
-# tsim = Float32(0.5)
-# tburn = Float32(0.2)
+n_dns = Int(128)
+n_les = Int(64)
+Re = Float32(2_000)
+Δt = Float32(2.5e-4)
+tsim = Float32(0.5)
+tburn = Float32(0.2)
 
 # forcing
 T_L = 0.01  # correlation time of the forcing
