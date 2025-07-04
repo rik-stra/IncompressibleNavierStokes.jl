@@ -12,9 +12,9 @@ using LinearAlgebra
 using RegularizedLeastSquares
 
 # parse input ARGS
-# model_index = parse(Int, ARGS[1])
+model_index = parse(Int, ARGS[1])
 # or set model_index manually
-model_index = 1
+#model_index = 1
 inputs_file_name = "/inputs_example.jld2"
 TO_folder = @__DIR__()*"/output/TO_LRS"
 track_file = @__DIR__()*"/output/data_track_tsim10.0.jld2"

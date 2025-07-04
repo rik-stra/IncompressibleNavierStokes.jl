@@ -69,5 +69,5 @@ for i in 1:n_replicas
     @info "Running sim $i out of $n_replicas"
     data_online = online_sgs(; params..., time_series_method=time_series_sampler);
 # Save tracking data
-    jldsave(DDN_folder*"DDN_data_online_tsim$(tsim)_replica$(i).jld2"; data_online, params);
+    jldsave(DDN_folder*"/DDN_data_online_tsim$(tsim)_replica$(i).jld2"; data_online, params);
 end
