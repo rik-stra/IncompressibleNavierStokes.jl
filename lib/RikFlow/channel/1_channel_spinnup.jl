@@ -1,4 +1,4 @@
-## Turbulent channel flow
+## Turbulent channel flow spin-up
 
 if false
     include("../../../src/IncompressibleNavierStokes.jl")
@@ -6,20 +6,18 @@ if false
 end
 
 using IncompressibleNavierStokes
-using CairoMakie
 using CUDA
 using CUDSS
 using RikFlow
 using JLD2
-using LoggingExtras
-#using WGLMakie
+#using LoggingExtras
 
-jobid = ENV["SLURM_JOB_ID"]
-#taskid = ENV["SLURM_ARRAY_TASK_ID"]
-logfile = joinpath(@__DIR__, "log_$(jobid).out")
-filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
-logger = TeeLogger(global_logger(), filelogger)
-global_logger(logger)
+
+#jobid = ENV["SLURM_JOB_ID"]
+#logfile = joinpath(@__DIR__, "log_$(jobid).out")
+#filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+#logger = TeeLogger(global_logger(), filelogger)
+#global_logger(logger)
 
 
 # Precision
@@ -31,11 +29,17 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 5f  # 10f
+tsim = 15f  # 15f
 # Grid
 nx = 512
 ny = 512
 nz = 256
+
+# small test
+tsim = 5f
+nx = 64
+ny = 64
+nz = 32
 
 @info "Grid size: $(nx) x $(ny) x $(nz)"
 
@@ -60,12 +64,9 @@ setup = Setup(;
     kwargs...,
 );
 
-@info "factorize psolver ..."
+psolver = psolver_transform(setup);
 
-@time psolver = psolver_transform(setup);
-
-@info "factorize psolver done"
-
+# Initial condition
 Re_tau = 180f
 Re_m = 2800f
 Re_ratio = Re_m / Re_tau
@@ -88,10 +89,8 @@ end
 
 ustart = velocityfield(setup, ustartfunc; psolver);
 ArrayType = CuArray
-#ustart = ArrayType(load(@__DIR__()*"/output/u_start_cont_constdt_128_128_64_tspin10.0.jld2", "fields")[3].u);
 
 @info "Solving DNS"
-# Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup,
     Δt = 0.0005f,
@@ -100,7 +99,7 @@ ArrayType = CuArray
     tlims = (0f, tsim),
     
     processors = (;
-        log = timelogger(; nupdate = 100),
+        log = timelogger(; nupdate = 1000),
         #fields = fieldsaver(; nupdate = 1000, setup),
         ehist = realtimeplotter(;
                 setup,
@@ -113,17 +112,13 @@ ArrayType = CuArray
     psolver,
 );
 
-outdir = @__DIR__()*"/output"
+outdir = @__DIR__()*"/output/HF"
 ispath(outdir) || mkpath(outdir)
 
-filename = "$outdir/u_start_cont_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).jld2"
+filename = "$outdir/u_start_T$(Int(tsim))_$(nx)_$(ny)_$(nz).jld2"
 u_start = u |> Array;
 jldsave(filename; u_start);
-#fields = outputs.fields |> Array;
-#jldsave(filename; u_start, fields);
 
 # Plot
-save(outdir*"/ehist_spinup_cont_constdt_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
+save(outdir*"/ehist_spinup_$(nx)_$(ny)_$(nz)_tspin$(tsim).png",outputs.ehist)
 
-# a = load(filename, "u_start")
-# heatmap(a[10,:,:,3])

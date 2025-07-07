@@ -142,7 +142,7 @@ end
     data = [load(@__DIR__()*"/output/online_TOpaper/LinReg11/LF_online_channel_to_64_64_32_tsim100.0_repl_$(i).jld2", "data")
             for i in 1:n_replicas];
     q_rep = map(x -> x.q ./2, data)
-    hf_data = load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2");
+    hf_data = load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2");
     q_ref = stack(hf_data["f"].data[1].qoi_hist)./2
     wale_data = load(@__DIR__()*"/output/WALE/LF_wale_mirror_channel_to_0.53_tsim100.0.jld2","qoihist");
     q_wale = stack(wale_data)./2

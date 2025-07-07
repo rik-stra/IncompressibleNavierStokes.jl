@@ -32,7 +32,7 @@ y_ax = setup.grid.xu[1][2]
 x_ax = setup.grid.xu[1][1]
 
 #u = Array(load(@__DIR__()*"/output/HF_channel_6qoi_mirror_2framerate_new_128_128_64_to_64_64_32_tsim20.0.jld2")["f"].data[1].u[:]);
-u = Array(load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[:]);
+u = Array(load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[:]);
 #u = Array(load(@__DIR__()*"/output/checkpoint_n10000.jld2")["results"].data[1].u[:]);
 
 u_ave_center = mean(stack(u[2:11])[1:end-2, Int(end/2):Int(end/2)+1, 1:end-2, 1, :])
@@ -87,7 +87,7 @@ display(f)
 
 
 let
-q = stack(load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].qoi_hist)
+q = stack(load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].qoi_hist)
 qois = [["Z",0,3],["E", 0, 3],["Z",4,12],["E", 4, 12],
         ["Z",13,17],["E", 13, 17]];
 time_index = 0:0.001:15

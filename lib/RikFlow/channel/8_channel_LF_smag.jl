@@ -56,7 +56,7 @@ setup = Setup(;
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
 psolver = psolver_transform(setup);
 
-hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
 ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
 to_setup_les = 

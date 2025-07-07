@@ -25,7 +25,7 @@ zlims = 0f, 4f / 3f * pi
 
 tsim = 10f
 Δts = [0.005f]
-hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
 nx_les = 64
 ny_les = 64
 nz_les = 32

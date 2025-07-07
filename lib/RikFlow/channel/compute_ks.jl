@@ -6,7 +6,7 @@ using RikFlow
 index_range = [2,10]
 linreg_params_table = DataFrame(load(@__DIR__()*"/inputs.jld2", "inputs"))[index_range[1]:index_range[2],:]
 # load reference data
-hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
 q_ref = stack(load(hf_file)["f"].data[1].qoi_hist[1:5:10001]);
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 

@@ -62,7 +62,7 @@ end
 # save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
 
 # plot coarse spectrum
-ustart = Array(load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[1]);
+ustart = Array(load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[1]);
 # Grid
 nx = 64 
 ny = 64 

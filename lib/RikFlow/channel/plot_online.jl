@@ -142,7 +142,7 @@ let
     save(@__DIR__()*"/output/figs/Channel_flowprofiles_online.pdf", f)
 end
 
-hf_file = @__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2"
+hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
 data = load(hf_file, "f").data[1].u[:];
 u_fields = data[2:11];
 u_ave_HF = get_u_ave(u_fields);
@@ -248,7 +248,7 @@ for lr in ["LinReg11", "LinReg13"]
     data = [load(@__DIR__()*"/output/online_TOpaper/$(lr)/LF_online_channel_to_64_64_32_tsim100.0_repl_$(i).jld2", "data")
             for i in 1:n_replicas];
     q_rep = map(x -> x.q ./2, data)
-    hf_data = load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2");
+    hf_data = load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2");
     q_ref = stack(hf_data["f"].data[1].qoi_hist)./2
 
 
@@ -288,7 +288,7 @@ end
 #         for i in 1:n_replicas]
 # q_rep = map(x -> x.q, data)
 let
-    hf_data = load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2");
+    hf_data = load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2");
     q_ref = stack(hf_data["f"].data[1].qoi_hist)./2
     wale_data = load(@__DIR__()*"/output/WALE/LF_wale_mirror_channel_to_0.53_tsim100.0.jld2","qoihist");
     q_wale = stack(wale_data)./2
@@ -369,6 +369,6 @@ save_vtk(f; setup, filename = @__DIR__()*"/output/vtks/LF_wale_T100", fieldnames
 data = load(@__DIR__()*"/output/smag/LF_smag_mirror_channel_to_0.13_tsim100.0.jld2", "fields")[end];
 save_vtk(data; setup, filename = @__DIR__()*"/output/vtks/LF_smag_T100", fieldnames = (:velocity, :Qfield))
 
-f = load(@__DIR__()*"/output/HF/HF_channel_6qoinew_mirror_2framerate_512_512_256_to_64_64_32_tsim15.0.jld2", "f").data[1].u[11];
+f = load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2", "f").data[1].u[11];
 state = (;u = f, t=0., temp=0);
 save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/HF_T10", fieldnames = (:velocity, :Qfield))
