@@ -12,7 +12,7 @@ using CUDA
 # parse input ARGS
 model_index = parse(Int, ARGS[1])
 # or set model_index manually
-#model_index = 1
+model_index = 2
 
 inputs_file_name = "/inputs_example.jld2"
 TO_folder = @__DIR__()*"/output/TO_LRS"
@@ -67,7 +67,6 @@ params = (;
     Δt,
     ArrayType,
     backend,
-    ustart,
     savefreq = 1000);
 
 # Run replicas
@@ -85,7 +84,7 @@ for i in 1:n_replicas
     
 # run the sim
     @info "Running sim $i out of $n_replicas"
-    data_online = online_sgs(; params..., time_series_method=time_series_sampler);
+    data_online = online_sgs(; params..., ustart=ustart, time_series_method=time_series_sampler);
 # Save tracking data
     jldsave(out_dir*"data_online_tsim$(tsim)_replica$(i).jld2"; data_online, params);
 end

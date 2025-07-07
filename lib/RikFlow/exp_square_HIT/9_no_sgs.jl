@@ -51,8 +51,7 @@ params = (;
     params_track...,
     tsim,
     Δt,
-    ArrayType,
-    ustart, 
+    ArrayType, 
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou),
     savefreq = 1000);
 
