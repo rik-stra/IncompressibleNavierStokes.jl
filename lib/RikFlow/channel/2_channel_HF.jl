@@ -39,7 +39,7 @@ nx_les = 64
 ny_les = 64
 nz_les = 32
 
-# small test
+#### small test
 # tsim = 5f
 # tspin = 5f
 # # Grid

@@ -1,4 +1,4 @@
-## Turbulent channel flow
+## This script runs multiple short WALE and Smagorinsky LES simulations to find the optimal closure model constant for the channel flow at Re = 180.
 
 if false
     include("../../../src/IncompressibleNavierStokes.jl")
@@ -6,14 +6,13 @@ if false
 end
 
 using IncompressibleNavierStokes
-#using CairoMakie
 using CUDA
 using RikFlow
 using JLD2
 using Statistics
 
 
-
+hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
 # Precision
 T = Float64
 f = one(T)
@@ -23,7 +22,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 10f
+tsim = 1f   # we optimize over 10-time unit simulations
 Δt = 0.005f
 
 nx_les = 64
@@ -56,19 +55,10 @@ setup = Setup(;
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
 #amgx_objects = amgx_setup();
 psolver = psolver_transform(setup);
-
-target_u_ave = 18.2665
-
-
-
-#c_s = 0.1:0.005:0.2
-c_s = 0.125:0.005:0.145
 u_aves_smag = []
-
+c_s = 0.125:0.005:0.145 # Smagorinsky constant range
 for c in c_s
     @info "c: $c"
-
-    hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
     ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 
     @info "Solving LES"
@@ -94,19 +84,18 @@ for c in c_s
     push!(u_aves_smag, u_ave)
 
 end
-
-filename = @__DIR__()*"/output/smag/optimize_smag_centerv2.jld2"
+out_dir = @__DIR__()*"/output/smag"
+ispath(out_dir) || mkpath(out_dir)
+filename = out_dir*"optimize_smag.jld2"
 jldsave(filename; c_s , u_aves_smag)
 
-exit()
-
+# Now we do the same for the WALE closure model
 c_w = 0.49:0.005:0.55
 u_aves_WALE = []
 
 for c in c_w
     @info "c: $c"
 
-    hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
     ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 
     @info "Solving LES"
@@ -132,41 +121,7 @@ for c in c_w
     push!(u_aves_WALE, u_ave)
 
 end
-
-filename = @__DIR__()*"/output/WALE/optimize_WALE_centerv.jld2"
+out_dir = @__DIR__()*"/output/WALE"
+ispath(out_dir) || mkpath(out_dir)
+filename = out_dir*"optimize_WALE_centerv.jld2"
 jldsave(filename; c_w, u_aves_WALE)
-
-
-# u_ave target   15.647
-# theta = 0.5 -> u_ave 15.622711
-# theta = 0.6 -> u_ave 15.774
-
-exit()
-
-filename_WALE = @__DIR__()*"/output/WALE/optimize_WALE_centerv.jld2"
-filename_smag = @__DIR__()*"/output/smag/optimize_smag_centerv.jld2"
-filename_smag2 = @__DIR__()*"/output/smag/optimize_smag_centerv2.jld2"
-WALE_data = load(filename_WALE)
-smag_data = load(filename_smag)
-smag_data2 = load(filename_smag2)
-
-smag_cs = cat(smag_data["c_s"], smag_data2["c_s"], dims=1)
-smag_u_aves = cat(smag_data["u_aves_smag"], smag_data2["u_aves_smag"], dims=1)
-
-target = 18.2665
-
-using CairoMakie
-fig = Figure(size = (1200, 600));
-ax1 = Axis(fig[1, 1], title = "WALE")
-lines!(ax1, WALE_data["c_w"], WALE_data["u_aves_WALE"], color = :blue, label = "WALE")
-lines!(ax1, [WALE_data["c_w"][1], WALE_data["c_w"][end]], [target, target], color = :black, linestyle = :dash, label = "Target u_ave")
-ax2 = Axis(fig[1, 2], title = "Smagorinsky")
-lines!(ax2, smag_cs, smag_u_aves, color = :red, label = "Smagorinsky")
-lines!(ax2, [smag_cs[1], smag_cs[end]], [target, target], color = :black, linestyle = :dash, label = "Target u_ave")
-display(fig)
-
-collect(WALE_data["c_w"])
-WALE_data["u_aves_WALE"]
-
-smag_cs
-smag_u_aves

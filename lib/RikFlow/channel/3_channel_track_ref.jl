@@ -6,13 +6,9 @@ if false
 end
 
 using IncompressibleNavierStokes
-#using CairoMakie
 using CUDA
-#using CUDSS
-#using AMGX
 using RikFlow
 using JLD2
-
 
 # Precision
 T = Float64
@@ -22,13 +18,15 @@ f = one(T)
 xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
-
-tsim = 10f
-Δts = [0.005f]
-hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
 nx_les = 64
 ny_les = 64
 nz_les = 32
+tsim = 10f
+Δt = 0.005f
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
+        ["Z",11,17],["E", 11, 17]];
+hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
+
 ArrayType = CuArray
 kwargs = (;
     boundary_conditions = (
@@ -57,74 +55,50 @@ setup = Setup(;
 psolver = psolver_transform(setup)
 
 
-qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
-        ["Z",11,17],["E", 11, 17]];
+ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
+qoi_ref = stack(load(hf_file)["f"].data[1].qoi_hist[1:10001]);
+sample_rate = 5 # In the HF simulation we saved every second time step, now we take 10 times bigger time steps
+qoi_ref = qoi_ref[:,1:sample_rate:end]
+ref_reader = Reference_reader(qoi_ref);
 
-for Δt in Δts
-    ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
-    qoi_ref = stack(load(hf_file)["f"].data[1].qoi_hist[1:10001]);
-    sample_rate = Int(Δt/0.001)
-    qoi_ref = qoi_ref[:,1:sample_rate:end]
-    ref_reader = Reference_reader(qoi_ref);
+nt = round(Int, tsim / Δt)
 
-    nt = round(Int, tsim / Δt)
+to_setup_les = 
+    RikFlow.TO_Setup(; qois, 
+    to_mode = :TRACK_REF, 
+    ArrayType, 
+    setup,
+    nstep=nt,
+    time_series_method = ref_reader,
+    mirror_y = true,);
 
-    to_setup_les = 
-        RikFlow.TO_Setup(; qois, 
-        to_mode = :TRACK_REF, 
-        ArrayType, 
-        setup,
-        nstep=nt,
-        time_series_method = ref_reader,
-        mirror_y = true,);
-
-    outdir = @__DIR__() *"/output"
-    ispath(outdir) || mkpath(outdir)
+outdir = @__DIR__() *"/output/track"
+ispath(outdir) || mkpath(outdir)
 
 
-    @info "Solving LES"
-    # Solve DNS and store filtered quantities
-    (; u, t), outputs = solve_unsteady(;
-        setup,
-        ustart,
-        docopy = false,
-        method = TOMethod(; to_setup = to_setup_les),
-        tlims = (0f, tsim),
-        Δt,
-        processors = (;
-            log = timelogger(; nupdate = Int(100/sample_rate)),
-            fields = fieldsaver(; setup, nupdate = Int(1000/sample_rate)),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
-        ),
-        psolver,
-    );
+@info "Solving LES"
+(; u, t), outputs = solve_unsteady(;
+    setup,
+    ustart,
+    docopy = false,
+    method = TOMethod(; to_setup = to_setup_les),
+    tlims = (0f, tsim),
+    Δt,
+    processors = (;
+        log = timelogger(; nupdate = Int(100/sample_rate)),
+        fields = fieldsaver(; setup, nupdate = Int(1000/sample_rate)),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+        qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1f7),
+    ),
+    psolver,
+);
 
-    q = stack(outputs.qoihist)
-    dQ = to_setup_les.outputs.dQ
-    tau = to_setup_les.outputs.tau
-    q_star = to_setup_les.outputs.q_star
-    fields = outputs.fields
-    data_train = (;dQ, tau, q, q_star, fields)
-
-    # Save filtered DNS data
-    filename = "$outdir/track/LF_6qoinew_mirror_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_dt$(Δt)_tsim$(tsim).jld2"
-    jldsave(filename; data_train)
-end
-
-exit()
 q = stack(outputs.qoihist)
-a = load(filename)
-keys(a["f"].data[1])
-a["f"].data[1].qoi_hist
+dQ = to_setup_les.outputs.dQ
+tau = to_setup_les.outputs.tau
+q_star = to_setup_les.outputs.q_star
+fields = outputs.fields
+data_train = (;dQ, tau, q, q_star, fields)
 
-# u_start low fidelity
-u_lf = a["f"].data[1].u[1]
-u_hf = load(@__DIR__()*"/output/u_start_256_256_128_tspin10.0.jld2", "u_start")
-
-using CairoMakie
-_, _, cb = heatmap(outputs.fields[1].u[:,:,16,1], colorrange = (-20, 20))
-
-heatmap(u_lf[:,:,1,1])
-heatmap(u_hf[:,:,64,1], colorrange = (-20, 20))
-
-total_kinetic_energy(ArrayType(u_hf), setup)
+# Save filtered DNS data
+filename = "$outdir/LF_6qoi_track_channel_to_$(nx_les)_$(ny_les)_$(nz_les)_dt$(Δt)_tsim$(tsim).jld2"
+jldsave(filename; data_train)

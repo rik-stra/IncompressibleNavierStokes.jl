@@ -1,4 +1,4 @@
-## Turbulent channel flow
+## Run 1 long simulations with smagorinsky closure model and optimal Smagorinsky constant
 
 if false
     include("../../../src/IncompressibleNavierStokes.jl")
@@ -6,13 +6,14 @@ if false
 end
 
 using IncompressibleNavierStokes
-#using CairoMakie
 using CUDA
 using RikFlow
 using JLD2
-using Statistics
 
-
+# Smagorinsky constant
+c = 0.13
+hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2" # for initial condition
+qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
 # Precision
 T = Float64
 f = one(T)
@@ -22,13 +23,13 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 100f
+tsim = 5f # 100
 Δt = 0.005f
-c = 0.13
 
 nx_les = 64
 ny_les = 64
 nz_les = 32
+
 ArrayType = CuArray
 kwargs = (;
     boundary_conditions = (
@@ -46,7 +47,7 @@ kwargs = (;
 setup = Setup(;
     x = (
         range(xlims..., nx_les + 1),
-        range(ylims..., ny_les + 1), # tanh_grid(ylims..., ny + 1),
+        range(ylims..., ny_les + 1),
         range(zlims..., nz_les + 1)
     ),
     kwargs...,
@@ -55,10 +56,8 @@ setup = Setup(;
 
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
 psolver = psolver_transform(setup);
-
-hf_file = @__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2"
 ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
-qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],["Z",11,17],["E", 11, 17]];
+
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
     to_mode = :CREATE_REF, 
@@ -84,8 +83,6 @@ to_setup_les =
 );
 
 # Save filtered DNS data
-outdir = @__DIR__()*"/output"
-filename = "$outdir/smag/LF_smag_mirror_channel_to_$(c)_tsim$(tsim).jld2"
+outdir = @__DIR__()*"/output/smag"
+filename = "$outdir/LF_smag_channel_c$(c)_tsim$(tsim).jld2"
 jldsave(filename; outputs.fields, outputs.qoihist)
-
-exit()
