@@ -1,4 +1,3 @@
-include("plotter.jl")
 
 
 function lesdatagen(dnsobs, Φ, les, compression, to_setup, n_plot)

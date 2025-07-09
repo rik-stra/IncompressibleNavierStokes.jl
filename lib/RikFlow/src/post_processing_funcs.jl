@@ -1,9 +1,7 @@
 if false                                               #src
     include("../src/RikFlow.jl")                  #src
-    #include("../NeuralClosure/src/NeuralClosure.jl")   #src
     include("../../../src/IncompressibleNavierStokes.jl") #src
     using .SymmetryClosure                             #src
-    #using .NeuralClosure                               #src
     using .IncompressibleNavierStokes                  #src
 end   
 
