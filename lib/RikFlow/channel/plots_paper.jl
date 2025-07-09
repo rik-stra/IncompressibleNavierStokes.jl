@@ -215,6 +215,7 @@ yp = setup.grid.xu[1][2][2:Int(end//2)]*180
 using DelimitedFiles
 if !ispath(@__DIR__()*"/ref_data_vreman/Chan180_FD2_basic_u.txt")
     println("Downloading reference data for channel flow profiles...")
+    using Downloads
     Downloads.download("https://www.vremanresearch.nl/Chan180_FD2_basic_u.txt", @__DIR__()*"/ref_data_vreman/Chan180_FD2_basic_u.txt")
 end
 
