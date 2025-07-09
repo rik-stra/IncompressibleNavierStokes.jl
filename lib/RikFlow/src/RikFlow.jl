@@ -14,12 +14,30 @@ using Statistics
 using Distributions
 using Random
 using Adapt
-using MLUtils
-using Lux, LuxCUDA
-using Optimisers, Zygote
+#using MLUtils
+#using Lux, LuxCUDA
+#using Optimisers, Zygote
 
 
 include("time_series_methods.jl")
+include("filter.jl")
+export FaceAverage, VolumeAverage
+
+include("HIT_setups/create_ref_data.jl")
+export create_ref_data
+export spinnup
+
+include("HIT_setups/LFsims.jl")
+export track_ref
+export online_sgs
+
+include("scale.jl")
+
+include("post_processing_funcs.jl")
+export ks_dist
+export energy_spectra_comparison
+
+
 """
 Create setup for Tau-orthogonal method (stored in a named tuple).
 The tuple stores
@@ -52,20 +70,6 @@ function TO_Setup(; qois, to_mode, ArrayType, setup, nstep = nothing, time_serie
     return to_setup
 end
 
-
-function read_next_from_Q_dQ_array(to_setup)
-    q = to_setup.Q_dQ_array[:,to_setup.time_index[]]
-    to_setup.time_index[] += 1
-    return q
-end
-
-function load_qois(qoi_refs_location::String)
-    load(qoi_refs_location*"/QoIhist.jld2")["q"]
-end
-
-function load_qois(qoi_refs_location::VecOrMat)
-    qoi_refs_location
-end
 
 function allocate_arrays_outputs(;nstep, N_qois, to_mode, T)
     dQ = Array{T}(undef, N_qois, nstep)
@@ -157,11 +161,6 @@ function curl(x, to_setup)
             ∂[3].*x[:,:,:,1] .- ∂[1].*x[:,:,:,3],
             ∂[1].*x[:,:,:,2] .- ∂[2].*x[:,:,:,1],
         ),
-        # (
-        #     ∂[2].*x[:,:,:,2] ,
-        #     zeros(eltype(x), size(x,1), size(x,2), size(x,3)), # zero in y direction
-        #     zeros(eltype(x), size(x,1), size(x,2), size(x,3)) # zero in z direction
-        # ),
         dims = 4
     )
 end
@@ -264,32 +263,6 @@ end
 
 
 """
-    get_w_hat(u::Tuple, setup)
-Compute the vorticity field, interpolate to cell centers and compute the Fourier transform of the field.
-"""
-function get_w_hat_from_w(w, setup)
-    (; dimension) = setup.grid
-    d = dimension()
-    # interpolate u to cell centers
-    #u_c = interpolate_u_p(u, setup)
-    w = stack([w[select_physical_fourier_points(a, setup), a] for a=1:d], dims=4)
-    w_hat = fft(w, [1,2,3])
-    return w_hat
-end
-
-# function get_w_hat(u::Tuple, setup)
-#     (; Ip) = setup.grid
-#     # compute vorticity
-#     w = vorticity(u, setup)
-#     # interpolate w to cell centers
-#     w = interpolate_ω_p(w, setup) 
-#     w = stack(w, dims=4)[Ip,:]
-#     # compute Fourier transform
-#     w_hat = fft(w, [1,2,3])
-#     return w_hat
-# end
-
-"""
     get_w_hat_from_u_hat(u_hat, to_setup)
 Compute the vorticity field from the velocity field in Fourier space.
 """
@@ -375,14 +348,6 @@ function to_sgs_term(u, setup, to_setup, stepper)
     @tensor sgs_hat[b,c,d,e] := -tau[a] * P_hat[b,c,d,e,a]
     sgs = real(ifft(sgs_hat, [1,2,3]))
 
-    ## DEBUG
-    # u_tilde = u_hat .+ sgs_hat
-    # w_tilde = get_w_hat_from_u_hat(u_tilde, to_setup)
-    # q_tilde = compute_QoI(u_tilde, w_tilde, to_setup,setup)
-    # @show q_star
-    # @show q_ref
-    # @show q_tilde
-
     if to_setup.mirror_y
         sgs = sgs[:,1:Int(end//2),:,:]
     end
@@ -397,12 +362,6 @@ function innerpoducts(x,y,setup; mirror_y = false)
         L[2] = L[2]*2
     end
     N = size(x)[1:D]
-    # ip = reshape(
-    #     sum(
-    #         x.*conj(reshape(y, (size(y)[1:end-1]..., 1, size(y)[end]))),
-    #          dims = (1,2,3,4)
-    #     ),
-    #     (size(y)[end],size(y)[end]))
     @tensor ip[e,f] := x[a,b,c,d,e]* conj(y)[a,b,c,d,f]
     Array(ip).*(prod(L)/(prod(N)^2))
 end
@@ -455,40 +414,9 @@ function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ
         stepper.u[select_physical_fourier_points(a, setup),a] .+= sgs[:,:,:,a]
     end
 
-    ### debug ###
-    # u_hat = get_u_hat(stepper.u, setup, to_setup)
-    # w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
-    # q = compute_QoI(u_hat, w_hat, to_setup,setup)
-    # @show q
-
     apply_bc_u!(stepper.u, stepper.t, setup)
-    ### debug ###
-    # u_hat = get_u_hat(stepper.u, setup, to_setup)
-    # w_hat = get_w_hat_from_u_hat(u_hat, to_setup)
-    # q2 = compute_QoI(u_hat, w_hat, to_setup,setup)
-    # @show q2
-    # @show ' '
-
     stepper
 end
 
-
-
-include("filter.jl")
-export FaceAverage, VolumeAverage
-
-include("create_ref_data.jl")
-export create_ref_data
-export spinnup
-
-include("LFsims.jl")
-export track_ref
-export online_sgs
-
-include("ANN.jl")
-
-include("post_processing_funcs.jl")
-export ks_dist
-export energy_spectra_comparison
 
 end # module RikFlow

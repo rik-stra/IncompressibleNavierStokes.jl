@@ -1,3 +1,4 @@
+using LaTeXStrings
 if false                                               #src
     include("../src/RikFlow.jl")                  #src
     include("../../../src/IncompressibleNavierStokes.jl") #src

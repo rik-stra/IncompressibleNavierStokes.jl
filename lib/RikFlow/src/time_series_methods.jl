@@ -1,3 +1,10 @@
+# This file implements various time series methods for generating time series data:
+# - `Reference_reader`: Reads time series data from a reference dataset.
+# - `MVG_sampler`: Samples from a multivariate Gaussian distribution fitted to the data.
+# - `Resampler`: Resamples from a given dataset.
+# - `ANN`: Uses a trained artificial neural network to predict the next item in the time series.
+# - `LinReg`: Uses a linear regression model to predict the next item in the time series.
+
 
 struct Reference_reader
     vals

@@ -21,7 +21,8 @@ Re = Float32(2_000)
 Δt = Float32(2.5e-3)
 tsim = Float32(10)
 
-outdir = @__DIR__()*"/output/"
+ref_file = @__DIR__()*"/output/paper_data_HIT/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim100.0.jld2"
+outdir = @__DIR__()*"/output"
 ispath(outdir) || mkpath(outdir)
 
 # forcing
@@ -37,7 +38,7 @@ seeds = (;
 )
 
 # load reference data
-ref_file = outdir*"/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim100.0.jld2"
+
 data_train = load(ref_file, "data_train");
 params_train = load(ref_file, "params_train");
 # get initial condition

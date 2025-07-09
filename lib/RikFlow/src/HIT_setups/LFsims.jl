@@ -1,3 +1,5 @@
+# This file contains standard setups for the low-fidelity HIT simulations.
+
 function track_ref(;
     ustart,
     ref_reader,
