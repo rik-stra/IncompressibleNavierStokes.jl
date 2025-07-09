@@ -1,0 +1,3 @@
+The reference data can be found at
+https://www.vremanresearch.nl/Chan180_FD2_basic_u.txt
+place the file named "Chan180_FD2_basic_u.txt" in this directory
