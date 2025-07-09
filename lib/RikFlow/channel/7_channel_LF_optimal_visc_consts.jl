@@ -22,7 +22,7 @@ xlims = 0f, 4f * pi
 ylims = 0f, 2f
 zlims = 0f, 4f / 3f * pi
 
-tsim = 1f   # we optimize over 10-time unit simulations
+tsim = 1.1f   # we optimize over 10-time unit simulations
 Δt = 0.005f
 
 nx_les = 64
@@ -57,6 +57,7 @@ setup = Setup(;
 psolver = psolver_transform(setup);
 u_aves_smag = []
 c_s = 0.125:0.005:0.145 # Smagorinsky constant range
+#c_s = [0.13]
 for c in c_s
     @info "c: $c"
     ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
@@ -72,25 +73,24 @@ for c in c_s
         Δt,
         processors = (;
             log = timelogger(; nupdate = 100),
-            fields = fieldsaver(; setup, nupdate = 200),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+            fields = fieldsaver(; setup, nupdate = 200),
         ),
         psolver,
     );
 
-    u_fields = outputs.fields[2:end];
-    us = stack(map(x -> x.u, u_fields));
+    us = stack(map(x -> x.u, outputs.fields));
     u_ave = mean(us[1:end-2, Int(end/2):Int(end/2)+1, 1:end-2, 1, :])
     @info "u_ave: $u_ave"
     push!(u_aves_smag, u_ave)
-
 end
 out_dir = @__DIR__()*"/output/smag"
 ispath(out_dir) || mkpath(out_dir)
-filename = out_dir*"optimize_smag.jld2"
+filename = out_dir*"/optimize_smag.jld2"
 jldsave(filename; c_s , u_aves_smag)
 
 # Now we do the same for the WALE closure model
 c_w = 0.49:0.005:0.55
+#c_w = [0.5]
 u_aves_WALE = []
 
 for c in c_w
@@ -114,8 +114,7 @@ for c in c_w
         psolver,
     );
 
-    u_fields = outputs.fields[2:end];
-    us = stack(map(x -> x.u, u_fields));
+    us = stack(map(x -> x.u, outputs.fields));
     u_ave = mean(us[1:end-2, Int(end/2):Int(end/2)+1, 1:end-2, 1, :])
     @info "u_ave: $u_ave"
     push!(u_aves_WALE, u_ave)
@@ -123,5 +122,5 @@ for c in c_w
 end
 out_dir = @__DIR__()*"/output/WALE"
 ispath(out_dir) || mkpath(out_dir)
-filename = out_dir*"optimize_WALE_centerv.jld2"
+filename = out_dir*"/optimize_WALE_centerv.jld2"
 jldsave(filename; c_w, u_aves_WALE)

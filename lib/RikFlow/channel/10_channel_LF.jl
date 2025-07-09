@@ -79,5 +79,6 @@ to_setup_les =
 );
 
 outdir = @__DIR__()*"/output/nomodel"
+ispath(outdir) || mkpath(outdir)
 filename = "$outdir/LF_nomodel_channel_tsim$(tsim).jld2"
 jldsave(filename; outputs.fields, outputs.qoihist)
