@@ -1,13 +1,19 @@
+# TO_IncompressibleNavierStokes
+
+This package implements the tau-orthogonal (TO) method, a data-driven SGS modeling framework for three-dimensional turbulent flows. It is build on top of the IncompressibleNavierStokes solver package. Most of the extensions can be found in [RikFlow](./lib/RikFlow).
+
+## Paper
+
+The extension of the tau-orthogonal method to 3D flows is presented in the paper **"Reduced Subgid Scale Terms in Three-Dimensional Turbulence"**. 
+
+The code to reproduce the results in this paper can be found in the branch ["clean_July2025_freeze"](https://github.com/rik-stra/TO_IncompressibleNavierStokes.jl/tree/clean_July2025_freeze). The dataset which contains the results presented in this paper can be downloaded from [Zenodo](https://zenodo.org). You can generate your own results for the HIT and Channel flow testcases by running the numbered scripts in [RikFlow](./lib/RikFlow), or just plot the results from the Zenodo dataset using the plots_paper.jl scripts.
+
+
 ![Logo](docs/src/public/logo_text_dots.png#gh-light-mode-only)
 ![Logo](docs/src/public/logo_text_dots_dark_mode.png#gh-dark-mode-only)
 
 # IncompressibleNavierStokes
 
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://agdestein.github.io/IncompressibleNavierStokes.jl/stable)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://agdestein.github.io/IncompressibleNavierStokes.jl/dev)
-[![Build Status](https://github.com/agdestein/IncompressibleNavierStokes.jl/workflows/CI/badge.svg)](https://github.com/agdestein/IncompressibleNavierStokes.jl/actions)
-[![Coverage](https://codecov.io/gh/agdestein/IncompressibleNavierStokes.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/agdestein/IncompressibleNavierStokes.jl)
-[![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14217342.svg)](https://doi.org/10.5281/zenodo.14217342)
 
 This package implements energy-conserving solvers for the incompressible Navier-Stokes
@@ -18,26 +24,12 @@ This package also provides experimental support for neural closure models for
 large eddy simulation.
 
 ## Installation
-
-To install IncompressibleNavierStokes, open up a Julia-REPL, type `]` to get
-into Pkg-mode, and type:
-
-```julia-repl
-(v1.10) pkg> add IncompressibleNavierStokes
-```
-
-which will install the package and all dependencies to your local environment.
 Note that IncompressibleNavierStokes requires Julia version `1.9` or above.
 
 See the
 [Documentation](https://agdestein.github.io/IncompressibleNavierStokes.jl/dev/generated/LidDrivenCavity2D/)
 for examples of some typical workflows. More examples can be found in the
 [`examples`](examples) directory.
-
-## Source code for paper
-
-See [here](./lib/PaperDC) for the source code used in the paper
-[Discretize first, filter next: learning divergence-consistent closure models for large-eddy simulation](https://arxiv.org/abs/2403.18088).
 
 ## Gallery
 
