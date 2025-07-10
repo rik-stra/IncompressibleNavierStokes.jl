@@ -1,4 +1,5 @@
 using LaTeXStrings
+using CairoMakie
 if false                                               #src
     include("../src/RikFlow.jl")                  #src
     include("../../../src/IncompressibleNavierStokes.jl") #src
@@ -32,9 +33,13 @@ function energy_spectra_comparison(
     sloperange = [0.6, 0.9],
     slopeoffset = 1.3,
     scale_numbers = nothing,
+    linestyles = [:solid,],
     kwargs...,
 )
     
+    if size(linestyles) == 1
+        linestyles = size(labels)*linestyles
+    end
 
     (; dimension, xp, Np, xlims) = setup.grid
     T = eltype(xp[1])
@@ -97,14 +102,14 @@ function energy_spectra_comparison(
         yscale = log10,
         #limits = (dx/kmax, dx, T(1e-15), T(1)),
     )
-    for (ehat, κ, label) in zip(ehats, ks, labels)
+    for (ehat, κ, label, linestyle, colid) in zip(ehats, ks, labels, linestyles, [8,3,1,2])
         if label == "Ref"
-            lines!(ax, κ, reshape(ehat,(:)); label = label, linewidth = 4, color = :black)
+            lines!(ax, κ, reshape(ehat,(:)); label = label, linewidth = 5, color = :black)
         else
-            lines!(ax, κ, reshape(ehat,(:)); label = label, linewidth = 2)
+            lines!(ax, κ, reshape(ehat,(:)); label = label, linewidth = 3, linestyle = linestyle, color = Cycled(colid))
         end
     end
-    lines!(ax, inertia; label = slopelabel, linestyle = :dash, linewidth = 2, color = Cycled(2))
+    lines!(ax, inertia; label = slopelabel, linestyle = :dot, linewidth = 3, color = Cycled(2))
     axislegend(ax; position = :lb)
 
 

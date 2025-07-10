@@ -39,7 +39,7 @@ let # energy spectrum HF
         text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1e-12*1.2), align = (:left, :bottom), color = :black)
     end
     display(fig)
-    save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.png", fig)
+    save(fig_folder*"/energy_spectrum_afterspinup_512_Re2000.0_freeze_10_tsim4.pdf", fig)
 end
 
 let ## energy spectrum coarse grained
@@ -61,7 +61,7 @@ let ## energy spectrum coarse grained
         text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1*0.5), align = (:center, :center), color = :black)
     end
     display(fig)
-    save(fig_folder*"/energy_spectrum_afterspinup_coarse_grained_Re2000.0_freeze_10_tsim4.png", fig)
+    save(fig_folder*"/energy_spectrum_afterspinup_coarse_grained_Re2000.0_freeze_10_tsim4.pdf", fig)
 end
 
 
@@ -88,20 +88,21 @@ let
                 x = (axis_x, axis_x, axis_x),
                 Re = Float32(2e3),);
     states = [ u_ref,
+            u_LinReg,
             u_no_sgs,
-            u_smag,
-            u_LinReg ];
+            u_smag,];
     #scales = get_scale_numbers(u_ref[1], setup)
     scales = (;ϵ = 3.7794485) # taken from HF_ref
     fig = energy_spectra_comparison(
             states,
-            ["Ref", "No model", "Smagorinsky", "TO LRS h=5"];
+            ["Ref",  "TO LRS h=5", "No model", "Smagorinsky",];
             setup,
             sloperange = [2, 16],
             slopeoffset = 3,
             scale_numbers = scales,
+            linestyles = [:solid, :solid, :dash, :dashdot, ],
         )
-    save(fig_folder*"/energy_spectrum_compare_online_nsnaps_$(n_fields).png", fig)
+    save(fig_folder*"/energy_spectrum_compare_online_nsnaps_$(n_fields).pdf", fig)
     display(fig)
 end
 
@@ -121,9 +122,9 @@ let # no model and smagorinsky
         title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
         for i in 0:size(q_ref, 1)-1]
     for i in 1:size(q_ref, 1)
-        lines!(ax[i], time_axis[2000:6000], q_ref[i,2000:6000], color=:black, label = "ref")
-        lines!(ax[i], time_axis[2000:6000], nomodel_data[i,2000:6000], label = "no model")
-        lines!(ax[i], time_axis[2000:6000], smag_data[i,2000:6000], label = "smag")
+        lines!(ax[i], time_axis[2000:6000], q_ref[i,2000:6000], color=:black, label = "Ref")
+        lines!(ax[i], time_axis[2000:6000], nomodel_data[i,2000:6000], label = "No model", linestyle=:dash)
+        lines!(ax[i], time_axis[2000:6000], smag_data[i,2000:6000], label = "Smag", linestyle=:dashdot)
         #lines!(ax[i], to_data[1][i,1:4000], label = "TO model")
     end
     axislegend(ax[6], position=:rc)
@@ -146,10 +147,10 @@ let # TO LRS
         for r in 1:5
             l=lines!(ax[i], time_axis[2000:6000], to_data[r][i,2000:6000], color=:blue, alpha = 0.3)
         end
-        r=lines!(ax[i], time_axis[2000:6000], q_ref[i,2000:6000], color=:black, label = "ref")
+        r=lines!(ax[i], time_axis[2000:6000], q_ref[i,2000:6000], color=:black, label = "Ref")
         
     end
-    axislegend(ax[6],[r,l],["ref", "TO LRS"], position=:rc)
+    axislegend(ax[6],[r,l],["Ref", "TO LRS"], position=:rc)
     ax[5].xlabel="t"
     ax[6].xlabel="t"
     display(g)
@@ -165,7 +166,7 @@ function plot_long_term_distr(data, q_ref, label, qois)
         title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
         for i in 0:size(data, 1)-1]
     for i in 1:size(data, 1)
-        density!(axs[i], q_ref[i, :], label = "ref", color = (:black, 0.3),
+        density!(axs[i], q_ref[i, :], label = "Ref", color = (:black, 0.3),
         strokecolor = :black, strokewidth = 3, strokearound = false)
         density!(axs[i], data[i, :], label = label, color = (:red, 0.3),
         strokecolor = :red, strokewidth = 3, linestyle=:dot, strokearound = false)
@@ -179,11 +180,11 @@ function plot_long_term_distr(data, q_ref, label, qois)
 end
 
 let  # no model
-    fname = @__DIR__()*"/output/paper_data_HIT/no_model/2data_no_sgs_tsim100.0.jld2"
+    fname = @__DIR__()*"/output/paper_data_HIT/no_model/data_no_sgs_tsim100.0.jld2"
     no_sgs_data = load(fname, "data_online");
-    g = plot_long_term_distr(no_sgs_data.q, q_ref, "no model", qois)
+    g = plot_long_term_distr(no_sgs_data.q, q_ref, "No model", qois)
     display(g)
-    save(fig_folder*"/lt_distr_q_nomodel_dns512_les64_Re2000.0_tsim100.png", g)
+    save(fig_folder*"/lt_distr_q_nomodel_dns512_les64_Re2000.0_tsim100.pdf", g)
 end
 
 
@@ -194,7 +195,7 @@ let # smagorisky 0.71
         "data_online").q
     g = plot_long_term_distr(smag_data, q_ref, "Smag $smag_val", qois)
     display(g)
-    save(fig_folder*"/lt_distr_q_smag_dns512_les64_Re2000.0_tsim100.png", g)
+    save(fig_folder*"/lt_distr_q_smag_dns512_les64_Re2000.0_tsim100.pdf", g)
 end
 
 let 
@@ -205,7 +206,7 @@ let
     qs = cat(linreg_data..., dims = 2)
     g = plot_long_term_distr(qs, q_ref, "TO LRS", qois)
     display(g)
-    save(fig_folder*"/lt_distr_q_TO_ensemble.png", g)
+    save(fig_folder*"/lt_distr_q_TO_ensemble.pdf", g)
 end
 
 let 
@@ -216,7 +217,7 @@ let
     qs = cat(linreg_data..., dims = 2)
     g = plot_long_term_distr(qs, q_ref, "TO LRS", qois)
     display(g)
-    save(fig_folder*"/lt_distr_q_TO_ensemble_h10_l001.png", g)
+    save(fig_folder*"/lt_distr_q_TO_ensemble_h10_l001.pdf", g)
 end
 
 let 
@@ -227,7 +228,7 @@ let
     qs = cat(linreg_data..., dims = 2)
     g = plot_long_term_distr(qs, q_ref, "TO LRS", qois)
     display(g)
-    save(fig_folder*"/lt_distr_q_TO_ensemble_h10_l0.png", g)
+    save(fig_folder*"/lt_distr_q_TO_ensemble_h10_l0.pdf", g)
 end
 
 
@@ -267,7 +268,7 @@ let
     end
 
     display(g)
-    save(fig_folder*"/KSdists_smag_dns512_les64_Re2000.0_tsim100.png", g)
+    save(fig_folder*"/KSdists_smag_dns512_les64_Re2000.0_tsim100.pdf", g)
 end
 
 
