@@ -136,9 +136,9 @@ let
         for i in 0:size(q_ref, 1)-1]
 
     for i in 1:size(q_ref, 1)
-        no_model = lines!(axs[i], time_index, q_no_model[i,:], color = (:red))
+        no_model = lines!(axs[i], time_index, q_no_model[i,:], color = (:red), linestyle = :dash)
         wale=lines!(axs[i],time_index, q_wale[i,:], color = (:orange))
-        smag=lines!(axs[i],time_index, q_smag[i,:], color = (:purple))
+        smag=lines!(axs[i],time_index, q_smag[i,:], color = (:purple), linestyle = :dashdot)
         ref = lines!(axs[i], time_index[1:2001], q_ref[i,1:5:10001], color = :black)
     end
     axislegend(axs[6],[ref, no_model, wale, smag], ["HF", "No model" ,"WALE", "Smag"], position=:rc)
@@ -229,10 +229,10 @@ let
     f = Figure(size=(600,400));
     ax1 = Axis(f[1, 1], xscale = log10)
     scatter!(ax1, yp_ref, u_ave_ref, color=:blue, label = "Ref")
-    scatter!(ax1, yp, u_ave_NM, color=:red, label = "No model")
-    scatter!(ax1, yp, u_ave_wale, color=:orange, label = "Wale")
-    scatter!(ax1, yp, u_ave_smag, color=:purple, label = "Smag")
-    scatter!(ax1, yp, u_ave_TO5, color=:green, label = "TO LRS h=5")
+    scatter!(ax1, yp, u_ave_NM, color=:red, marker = :xcross, label = "No model")
+    scatter!(ax1, yp, u_ave_wale, color=:orange, marker=:diamond, label = "WALE")
+    scatter!(ax1, yp, u_ave_smag, color=:purple, marker=:star6, label = "Smag")
+    scatter!(ax1, yp, u_ave_TO5, color=:green, marker=:star4, label = "TO LRS h=5")
     ylims!(ax1,0, 19)
     xlims!(ax1, 0.2, 180)
     axislegend(ax1, position = :lt)
@@ -240,10 +240,10 @@ let
 
     ax2 = Axis(f[1, 2])
     scatter!(ax2, yp_ref, u_ave_ref, color=:blue, label = "Ref")
-    scatter!(ax2, yp, u_ave_NM, color=:red, label = "No model")
-    scatter!(ax2, yp, u_ave_wale, color=:orange, label = "Wale")
-    scatter!(ax2, yp, u_ave_smag, color=:purple, label = "Smag")
-    scatter!(ax2, yp, u_ave_TO5, color=:green, label = "TO LRS h=5")
+    scatter!(ax2, yp, u_ave_NM, color=:red, marker=:xcross, label = "No model")
+    scatter!(ax2, yp, u_ave_wale, color=:orange, marker=:diamond, label = "WALE")
+    scatter!(ax2, yp, u_ave_smag, color=:purple, marker=:star6, label = "Smag")
+    scatter!(ax2, yp, u_ave_TO5, color=:green, marker=:star4, label = "TO LRS h=5")
     ylims!(ax2,0, 19)
     xlims!(ax2, 0.0, 180)
     ax1.ylabel=L"\text{mean } v_x"
@@ -264,9 +264,9 @@ let
 f = Figure(size=(600,400));
 ax1 = Axis(f[1, 1], xscale = log10)
 scatter!(ax1, yp_ref, u_ave_ref, color=:blue, label = "Ref")
-scatter!(ax1, yp, u_ave_HF, color=:green, label = "HF")
-scatter!(ax1, yp, u_ave_wale_short, color=:orange, label = "Wale")
-scatter!(ax1, yp, u_ave_smag_short, color=:purple, label = "Smag")
+scatter!(ax1, yp, u_ave_HF, color=:green, marker=:xcross, label = "HF")
+scatter!(ax1, yp, u_ave_wale_short, color=:orange, marker=:diamond, label = "WALE")
+scatter!(ax1, yp, u_ave_smag_short, color=:purple, marker=:star6, label = "Smag")
 
 ylims!(ax1,0, 19)
 xlims!(ax1, 0.2, 180)
@@ -275,9 +275,9 @@ axislegend(ax1, position = :lt)
 
 ax2 = Axis(f[1, 2])
 scatter!(ax2, yp_ref, u_ave_ref, color=:blue, label = "Ref")
-scatter!(ax2, yp, u_ave_HF, color=:green, label = "HF")
-scatter!(ax2, yp, u_ave_wale_short, color=:orange, label = "Wale")
-scatter!(ax2, yp, u_ave_smag_short, color=:purple, label = "Smag")
+scatter!(ax2, yp, u_ave_HF, color=:green, marker=:xcross, label = "HF")
+scatter!(ax2, yp, u_ave_wale_short, color=:orange, marker=:diamond, label = "WALE")
+scatter!(ax2, yp, u_ave_smag_short, color=:purple, marker=:star6, label = "Smag")
 ylims!(ax2,0, 19)
 xlims!(ax2, 0.0, 180)
 ax1.ylabel=L"\text{mean } v_x"
