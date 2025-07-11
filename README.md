@@ -6,7 +6,7 @@ This package implements the tau-orthogonal (TO) method, a data-driven SGS modeli
 
 The extension of the tau-orthogonal method to 3D flows is presented in the paper **"Reduced Subgid Scale Terms in Three-Dimensional Turbulence"**. 
 
-The code to reproduce the results in this paper can be found in the branch ["clean_July2025_freeze"](https://github.com/rik-stra/TO_IncompressibleNavierStokes.jl/tree/clean_July2025_freeze). The dataset which contains the results presented in this paper can be downloaded from [Zenodo](https://zenodo.org). You can generate your own results for the HIT and Channel flow testcases by running the numbered scripts in [RikFlow](./lib/RikFlow), or just plot the results from the Zenodo dataset using the plots_paper.jl scripts.
+The code to reproduce the results in this paper can be found in the branch ["clean_July2025_freeze"](https://github.com/rik-stra/TO_IncompressibleNavierStokes.jl/tree/clean_July2025_freeze).
 
 
 ![Logo](docs/src/public/logo_text_dots.png#gh-light-mode-only)
