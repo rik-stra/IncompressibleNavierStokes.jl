@@ -125,12 +125,14 @@ let
     q_no_model = stack(nomodel_data)./2
     smag_data = load(@__DIR__()*"/output/paper_data_channel/smag/LF_smag_channel_c0.13_tsim100.0.jld2","qoihist");
     q_smag = stack(smag_data)./2
+    TO_5_r1 = load(@__DIR__()*"/output/paper_data_channel/TO_LRS/LinReg11/LF_online_channel_to_64_64_32_tsim100.0_repl_1.jld2", "data");
+    q_TO_5_r1 = TO_5_r1.q ./2
 
     qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10], ["Z",11,17],["E", 11, 17]];
     time_index = 0:0.005:100
 
-    g = Figure(size = (700, 600))
-    smag, ref, no_model, wale= nothing, nothing, nothing, nothing
+    g = Figure(size = (700, 650))
+    smag, ref, no_model, wale, TO_5= nothing, nothing, nothing, nothing, nothing
     axs = [Axis(g[i ÷ 2, i%2], 
             title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
         for i in 0:size(q_ref, 1)-1]
@@ -140,8 +142,9 @@ let
         wale=lines!(axs[i],time_index, q_wale[i,:], color = (:orange))
         smag=lines!(axs[i],time_index, q_smag[i,:], color = (:purple), linestyle = :dashdot)
         ref = lines!(axs[i], time_index[1:2001], q_ref[i,1:5:10001], color = :black)
+        TO_5 = lines!(axs[i], time_index, q_TO_5_r1[i,:], color = (:blue, 0.4), linestyle = :dot)
     end
-    axislegend(axs[6],[ref, no_model, wale, smag], ["HF", "No model" ,"WALE", "Smag"], position=:rc)
+    axislegend(axs[6],[ref, no_model, wale, smag, TO_5], ["HF", "No model" ,"WALE", "Smag", "TO LRS \n h=5 repl. 1"], position=:rc)
     axs[5].xlabel="t"
     axs[6].xlabel="t"
     display(g)
