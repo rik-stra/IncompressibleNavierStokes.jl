@@ -119,10 +119,10 @@ function spinnup(;
     savefreq = 100,
     ou_bodyforce = nothing,
     checkpoint_file_name = "./u",
+    Δt = nothing,
     kwargs...,
 )
     T = typeof(Re)
-
 
     # Build setup and assemble operators
     dns = Setup(;
@@ -140,10 +140,9 @@ function spinnup(;
     any(u -> any(isnan, u), ustart) && @warn "Initial conditions contain NaNs"
 
     _dns = dns
-
     # Solve burn-in DNS
-    nt = round(Int, tsim / Δt)
-    n_checkpoints = 10
+    nt = round(Int, tburn / Δt)
+    n_checkpoints = 9
     checkpoints= 0:round(nt/(n_checkpoints+1)):nt
     @info "Solving burn-in DNS"
     (; u, t), outputs =
@@ -151,6 +150,7 @@ function spinnup(;
         #method = RKMethods.Wray3(),
         setup = _dns, ustart, tlims = (T(0), tburn),
         docopy = false,
+        Δt,
         kwargs...,
         processors = (;
             log = timelogger(; nupdate = 100),

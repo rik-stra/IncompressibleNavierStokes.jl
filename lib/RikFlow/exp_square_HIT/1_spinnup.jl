@@ -4,7 +4,7 @@
 
 println("Loading modules...")
 t0 = time()
-# using LoggingExtras
+using LoggingExtras
 using Random
 using CairoMakie
 using JLD2
@@ -14,26 +14,23 @@ using CUDA
 t1 = time()
 
 # Write output to file, as the default SLURM file is not updated often enough
-# jobid = ENV["SLURM_JOB_ID"]
-# logfile = joinpath(@__DIR__, "log_$(jobid).out")
-# filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
-# logger = TeeLogger(global_logger(), filelogger)
-# global_logger(logger)
+jobid = ENV["SLURM_JOB_ID"]
+logfile = joinpath(@__DIR__, "log_$(jobid).out")
+filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+logger = TeeLogger(global_logger(), filelogger)
+global_logger(logger)
 
 
 println("Modules loaded. Time: $(t1-t0) s")
 
 # full size simulation
-n_dns = Int(64)
+n_dns = Int(900)
 n_les = Int(64)
 Re = Float32(2_000)
 tburn = Float32(4)
 Δt = Float32(0.00025)
 
-outdir = @__DIR__() *"/output_spinnup"
-ispath(outdir) || mkpath(outdir)
-filename = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tburn).jld2"
-checkpoint_file_name = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tburn)"
+
 
 # small test parameters
 # n_dns = Int(128)
@@ -61,6 +58,11 @@ seeds = (;
 T = Float32
 backend = CUDABackend()
 
+outdir = @__DIR__() *"/output_spinnup"
+ispath(outdir) || mkpath(outdir)
+filename = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn).jld2"
+checkpoint_file_name = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn)"
+
 # Parameters
 get_params(nlesscalar) = (;
     D = 3,
@@ -74,6 +76,7 @@ get_params(nlesscalar) = (;
 
 params_train = (; get_params([n_les])..., Δt, checkpoint_file_name);
 t3 = time()
+println("Starting $(n_dns)^3 DNS simulation for $(tburn) time units at Re=$(Re) with Δt=$(Δt).")
 u_start, ehist = spinnup(; params_train...);
 u_start = Array(u_start);
 
