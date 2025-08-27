@@ -9,14 +9,14 @@ using IncompressibleNavierStokes
 using CUDA
 using RikFlow
 using JLD2
-#using LoggingExtras
+using LoggingExtras
 
-# jobid = ENV["SLURM_JOB_ID"]
+jobid = ENV["SLURM_JOB_ID"]
 
-# logfile = joinpath(@__DIR__, "log_$(jobid).out")
-# filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
-# logger = TeeLogger(global_logger(), filelogger)
-# global_logger(logger)
+logfile = joinpath(@__DIR__, "log_$(jobid).out")
+filelogger = MinLevelLogger(FileLogger(logfile), Logging.Info)
+logger = TeeLogger(global_logger(), filelogger)
+global_logger(logger)
 
 # Precision
 T = Float64
