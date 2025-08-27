@@ -33,7 +33,7 @@ tsim = 4f
 nx = 512      
 ny = 512     
 nz = 512     
-Δt = 0.001f
+Δt = 0.0005f
 nx_les = 64
 ny_les = 64
 nz_les = 64
@@ -128,13 +128,13 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
     ustart,
     docopy = false,
     tlims = (0f, tsim),
-    #Δt,
+    Δt,
     processors = (;
         f = RikFlow.filtersaver(
             setup,
             [les_setup,],
             (FaceAverage(),),
-            [2,],
+            [Int(nx/nx_les),],
             [to_setup_les,];
             nupdate = 1,
             n_plot = 100,
@@ -142,7 +142,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
             checkpoint_name = checkpoints_dir,
         ),
         log = timelogger(; nupdate = 10),
-        #fields = fieldsaver(; nupdate = round(Int,nt/3), setup),
+        fields = fieldsaver(; nupdate = round(Int,nt/2), setup),
         ),
     psolver,
 );
