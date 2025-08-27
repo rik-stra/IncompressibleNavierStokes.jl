@@ -24,18 +24,18 @@ t1 = time()
 println("Modules loaded. Time: $(t1-t0) s")
 
 # full size simulation
-n_dns = Int(512)
+n_dns = Int(1024)
 n_les = Int(64)
 Re = Float32(2_000)
-tburn = Float32(4)
+tburn = Float32(0.01)
 Δt = Float32(0.00025)
 
 # small test parameters
-n_dns = Int(128)
-n_les = Int(64)
-Re = Float32(2_000)
-tburn = Float32(0.2)
-Δt = Float32(0.00025)
+# n_dns = Int(128)
+# n_les = Int(64)
+# Re = Float32(2_000)
+# tburn = Float32(0.2)
+# Δt = Float32(0.00025)
 
 # forcing
 T_L = 0.01  # correlation time of the forcing
