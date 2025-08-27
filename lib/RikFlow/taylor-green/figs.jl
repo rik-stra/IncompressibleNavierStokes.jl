@@ -10,7 +10,7 @@ if !isdir(fig_folder)
 end
 
 ## load reference QoI data
-filename = @__DIR__()*"/output/HF/HF_TG_128_to_64_tsim10.0.jld2"
+filename = @__DIR__()*"/output/HF/HF_TG_128_to_64_Re_2000.0_tsim4.0.jld2"
 ref_data = load(filename, "f");
 qois = [["Z",0,6],["E", 0, 6],["Z",7,15],["E", 7, 15],["Z",16,32],["E", 16, 32]]
 q_ref = stack(ref_data.data[1].qoi_hist)
@@ -37,7 +37,7 @@ size(ref_data.data[1].u)
 for i in 1:40
     fig = Figure()
     ax = Axis(fig[1,1], title = "Coarse DNS u at i=$(i)")
-    heatmap!(ref_data.data[1].u[i][:,:,9,3])
+    heatmap!(ref_data.data[1].u[i][:,:,9,2])
     display(fig)
 end
 
@@ -45,8 +45,8 @@ hf_fields = load(filename, "fields");
 
 for j in 1:size(hf_fields, 1)
     fig = Figure()
-    ax = Axis(fig[1,1], title = "Coarse DNS u at t=$(hf_fields[j].t)")
-    heatmap!(hf_fields[j].u[:,:,9,1])
+    ax = Axis(fig[1,1], title = "DNS u at t=$(hf_fields[j].t)")
+    heatmap!(hf_fields[j].u[:,:,9,3])
     display(fig)
 end
 
@@ -58,6 +58,6 @@ axis_x = range(0.0, 1., n + 1)
 setup = Setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = Float32(1e3),);
-state = (;u = hf_fields[1].u, t=hf_fields[1].t, temp=0);
+state = (;u = hf_fields[3].u, t=hf_fields[3].t, temp=0);
     # save to vtk
-save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/HF1", fieldnames = (:velocity, :Qfield))
+save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/HF3", fieldnames = (:velocity, :Qfield))

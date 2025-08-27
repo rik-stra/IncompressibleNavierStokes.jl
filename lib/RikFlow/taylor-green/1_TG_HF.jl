@@ -22,36 +22,38 @@ using JLD2
 T = Float64
 f = one(T)
 
-# Domain
-xlims = 0f, 1f
-ylims = 0f, 1f
-zlims = 0f, 1f
-
-tsim = 10f
-# Grid
-nx = 64      
-ny = 64      
-nz = 64      
-Δt = 0.0005f
-
-nx_les = 32
-ny_les = 32
-nz_les = 32
-
 #### small test
 xlims = 0f, 1f
 ylims = 0f, 1f
 zlims = 0f, 1f
 
-tsim = 10f
+Re = 2_000f
+tsim = 4f
 # Grid
-nx = 128      
-ny = 128     
-nz = 128     
-Δt = 0.0025f
+nx = 512      
+ny = 512     
+nz = 512     
+Δt = 0.001f
 nx_les = 64
 ny_les = 64
 nz_les = 64
+
+
+#### small test
+# xlims = 0f, 1f
+# ylims = 0f, 1f
+# zlims = 0f, 1f
+
+# Re = 2_000f
+# tsim = 4f
+# # Grid
+# nx = 128      
+# ny = 128     
+# nz = 128     
+# Δt = 0.0025f
+# nx_les = 64
+# ny_les = 64
+# nz_les = 64
 
 kwargs = (;
     boundary_conditions = (
@@ -59,7 +61,7 @@ kwargs = (;
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
     ),
-    Re = 1000f,
+    Re,
     backend = CUDABackend(),
 )
 
@@ -126,7 +128,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
     ustart,
     docopy = false,
     tlims = (0f, tsim),
-    Δt,
+    #Δt,
     processors = (;
         f = RikFlow.filtersaver(
             setup,
@@ -135,19 +137,19 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
             [2,],
             [to_setup_les,];
             nupdate = 1,
-            n_plot = 40,
+            n_plot = 100,
             checkpoints,
             checkpoint_name = checkpoints_dir,
         ),
         log = timelogger(; nupdate = 10),
-        fields = fieldsaver(; nupdate = round(Int,nt/3), setup),
+        #fields = fieldsaver(; nupdate = round(Int,nt/3), setup),
         ),
     psolver,
 );
 
 
 # Save filtered DNS data
-filename = "$outdir/HF_TG_$(nx)_to_$(nx_les)_tsim$(tsim).jld2"
+filename = "$outdir/HF_TG_$(nx)_to_$(nx_les)_Re_$(Re)_tsim$(tsim).jld2"
 
 jldsave(filename; outputs.f, outputs.fields)
 
