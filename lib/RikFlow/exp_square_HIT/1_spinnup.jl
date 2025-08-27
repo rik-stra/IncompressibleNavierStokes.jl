@@ -4,7 +4,7 @@
 
 println("Loading modules...")
 t0 = time()
-#using LoggingExtras
+# using LoggingExtras
 using Random
 using CairoMakie
 using JLD2
@@ -24,11 +24,16 @@ t1 = time()
 println("Modules loaded. Time: $(t1-t0) s")
 
 # full size simulation
-n_dns = Int(1024)
+n_dns = Int(64)
 n_les = Int(64)
 Re = Float32(2_000)
-tburn = Float32(0.01)
+tburn = Float32(4)
 Δt = Float32(0.00025)
+
+outdir = @__DIR__() *"/output_spinnup"
+ispath(outdir) || mkpath(outdir)
+filename = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tburn).jld2"
+checkpoint_file_name = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tburn)"
 
 # small test parameters
 # n_dns = Int(128)
@@ -43,8 +48,7 @@ e_star = 0.1 # energy injection rate
 k_f = sqrt(2) # forcing wavenumber
 freeze = 10 # number of time steps to freeze the forcing
 
-outdir = @__DIR__() *"/output"
-ispath(outdir) || mkpath(outdir)
+
 
 seeds = (;
     ou_spin = 123, # DNS initial condition
@@ -68,7 +72,7 @@ get_params(nlesscalar) = (;
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou_spin ),
 )
 
-params_train = (; get_params([n_les])..., Δt);
+params_train = (; get_params([n_les])..., Δt, checkpoint_file_name);
 t3 = time()
 u_start, ehist = spinnup(; params_train...);
 u_start = Array(u_start);
@@ -76,8 +80,8 @@ u_start = Array(u_start);
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data
-filename = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tburn).jld2"
-jldsave(filename; u_start)
 
 # Plot
 save(outdir*"/ehist2_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(params_train.tburn).png",ehist)
+
+jldsave(filename; u_start)

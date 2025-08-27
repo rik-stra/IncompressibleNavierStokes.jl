@@ -118,6 +118,7 @@ function spinnup(;
     create_psolver = psolver_spectral,
     savefreq = 100,
     ou_bodyforce = nothing,
+    checkpoint_file_name = "./u",
     kwargs...,
 )
     T = typeof(Re)
@@ -141,7 +142,9 @@ function spinnup(;
     _dns = dns
 
     # Solve burn-in DNS
-    
+    nt = round(Int, tsim / Δt)
+    n_checkpoints = 10
+    checkpoints= 0:round(nt/(n_checkpoints+1)):nt
     @info "Solving burn-in DNS"
     (; u, t), outputs =
         solve_unsteady(;
@@ -158,6 +161,7 @@ function spinnup(;
                 displayupdates = false,
                 displayfig = false,
             ),
+            cp = checkpointer(checkpoints, checkpoint_file_name)
             # espec = realtimeplotter(;
             #     setup= _dns,
             #     plot = energy_spectrum_plot,
