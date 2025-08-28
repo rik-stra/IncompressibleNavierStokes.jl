@@ -161,7 +161,7 @@ function spinnup(;
                 displayupdates = false,
                 displayfig = false,
             ),
-            cp = checkpointer(checkpoints, checkpoint_file_name)
+            cp = checkpointer(checkpoints, checkpoint_file_name, _dns)
             # espec = realtimeplotter(;
             #     setup= _dns,
             #     plot = energy_spectrum_plot,

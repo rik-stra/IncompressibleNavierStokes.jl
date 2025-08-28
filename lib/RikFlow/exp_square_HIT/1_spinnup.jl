@@ -25,9 +25,8 @@ println("Modules loaded. Time: $(t1-t0) s")
 
 # full size simulation
 n_dns = Int(900)
-n_les = Int(64)
 Re = Float32(2_000)
-tburn = Float32(4)
+tburn = Float32(0.005)
 Δt = Float32(0.00025)
 
 
@@ -64,7 +63,7 @@ filename = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tbur
 checkpoint_file_name = "$outdir/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_$(freeze)_tsim$(tburn)"
 
 # Parameters
-get_params(nlesscalar) = (;
+get_params() = (;
     D = 3,
     Re,
     lims = ( (T(0) , T(1)) , (T(0) , T(1)), (T(0),T(1)) ),
@@ -74,7 +73,7 @@ get_params(nlesscalar) = (;
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou_spin ),
 )
 
-params_train = (; get_params([n_les])..., Δt, checkpoint_file_name);
+params_train = (; get_params()..., Δt, checkpoint_file_name);
 t3 = time()
 println("Starting $(n_dns)^3 DNS simulation for $(tburn) time units at Re=$(Re) with Δt=$(Δt).")
 u_start, ehist = spinnup(; params_train...);

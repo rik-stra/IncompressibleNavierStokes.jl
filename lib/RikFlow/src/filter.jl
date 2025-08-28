@@ -170,7 +170,7 @@ filtersaver(dns, les, filters, compression, to_setup_les; nupdate = 1, n_plot = 
         results
     end
 
-checkpointer(checkpoints, file_name) =
+checkpointer(checkpoints, file_name, setup) =
     processor() do state
         on(state) do (; u, t, n)
             if n in checkpoints
@@ -178,6 +178,12 @@ checkpointer(checkpoints, file_name) =
                 filename = "$(file_name).jld2"
                 u_cpu = Array(u)
                 jldsave(filename; u_cpu)
+                scales = get_scale_numbers(u_cpu, setup)
+                msg = String[]
+                push!(msg, "Update checkpoint at n = $n, t = $t, filename = $file_name")
+                push!(msg, "Scale numbers: $(scales)")
+                @info join(msg, "\t")
+                flush(stdout)
             end
         end
         1
