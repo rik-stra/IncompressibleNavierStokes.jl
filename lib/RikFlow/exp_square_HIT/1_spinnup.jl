@@ -26,7 +26,7 @@ println("Modules loaded. Time: $(t1-t0) s")
 # full size simulation
 n_dns = Int(900)
 Re = Float32(2_000)
-tburn = Float32(0.005)
+tburn = Float32(4)
 Δt = Float32(0.00025)
 
 

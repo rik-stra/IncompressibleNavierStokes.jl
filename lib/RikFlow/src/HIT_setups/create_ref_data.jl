@@ -153,7 +153,7 @@ function spinnup(;
         Δt,
         kwargs...,
         processors = (;
-            log = timelogger(; nupdate = 100),
+            log = timelogger(; nupdate = 50),
             ehist = realtimeplotter(;
                 setup = _dns,
                 plot = energy_history_plot,
