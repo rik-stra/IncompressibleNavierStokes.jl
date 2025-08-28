@@ -12,7 +12,7 @@ using RikFlow
 figs_folder = @__DIR__()
 #filename =  @__DIR__()*"/output/paper_data_HIT/u_start_spinnup_512_Re2000.0_freeze_10_tsim4.0.jld2"
 filename = @__DIR__()*"/output_spinnup/u_start_spinnup_900_Re2000.0_freeze_10_tsim4.0.jld2"
-u_start = stack(load(filename, "u_start"));
+u_start = stack(load(filename, "u_cpu"));
 n = 900
 Δx = 1/n
 axis_x = range(0.0, 1., n + 1)
