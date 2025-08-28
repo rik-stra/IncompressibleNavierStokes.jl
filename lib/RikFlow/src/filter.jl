@@ -174,7 +174,7 @@ checkpointer(checkpoints, file_name) =
     processor() do state
         on(state) do (; u, t, n)
             if n in checkpoints
-                println("Update checkpoint at n = $n, t = $t")
+                println("Update checkpoint at n = $n, t = $t, filename = $file_name")
                 filename = "$(file_name).jld2"
                 u_cpu = Array(u)
                 jldsave(filename; u_cpu)
