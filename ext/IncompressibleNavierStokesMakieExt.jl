@@ -303,21 +303,28 @@ function energy_spectrum_plot(
     scale_numbers = nothing,
     plot_wavelength = false,
     figure_size = (600, 400),
+    plot_n_spectra = 1,
     kwargs...,
 )
-    state isa Observable || (state = Observable(state))
+    #state isa Observable || (state = Observable(state))
 
-    (; dimension, xp, Np, xlims) = setup.grid
+    
+    (; dimension, xp, Np, xlims) = setup[1].grid
     T = eltype(xp[1])
     D = dimension()
     dx = xlims[1][2]-xlims[1][1]
     Δx = dx / Np[1]
 
-    (; ehat, κ) = observespectrum(state; setup, kwargs...)
+    ehat_l = []; κ_l = []
+    for i in 1:plot_n_spectra
+        (; ehat, κ) = observespectrum(state[i]; setup = setup[i], kwargs...)
+        push!(ehat_l, ehat)
+        push!(κ_l, κ)
+    end
 
-    kmax = maximum(κ)
+    kmax = maximum(κ_l[1])
     # Build inertial slope above energy
-    krange = kmax .^ sloperange
+    #krange = kmax .^ sloperange
     slope, slopelabel = D == 2 ? (-T(3), L"$k^{-3}$") : (-T(5 / 3), L"$k^{-5/3}$")
 
     τ = 2π |> T
@@ -357,22 +364,28 @@ function energy_spectrum_plot(
         logmax = round(Int, log2(kmax + 1))
         xticks = (T(2) .^ (0:logmax))
     end
+
     fig = Figure(size=figure_size)
     fig[1,1] = ax = Axis(
         fig;
         xlabel,
-        # ylabel = "E(k)",
+        ylabel = "Kinetic energy",
         xscale = log10,
         yscale = log10,
         #limits = (dx/kmax, dx, T(1e-15), T(1)),
     )
-    if plot_wavelength
-        l = dx./(κ)
-    else
-        l = κ
+    ls = [:solid, :dash]
+    for i in 1:plot_n_spectra
+        if plot_wavelength
+            l = dx./(κ_l[i])
+        else
+            l = κ_l[i]
+        end
+        lines!(ax, l, ehat_l[i]; label = "N = $(setup[i].grid.Np[1])", linewidth = 2, linestyle = ls[i])
     end
-    lines!(ax, l, ehat; label = "Kinetic energy", linewidth = 2)
-    lines!(ax, inertia; label = slopelabel, linestyle = :dash, linewidth = 2, color = Cycled(2))
+    
+    
+    lines!(ax, inertia; label = slopelabel, linestyle = :dash, linewidth = 2, color = Cycled(3))
     axislegend(ax; position = :lb)
     if !isnothing(v_lines)
         vlines!(ax, v_lines; linestyle = :dash)
