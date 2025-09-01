@@ -36,7 +36,7 @@ scales = get_scale_numbers(u_start_800, setup_HF)
 println("Scale numbers: $(scales)")
 
 
-fig = energy_spectrum_plot([state_HF, state_LF]; setup = [setup_HF, setup_LF], npoint = 100, sloperange = [2,16], v_lines = [scales.λ, scales.η, Δx_hf], slopeoffset = 1.8,
+fig = energy_spectrum_plot([state_HF, state_LF]; setup = [setup_HF, setup_LF], npoint = 100, sloperange = [2,16], v_lines = [scales.λ, scales.η, Δx_hf], slopeoffset = 1.9,
  scale_numbers = scales, plot_wavelength = true, plot_n_spectra = 2)
 #display(fig)
 v = [scales.λ, scales.η, Δx_hf]
