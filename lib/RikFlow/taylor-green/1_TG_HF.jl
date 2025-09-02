@@ -33,7 +33,7 @@ tsim = 20f
 nx = 512      
 ny = 512     
 nz = 512     
-Δt = 0.0005f
+Δt = 0.005f
 nx_les = 64
 ny_les = 64
 nz_les = 64
@@ -111,7 +111,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
     ustart,
     docopy = false,
     tlims = (0f, tsim),
-    #Δt,
+    Δt,
     processors = (;
         f = RikFlow.filtersaver(
             setup,
