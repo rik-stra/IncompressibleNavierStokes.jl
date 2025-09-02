@@ -23,12 +23,12 @@ T = Float64
 f = one(T)
 
 #### small test
-xlims = 0f, 1f
-ylims = 0f, 1f
-zlims = 0f, 1f
+xlims = 0f, 2f*pi
+ylims = 0f, 2f*pi
+zlims = 0f, 2f*pi
 
-Re = 2_000f
-tsim = 4f
+Re = 1_600f
+tsim = 20f
 # Grid
 nx = 512      
 ny = 512     
@@ -38,22 +38,6 @@ nx_les = 64
 ny_les = 64
 nz_les = 64
 
-
-#### small test
-# xlims = 0f, 1f
-# ylims = 0f, 1f
-# zlims = 0f, 1f
-
-# Re = 2_000f
-# tsim = 4f
-# # Grid
-# nx = 128      
-# ny = 128     
-# nz = 128     
-# Δt = 0.0025f
-# nx_les = 64
-# ny_les = 64
-# nz_les = 64
 
 kwargs = (;
     boundary_conditions = (
@@ -87,16 +71,15 @@ les_setup = Setup(;
 
 psolver = psolver_spectral(setup);
 
-qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],
-        ["Z",11,17],["E", 11, 17]];
+qois = [["Z",0,1],["E", 0, 1],["Z",2,3],["E", 2, 3],["Z",4,5],["E", 4, 5]];
 ArrayType = CuArray
 
 
 U(dim, x, y, z) =
     if dim == 1
-        sinpi(2x) * cospi(2y) * sinpi(2z)
+        sin(x) * cos(y) * sin(z)
     elseif dim == 2
-        -cospi(2x) * sinpi(2y) * sinpi(2z)
+        -cos(x) * sin(y) * sin(z)
     else
         zero(x)
     end
@@ -128,7 +111,7 @@ ispath(checkpoints_dir) || mkpath(checkpoints_dir)
     ustart,
     docopy = false,
     tlims = (0f, tsim),
-    Δt,
+    #Δt,
     processors = (;
         f = RikFlow.filtersaver(
             setup,
