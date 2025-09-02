@@ -65,7 +65,7 @@ U(dim, x, y, z) =
     if dim == 1
         sin(x) * cos(y) * sin(z)
     elseif dim == 2
-        -cos(x) * sin(2y) * sin(2z)
+        -cos(x) * sin(y) * sin(z)
     else
         zero(x)
     end
@@ -75,8 +75,13 @@ u_les = vectorfield(les_setup)
 ϕ = FaceAverage()
 ϕ(u_les, ustart, les_setup, Int(nx/nx_les));
 IncompressibleNavierStokes.apply_bc_u!(u_les, 0, les_setup)
+
+psolver = psolver_spectral(les_setup);
+u_les_projected = project(u_les, les_setup, psolver=psolver);
+
 using CairoMakie
 heatmap(Array(u_les)[:,:,5,1])
+heatmap(Array(u_les_projected)[:,:,5,1])
 
 file_name = @__DIR__() * "/output/filtered_initial_field.jld2"
 u_start = Array(u_les)

@@ -27,8 +27,14 @@ ny_les = 64
 nz_les = 64
 Δt = 0.05f
 
+qois = [["Z",0,1],["E", 0, 1],["Z",2,3],["E", 2, 3],["Z",4,5],["E", 4, 5]];
 
-
+hf_file = @__DIR__() *"/output/HF/HF_TG_512_to_64_Re_1600.0_tsim20.0.jld2"
+qoi_ref = stack(load(hf_file)["f"].data[1].qoi_hist[:]);
+sample_rate = 10 # In the HF simulation we saved every second time step, now we take 10 times bigger time steps
+qoi_ref = qoi_ref[:,1:sample_rate:end]
+ref_reader = Reference_reader(qoi_ref);
+ArrayType = CuArray
 kwargs = (;
     boundary_conditions = (
         (PeriodicBC(), PeriodicBC()),
@@ -37,9 +43,8 @@ kwargs = (;
     ),
     Re,
     backend = CUDABackend(),
+    ArrayType,
 )
-
-
 les_setup = Setup(;
     x = (
         range(xlims..., nx_les + 1),
@@ -48,30 +53,23 @@ les_setup = Setup(;
     ),
     kwargs...,
 );
+
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
 
 psolver = psolver_spectral(les_setup);
 
-qois = [["Z",0,1],["E", 0, 1],["Z",2,3],["E", 2, 3],["Z",4,5],["E", 4, 5]];
-
-
-ArrayType = CuArray
-
-
 u_start_file_name = @__DIR__() *"/output/filtered_initial_field.jld2"
-ArrayType = CuArray
 ustart = ArrayType(load(u_start_file_name, "u_start"));
 
-
-
+nt = round(Int, tsim / Δt)
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
-    to_mode = :CREATE_REF, 
+    to_mode = :TRACK_REF, 
     ArrayType, 
     setup = les_setup,
+    nstep=nt,
+    time_series_method = ref_reader,
     );
-
-#determine checkpoints
 
 
 @info "Solving LES"
@@ -79,7 +77,8 @@ to_setup_les =
 (; u, t), outputs = solve_unsteady(;
     setup = les_setup,
     ustart,
-    docopy = false,
+    docopy = true,
+    method = TOMethod(; to_setup = to_setup_les),
     tlims = (0f, tsim),
     Δt,
     processors = (;
@@ -90,10 +89,14 @@ to_setup_les =
     psolver,
 );
 
-
+q = stack(outputs.qoihist)
+dQ = to_setup_les.outputs.dQ
+tau = to_setup_les.outputs.tau
+q_star = to_setup_les.outputs.q_star
+data_train = (;dQ, tau, q, q_star)
 # Save filtered DNS data
-outdir = @__DIR__() *"/output/LF"
+outdir = @__DIR__() *"/output/LF/track"
 ispath(outdir) || mkpath(outdir)
-filename = "$outdir/LF_TG_$(nx_les)_Re_$(Re)_tsim$(tsim).jld2"
+filename = "$outdir/track_TG_$(nx_les)_Re_$(Re)_tsim$(tsim).jld2"
 
-jldsave(filename; outputs.qoihist, outputs.fields)
+jldsave(filename; data_train, outputs.fields)

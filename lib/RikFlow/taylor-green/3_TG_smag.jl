@@ -38,8 +38,6 @@ kwargs = (;
     Re,
     backend = CUDABackend(),
 )
-
-
 les_setup = Setup(;
     x = (
         range(xlims..., nx_les + 1),
@@ -48,6 +46,7 @@ les_setup = Setup(;
     ),
     kwargs...,
 );
+
 @info "Grid size LF: $(nx_les) x $(ny_les) x $(nz_les)"
 
 psolver = psolver_spectral(les_setup);
@@ -62,7 +61,10 @@ u_start_file_name = @__DIR__() *"/output/filtered_initial_field.jld2"
 ArrayType = CuArray
 ustart = ArrayType(load(u_start_file_name, "u_start"));
 
+c_s = 0.07
 
+closure_model = IncompressibleNavierStokes.smagorinsky_closure_natural;
+les_setup = (; les_setup..., closure_model);
 
 to_setup_les = 
     RikFlow.TO_Setup(; qois, 
@@ -71,15 +73,14 @@ to_setup_les =
     setup = les_setup,
     );
 
-#determine checkpoints
-
 
 @info "Solving LES"
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup = les_setup,
+    θ = T(c_s),
     ustart,
-    docopy = false,
+    docopy = true,
     tlims = (0f, tsim),
     Δt,
     processors = (;
@@ -92,8 +93,8 @@ to_setup_les =
 
 
 # Save filtered DNS data
-outdir = @__DIR__() *"/output/LF"
+outdir = @__DIR__() *"/output/LF/smag"
 ispath(outdir) || mkpath(outdir)
-filename = "$outdir/LF_TG_$(nx_les)_Re_$(Re)_tsim$(tsim).jld2"
+filename = "$outdir/smag_TG_$(c_s)_$(nx_les)_Re_$(Re)_tsim$(tsim).jld2"
 
 jldsave(filename; outputs.qoihist, outputs.fields)
