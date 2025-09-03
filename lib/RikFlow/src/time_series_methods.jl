@@ -158,8 +158,11 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
 
             if time_series_method.target == :dq
                 dQ = pred
+                # set dQ_i to 0 if q*_i is 0
+                any(abs.(q_star) .< 1e-2) && (dQ .= 0)
             elseif time_series_method.target == :q
                 dQ = pred - q_star
+                any(abs.(q_star) .< 1e-2) && (dQ .= 0)
             end
         end
         time_series_method.q_hist[:,2:end] = time_series_method.q_hist[:,1:end-1] # shift history
@@ -172,20 +175,22 @@ function get_next_item_timeseries(time_series_method::LinReg, q_star)
             time_series_method.q_hist[n_qoi+1:end,1] .= q_star
         end
     else    # if the model does not use history, predict dQ directly from q_star
-        input = q_star
-        data = vcat(scale_input(input, time_series_method.scaling.in_scaling),ones(eltype(input), (1,1)))
+        q_star_sc = scale_input(q_star, time_series_method.scaling.in_scaling)
+        data = vcat(q_star_sc, ones(eltype(q_star_sc), (1,1)))
         if !isnothing(time_series_method.stoch_distr)
             pred = rand(time_series_method.rng, time_series_method.stoch_distr) |> adapt(time_series_method.ArrayType)
         else
-            pred = zeros(eltype(input), n_qoi)
+            pred = zeros(eltype(q_star_sc), n_qoi)
         end
         pred[time_series_method.fitted_qois,:] += time_series_method.c * data
         pred = scale_output(pred, time_series_method.scaling.out_scaling)[:]
         
         if time_series_method.target == :dq
             dQ = pred
+            any(abs.(q_star) .< 1e-2) && (dQ .= 0)
         elseif time_series_method.target == :q
             dQ = pred - q_star
+            any(abs.(q_star) .< 1e-2) && (dQ .= 0)
         end
     end
     return dQ

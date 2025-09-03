@@ -61,7 +61,7 @@ kwargs = (;
 
 
 data_track = load(track_file, "data_train");
-dQ_data = data_track.dQ[:,1:100];
+dQ_data = data_track.dQ[:,1:5];
 
 u_start_file_name = @__DIR__() *"/output/filtered_initial_field.jld2"
 ustart = ArrayType(load(u_start_file_name, "u_start"));
@@ -89,7 +89,9 @@ for i in 1:n_replicas
             q_hist = cat(q_hist, q_hist, dims=1)
         end
     end
-    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(i), ArrayType, q_hist = q_hist, spinnup_data = ArrayType{T}(dQ_data));
+    time_series_sampler = RikFlow.LinReg(LinReg_file_name, Xoshiro(i), ArrayType, q_hist = q_hist, 
+    spinnup_data = ArrayType{T}(dQ_data)
+    );
     
 
     to_setup_les = 
@@ -113,7 +115,7 @@ for i in 1:n_replicas
         processors = (;
             log = timelogger(; nupdate = 10),
             fields = fieldsaver(; setup, nupdate = 10),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1e8),
+            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1, nan_limit = 1e4),
         ),
         psolver,
     );

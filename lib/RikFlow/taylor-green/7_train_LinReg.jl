@@ -59,6 +59,7 @@ data = load(track_file, "data_train");
 q_scaled, in_scaling = RikFlow._normalise(data.q[:,train_range[1]:train_range[2]-1], normalization = normalization)
 q_star_scaled = RikFlow.scale_input(data.q_star[:,train_range[1]:train_range[2]-1], in_scaling)
 dQ_scaled     = RikFlow.scale_input(data.q[:,train_range[1]+1:train_range[2]], in_scaling)
+#dQ_scaled     = RikFlow.scale_input(data.dQ[:,train_range[1]:train_range[2]-1], in_scaling)
 scaling = (in_scaling = in_scaling, out_scaling = in_scaling)
 
 inputs, outputs = create_history(hist_len, q_star_scaled, q_scaled, dQ_scaled, hist_var; include_predictor)
@@ -131,6 +132,7 @@ include_predictor = model["include_predictor"]
 q_test = RikFlow.scale_input(data_test.q[:,1:400], model["scaling"].in_scaling)
 q_star_test = RikFlow.scale_input(data_test.q_star[:,1:400], model["scaling"].in_scaling)
 dQ_test = RikFlow.scale_input(data_test.q[:,2:401], model["scaling"].out_scaling)
+#dQ_test = RikFlow.scale_input(data_test.dQ[:,1:400], model["scaling"].out_scaling)
 dQ_scaled = data_test.dQ[:,1:400]./ model["scaling"].out_scaling.sigma
 
 inputs_test,outputs_test = create_history(model["hist_len"], q_star_test, q_test, dQ_test, hist_var; include_predictor)
@@ -164,5 +166,5 @@ function plot_time_series(data, qois, title; ref = nothing)
 end
 
 plot_time_series(preds, qois, "preds", ref = outputs_test)
-plot_time_series(preds-q_star_test[:,6:end], qois, "preds", ref = dQ_scaled[:,6:end])
+plot_time_series(preds-q_star_test[:,2:end], qois, "preds", ref = dQ_scaled[:,6:end])
 #plot_time_series(rp', qois, "rand_part", ref=tracking_noise.*randn(6,1000))
