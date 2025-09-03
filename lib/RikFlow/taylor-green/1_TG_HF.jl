@@ -28,7 +28,7 @@ ylims = 0f, 2f*pi
 zlims = 0f, 2f*pi
 
 Re = 1_600f
-tsim = 20f
+tsim = 60f
 # Grid
 nx = 512      
 ny = 512     
