@@ -17,7 +17,7 @@ zlims = 0f, 4f / 3f * pi
 
 Re = 180f
 Δt = 0.005f
-tsim = 1.5f
+tsim = 2f
 
 
 hf_file = @__DIR__()*"/../channel/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2" # for initial condition
@@ -64,8 +64,8 @@ psolver = psolver_transform(setup);
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 200),
-            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 10),
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
         ),
         psolver,
 );
@@ -86,8 +86,8 @@ close(io)
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 200),
-            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 10),
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
         ),
         psolver,
 );
@@ -108,8 +108,8 @@ close(io)
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 200),
-            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 10),
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
         ),
         psolver,
 );
@@ -150,8 +150,8 @@ to_setup_les = RikFlow.TO_Setup(;
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 200),
-            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 10),
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
         ),
         psolver,
 );

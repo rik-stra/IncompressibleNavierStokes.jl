@@ -56,8 +56,8 @@ psolver = psolver_spectral(setup);
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 200),
-            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 10),
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
         ),
         psolver,
 );
@@ -78,8 +78,8 @@ close(io)
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 200),
-            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 10),
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
         ),
         psolver,
 );
@@ -117,8 +117,8 @@ to_setup_les = RikFlow.TO_Setup(;
         tlims = (T(0), tsim),
         Δt,
         processors = (;
-            log = timelogger(; nupdate = 200),
-            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 10),
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
         ),
         psolver,
 );
