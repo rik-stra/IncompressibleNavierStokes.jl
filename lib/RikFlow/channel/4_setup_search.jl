@@ -25,7 +25,7 @@ fixed_parameters = (
 
 i = 0
 inputs = []
-hist_lens = [5,10]
+hist_lens = [5,10, 50]
 lambdas = [0.0, 1e-4]
 
 for hist_len in hist_lens
