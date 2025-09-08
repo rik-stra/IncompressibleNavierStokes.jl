@@ -49,12 +49,13 @@ track_file_name = @__DIR__()*"/output/LF/track/track_TG_64_Re_1600.0_tsim20.0.jl
 track_data = load(track_file_name); 
 q_track = track_data["data_train"].q;
 
-TO_file_name = @__DIR__()*"/output/TO_LRS/LinReg5/TO_online_TG_to_64_tsim20.0_repl_2.jld2"
+TO_file_name = @__DIR__()*"/output/TO_LRS/LinReg5/TO_online_TG_to_64_tsim60.0_repl_1.jld2"
 TO_data = load(TO_file_name);
 q_TO = TO_data["data"].q;
 
 let # plot lf QoI trajectories
     time_axis_lf = 0:0.05:20
+    time_axis_lf_long = 0:0.05:60
     time_axis_hf = 0:5e-3:20
     g = Figure(size=(1000,1000))
     ax = [Axis(g[i ÷ 2, i%2], 
@@ -66,7 +67,7 @@ let # plot lf QoI trajectories
         lines!(ax[i], time_axis_lf[:], q_smag[i,1:length(time_axis_lf)], color=:red, label = "Smag")
         lines!(ax[i], time_axis_lf[:], q_wale[i,1:length(time_axis_lf)], color=:green, label = "WALE")
         lines!(ax[i], time_axis_lf[:], q_track[i,1:length(time_axis_lf)], color=:orange, linestyle = :dash, label = "Track")
-        lines!(ax[i], time_axis_lf[:], q_TO[i,1:length(time_axis_lf)], color=:purple, linestyle = :dash, label = "TO")
+        lines!(ax[i], time_axis_lf_long[:], q_TO[i,1:length(time_axis_lf_long)], color=:purple, linestyle = :dash, label = "TO")
     end
     axislegend(ax[6], position=:rc)
     ax[5].xlabel="t"
