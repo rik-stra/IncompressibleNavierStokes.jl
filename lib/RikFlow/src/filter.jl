@@ -187,3 +187,20 @@ checkpointer(checkpoints, file_name, setup) =
         end
         1
     end
+
+solver_timer(; n_steps = 100, n_warmup = 10) =
+    processor() do state
+        times = []
+        on(state) do (; u, t, n)
+            if n == n_warmup
+                CUDA.synchronize()
+                t = time()
+                push!(times, t)
+            elseif n == n_warmup + n_steps
+                CUDA.synchronize()
+                t = time()
+                push!(times, t)
+            end
+        end
+        times
+    end
