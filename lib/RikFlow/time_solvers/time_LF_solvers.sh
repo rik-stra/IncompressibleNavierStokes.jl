@@ -5,6 +5,6 @@
 #SBATCH --gpus=1
 
 export JULIA_DEPOT_PATH=$HOME/julia/julia_A100:
-julia --project -t auto -e 'using Pkg; Pkg.update()'
+# julia --project -t auto -e 'using Pkg; Pkg.update()'
 julia --project LF_HIT.jl
 julia --project LF_channel.jl

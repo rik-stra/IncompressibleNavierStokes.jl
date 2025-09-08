@@ -14,6 +14,7 @@ using Statistics
 using Distributions
 using Random
 using Adapt
+using CUDA
 #using MLUtils
 #using Lux, LuxCUDA
 #using Optimisers, Zygote
