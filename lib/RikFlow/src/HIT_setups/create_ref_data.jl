@@ -120,6 +120,7 @@ function spinnup(;
     ou_bodyforce = nothing,
     checkpoint_file_name = "./u",
     Δt = nothing,
+    ArrayType = Array,
     kwargs...,
 )
     T = typeof(Re)
@@ -130,6 +131,7 @@ function spinnup(;
         Re,
         ou_bodyforce,
         backend,
+        ArrayType,
     )
 
     # Since the grid is uniform and identical for x and y, we may use a specialized

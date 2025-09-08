@@ -56,6 +56,7 @@ seeds = (;
 
 T = Float32
 backend = CUDABackend()
+ArrayType = CuArray
 
 outdir = @__DIR__() *"/output_spinnup"
 ispath(outdir) || mkpath(outdir)
@@ -69,6 +70,7 @@ get_params() = (;
     lims = ( (T(0) , T(1)) , (T(0) , T(1)), (T(0),T(1)) ),
     tburn,
     backend,
+    ArrayType,
     ndns = (n -> (n, n, n))(n_dns), # DNS resolution
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou_spin ),
 )
