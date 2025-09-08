@@ -108,7 +108,7 @@ end
 # fit model
 c, stoch_distr = fit_model(inputs, outputs, fitted_qois; indep_normals, lambda, regularizer = :l2)
 
-# overwrite the nose distribution
+# overwrite the noise distribution
 if model_noise == :tracking_noise
     stds_ref_data = load(@__DIR__()*"/output/tracking/stds_refdata.jld2", "stds")
     stds = stds_ref_data.*tracking_noise./scaling.out_scaling.sigma
