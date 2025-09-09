@@ -62,8 +62,6 @@ psolver = psolver_spectral(setup);
         psolver,
 );
 
-u_nat = Array(u)
-
 elapsed = outputs.timer[2]-outputs.timer[1]
 println("elapsed time:", elapsed, " s")
 
@@ -85,9 +83,6 @@ close(io)
         ),
         psolver,
 );
-
-u_new = Array(u)
-println("difference between smag new and natural: ", norm(u_new-u_nat))
 
 elapsed = outputs.timer[2]-outputs.timer[1]
 println("elapsed time:", elapsed, " s")
