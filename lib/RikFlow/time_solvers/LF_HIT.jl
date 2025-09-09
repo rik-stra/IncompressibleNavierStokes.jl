@@ -62,13 +62,39 @@ psolver = psolver_spectral(setup);
         psolver,
 );
 
+u_nat = Array(u)
+
 elapsed = outputs.timer[2]-outputs.timer[1]
 println("elapsed time:", elapsed, " s")
 
 io = open(@__DIR__()*"/time_results.txt", "a")
-write(io, "HIT_LF_smag nles: $nles, elapsed_time: $elapsed  \n")
+write(io, "HIT_LF_smag_natural nles: $nles, elapsed_time: $elapsed  \n")
 close(io)
 
+@info "Solving LF sim (SMAG)"
+(; u, t), outputs = solve_unsteady(; 
+        setup = (;setup..., closure_model = IncompressibleNavierStokes.smagorinsky_closure),
+        θ = T(0.071), 
+        ustart,
+        docopy = true,
+        tlims = (T(0), tsim),
+        Δt,
+        processors = (;
+            log = timelogger(; nupdate = 300),
+            timer = RikFlow.solver_timer(; n_steps = 100, n_warmup = 110),
+        ),
+        psolver,
+);
+
+u_new = Array(u)
+println("difference between smag new and natural: ", norm(u_new-u_nat))
+
+elapsed = outputs.timer[2]-outputs.timer[1]
+println("elapsed time:", elapsed, " s")
+
+io = open(@__DIR__()*"/time_results.txt", "a")
+write(io, "HIT_LF_smag_new nles: $nles, elapsed_time: $elapsed  \n")
+close(io)
 
 @info "Solving LF sim (no_model)"
 (; u, t), outputs = solve_unsteady(; 
