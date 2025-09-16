@@ -29,9 +29,9 @@ using SparseArrays
 using StaticArrays
 using Statistics
 using WriteVTK: CollectionFile, paraview_collection, vtk_grid, vtk_save
-using TensorOperations
+#using TensorOperations
 using CUDA
-import cuTENSOR
+#import cuTENSOR
 
 
 # Docstring templates

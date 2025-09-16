@@ -115,13 +115,20 @@ function OU_forcing_step!(; ou_setup, Δt)
         for d in 1:num_dims
             f_hat[d][mask] .= ou_setup.state[:,d]
             f_hat[d][:,end÷2+2:end] .= conj.(reverse(f_hat[d][:,1:end÷2], dims=2)) # fill the positive frequencies in the last dimension
-            @tensor ou_setup.f[d][b,c] = E[j,b]*E[k,c]*f_hat[d][k,j]
+            #@tensor ou_setup.f[d][b,c] = E[j,b]*E[k,c]*f_hat[d][k,j]
         end
     elseif num_dims == 3
         for d in 1:num_dims
             f_hat[d][mask] .= ou_setup.state[:,d]
             f_hat[d][:,:,end÷2+2:end] .= conj.(reverse(f_hat[d][:,:,1:end÷2], dims=3)) # fill the positive frequencies in the last dimension
-            @tensor ou_setup.f[d][a,b,c] = E[i,a]*E[j,b]*E[k,c]*f_hat[d][k,j,i] # this is slow! (but computational cost is also high: O(N_f^3*N^3))
+            # @tensor ou_setup.f[d][a,b,c] = E[i,a]*E[j,b]*E[k,c]*f_hat[d][k,j,i] # this is slow! (but computational cost is also high: O(N_f^3*N^3))
+            t1=sum( reshape(E,        size(E,1), 1, 1, size(E,2)).* 
+                    reshape(f_hat[d], size(f_hat[d],1), size(f_hat[d],2), size(f_hat[d],3), 1), dims=1)
+            t2=sum(reshape(E, 1, size(E,1), 1, size(E,2), 1).*
+                reshape(t1, size(t1,1), size(t1,2), size(t1,3), 1, size(t1,4)), dims=2)
+            t3=sum(reshape(E, 1, 1, size(E,1), size(E,2),1,1).*
+                    reshape(t2, size(t2,1), size(t2,2), size(t2,3), 1, size(t2,4), size(t2,5)), dims=3)
+            ou_setup.f[d] = reshape(t3, size(t3,4), size(t3,5), size(t3,6))
         end
     end
 end

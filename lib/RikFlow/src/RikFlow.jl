@@ -7,8 +7,8 @@ using FFTW
 using Observables
 using JLD2
 using Infiltrator
-using TensorOperations
-import cuTENSOR
+#using TensorOperations
+#import cuTENSOR
 using KernelAbstractions
 using Statistics
 using Distributions
@@ -344,9 +344,20 @@ function to_sgs_term(u, setup, to_setup, stepper)
     # move to GPU
     cij = setup.ArrayType(cij)
     tau = setup.ArrayType(tau)
+
     # construct SGS term
-    @tensor P_hat[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
-    @tensor sgs_hat[b,c,d,e] := -tau[a] * P_hat[b,c,d,e,a]
+    #@tensor P_hat2[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
+    cij = reshape(cij, 1,1,1,1,size(cij,1), size(cij,2))
+    ti = reshape(ti, size(ti,1), size(ti,2), size(ti,3), size(ti,4), size(ti,5), 1)
+    P_hat = sum(cij .* ti; dims = 5)
+    P_hat = reshape(P_hat, size(P_hat,1), size(P_hat,2), size(P_hat,3), size(P_hat,4), size(cij,6))
+
+    #@tensor sgs_hat2[b,c,d,e] := -tau[a] * P_hat[b,c,d,e,a]
+    tau = reshape(tau, 1,1,1,1,:)
+    @. P_hat = -tau * P_hat
+    sgs_hat = sum(P_hat; dims = 5)
+    sgs_hat = reshape(sgs_hat, size(sgs_hat,1), size(sgs_hat,2), size(sgs_hat,3), size(sgs_hat,4))
+
     sgs = real(ifft(sgs_hat, [1,2,3]))
 
     if to_setup.mirror_y
@@ -363,7 +374,10 @@ function innerpoducts(x,y,setup; mirror_y = false)
         L[2] = L[2]*2
     end
     N = size(x)[1:D]
-    @tensor ip[e,f] := x[a,b,c,d,e]* conj(y)[a,b,c,d,f]
+    #@tensor ip2[e,f] := x[a,b,c,d,e]* conj(y)[a,b,c,d,f]
+    x = reshape(x, size(x,1), size(x,2), size(x,3), size(x,4), size(x,5), 1)
+    y = reshape(y, size(y,1), size(y,2), size(y,3), size(y,4), 1, size(y,5))
+    ip =reshape(sum(x .* conj.(y); dims = (1,2,3,4)), size(x,5), size(y,6))
     Array(ip).*(prod(L)/(prod(N)^2))
 end
 
