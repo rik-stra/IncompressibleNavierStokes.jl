@@ -4,6 +4,6 @@
 #SBATCH --partition=gpu_h100
 #SBATCH --gpus=1
 
-export JULIA_DEPOT_PATH=$HOME/julia/julia_h100:
-# julia --project -t auto -e 'using Pkg; Pkg.update()'
+export JULIA_DEPOT_PATH=$HOME/julia/julia_h1002:
+julia --project -t auto -e 'using Pkg; Pkg.update()'
 julia --project 1_TG_HF.jl
