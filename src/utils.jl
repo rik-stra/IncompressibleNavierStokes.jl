@@ -58,15 +58,15 @@ function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) /
         ky = reshape(0:K[2]-1, 1, :)./domain_length[2]
         @. k = sqrt(kx^2 + ky^2)
     elseif D == 3
-        kx = reshape(0:K[1]-1, :)./domain_length[1]
-        ky = reshape(0:K[2]-1, 1, :)./domain_length[2]
-        kz = reshape(0:K[3]-1, 1, 1, :)./domain_length[3]
+        kx = reshape(0:K[1]-1, :) #./domain_length[1]
+        ky = reshape(0:K[2]-1, 1, :) #./domain_length[2]
+        kz = reshape(0:K[3]-1, 1, 1, :) #./domain_length[3]
         @. k = sqrt(kx^2 + ky^2 + kz^2)
     end
     k = reshape(k, :)
 
     # Sum or average wavenumbers between k and k+1
-    kmax = minimum([(K[d]-1)/domain_length[d] for d in 1:D]) 
+    kmax = minimum([(K[d]) for d in 1:D]) 
     isort = sortperm(k)
     ksort = k[isort]
 

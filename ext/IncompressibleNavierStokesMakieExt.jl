@@ -381,7 +381,7 @@ function energy_spectrum_plot(
         else
             l = κ_l[i]
         end
-        lines!(ax, l, ehat_l[i]; label = "N = $(setup[i].grid.Np[1])", linewidth = 2, linestyle = ls[i])
+        lines!(ax, l, ehat_l[i]; label = "t = $(state[i].t)", linewidth = 2, linestyle = ls[i])
     end
     
     
@@ -392,6 +392,8 @@ function energy_spectrum_plot(
     end
 
     #xlims!(ax,Δx*0.7, dx)
+    #ylims!(ax, 1e-15, 1)
+    #xlims!(ax, dx, Δx*0.7)
     if plot_wavelength
         ax.xreversed = true
     else
