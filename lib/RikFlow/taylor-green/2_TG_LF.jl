@@ -14,12 +14,11 @@ using JLD2
 T = Float64
 f = one(T)
 
-#### small test
 xlims = 0f, 2f*pi
 ylims = 0f, 2f*pi
 zlims = 0f, 2f*pi
 
-Re = 1_600f
+Re = 800f
 tsim = 20f
 # Grid
 nx_les = 64

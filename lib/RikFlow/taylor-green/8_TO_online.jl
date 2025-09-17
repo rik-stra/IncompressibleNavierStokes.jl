@@ -12,13 +12,13 @@ using JLD2
 using Random
 
 # parse input ARGS
-# model_index = parse(Int, ARGS[1])
+model_index = parse(Int, ARGS[1])
 # or set model_index manually
-model_index = 5
+# model_index = 2
 
 inputs_file_name = "/inputs.jld2"
 TO_folder = @__DIR__()*"/output/TO_LRS"
-track_file = @__DIR__()*"/output/LF/track/track_TG_64_Re_1600.0_tsim20.0.jld2"
+track_file = @__DIR__()*"/output/LF/track/track_TG_64_Re_800.0_tsim20.0.jld2"
 
 inputs = load(TO_folder*inputs_file_name, "inputs")
 (; name, hist_len, n_replicas, hist_var,tracking_noise) = inputs[model_index]
@@ -32,8 +32,8 @@ xlims = 0f, 2f*pi
 ylims = 0f, 2f*pi
 zlims = 0f, 2f*pi
 
-Re = 1_600f
-tsim = 60f
+Re = 800f
+tsim = 20f
 # Grid
 nx_les = 64
 ny_les = 64

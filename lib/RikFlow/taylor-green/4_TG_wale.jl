@@ -19,7 +19,7 @@ xlims = 0f, 2f*pi
 ylims = 0f, 2f*pi
 zlims = 0f, 2f*pi
 
-Re = 1_600f
+Re = 800f
 tsim = 20f
 # Grid
 nx_les = 64
@@ -61,38 +61,40 @@ u_start_file_name = @__DIR__() *"/output/filtered_initial_field.jld2"
 ArrayType = CuArray
 ustart = ArrayType(load(u_start_file_name, "u_start"));
 
-c_w = 0.5
+c_vals = 0.1:0.05:0.9
+
+for c_w in c_vals
+    @info "Wale model with c_w = $c_w"
+    to_setup_les = 
+        RikFlow.TO_Setup(; qois, 
+        to_mode = :CREATE_REF, 
+        ArrayType, 
+        setup = les_setup,
+        );
 
 
-to_setup_les = 
-    RikFlow.TO_Setup(; qois, 
-    to_mode = :CREATE_REF, 
-    ArrayType, 
-    setup = les_setup,
+    @info "Solving LES"
+    # Solve DNS and store filtered quantities
+    (; u, t), outputs = solve_unsteady(;
+        setup = (; les_setup..., closure_model = IncompressibleNavierStokes.wale_closure),
+        θ = T(c_w),
+        ustart,
+        docopy = true,
+        tlims = (0f, tsim),
+        Δt,
+        processors = (;
+            log = timelogger(; nupdate = 10),
+            fields = fieldsaver(; setup=les_setup, nupdate = 10),  # by calling this BEFORE qoisaver, we also save the field at t=0!
+            qoihist = RikFlow.qoisaver(; setup=les_setup, to_setup=to_setup_les, nupdate = 1),
+        ),
+        psolver,
     );
 
 
-@info "Solving LES"
-# Solve DNS and store filtered quantities
-(; u, t), outputs = solve_unsteady(;
-    setup = (; les_setup..., closure_model = IncompressibleNavierStokes.wale_closure),
-    θ = T(c_w),
-    ustart,
-    docopy = true,
-    tlims = (0f, tsim),
-    Δt,
-    processors = (;
-        log = timelogger(; nupdate = 10),
-        fields = fieldsaver(; setup=les_setup, nupdate = 10),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-        qoihist = RikFlow.qoisaver(; setup=les_setup, to_setup=to_setup_les, nupdate = 1),
-    ),
-    psolver,
-);
+    # Save filtered DNS data
+    outdir = @__DIR__() *"/output/LF/wale"
+    ispath(outdir) || mkpath(outdir)
+    filename = "$outdir/wale_TG_$(c_w)_$(nx_les)_Re_$(Re)_tsim$(tsim).jld2"
 
-
-# Save filtered DNS data
-outdir = @__DIR__() *"/output/LF/wale"
-ispath(outdir) || mkpath(outdir)
-filename = "$outdir/wale_TG_$(c_w)_$(nx_les)_Re_$(Re)_tsim$(tsim).jld2"
-
-jldsave(filename; outputs.qoihist, outputs.fields)
+    jldsave(filename; outputs.qoihist, outputs.fields)
+end

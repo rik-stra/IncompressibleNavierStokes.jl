@@ -19,7 +19,7 @@ xlims = 0f, 2f*pi
 ylims = 0f, 2f*pi
 zlims = 0f, 2f*pi
 
-Re = 1_600f
+Re = 800f
 tsim = 20f
 # Grid
 nx_les = 64
@@ -29,9 +29,9 @@ nz_les = 64
 
 qois = [["Z",0,1],["E", 0, 1],["Z",2,3],["E", 2, 3],["Z",4,5],["E", 4, 5]];
 
-hf_file = @__DIR__() *"/output/HF/HF_TG_512_to_64_Re_1600.0_tsim20.0.jld2"
+hf_file = @__DIR__() *"/output/HF/HF_TG_512_to_64_Re_800.0_tsim20.0.jld2"
 qoi_ref = stack(load(hf_file)["f"].data[1].qoi_hist[:]);
-sample_rate = 10 # In the HF simulation we saved every second time step, now we take 10 times bigger time steps
+sample_rate = 10 # In the HF simulation we saved every time step, now we take 10 times bigger time steps
 qoi_ref = qoi_ref[:,1:sample_rate:end]
 ref_reader = Reference_reader(qoi_ref);
 ArrayType = CuArray

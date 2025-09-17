@@ -10,7 +10,7 @@ if !isdir(fig_folder)
 end
 
 ## load reference QoI data
-filename = @__DIR__()*"/output/HF/HF_TG_512_to_64_Re_1600.0_tsim20.0.jld2"
+filename = @__DIR__()*"/output/HF/HF_TG_512_to_64_Re_800.0_tsim20.0.jld2"
 ref_data = load(filename, "f");
 qois = [["Z",0,1],["E", 0, 1],["Z",2,3],["E", 2, 3],["Z",4,5],["E", 4, 5]]
 q_ref = stack(ref_data.data[1].qoi_hist)
@@ -32,30 +32,38 @@ let # plot reference QoI trajectories
     #save(fig_folder*"/Qoi_trajectories_nomodel_smag.pdf", g)
 end
 
-## load LF data
-LF_file_name = @__DIR__()*"/output/LF/LF_TG_64_Re_1600.0_tsim20.0.jld2"
-lf_data = load(LF_file_name);
-q_lf = stack(lf_data["qoihist"])
+ref_fields = load(filename, "fields");
 
-smag_file_name = @__DIR__()*"/output/LF/smag/smag_TG_0.07_64_Re_1600.0_tsim20.0.jld2"
-smag_data = load(smag_file_name);
-q_smag = stack(smag_data["qoihist"])
+n = 512
+Δx = 2*pi/n
+axis_x = range(0.0, 2*pi, n + 1)
+setup = Setup(;
+                x = (axis_x, axis_x, axis_x),
+                Re = 1.6e3,);
+state10 = (;u = ref_fields[1].u, t=10, temp=0);
+state20 = (;u = ref_fields[2].u, t=20, temp=0);
 
-wale_file_name = @__DIR__()*"/output/LF/wale/wale_TG_0.5_64_Re_1600.0_tsim20.0.jld2"
-wale_data = load(wale_file_name);
-q_wale = stack(wale_data["qoihist"])
+fig = energy_spectrum_plot([state10, state20]; setup = [setup, setup], plot_n_spectra = 2, npoint = 100, v_lines=[2*pi/512], plot_wavelength = true)
+v = [Δx]
+v_labels = ["Δx"]
+text!(fig[1,1], v_labels[1], position = (v[1]*0.96,1e-15*1.2), align = (:left, :bottom), color = :black)
+display(fig)
+save(fig_folder*"/energy_spectrum_TG.pdf", fig)
 
-track_file_name = @__DIR__()*"/output/LF/track/track_TG_64_Re_1600.0_tsim20.0.jld2"
+save_vtk(state10; setup, filename = @__DIR__()*"/output/vtks/HF_T10_re800", fieldnames = (:velocity, :Qfield))
+save_vtk(state20; setup, filename = @__DIR__()*"/output/vtks/HF_T20_re800", fieldnames = (:velocity, :Qfield))
+
+track_file_name = @__DIR__()*"/output/LF/track/track_TG_64_Re_800.0_tsim20.0.jld2"
 track_data = load(track_file_name); 
 q_track = track_data["data_train"].q;
 
-TO_file_name = @__DIR__()*"/output/TO_LRS/LinReg5/TO_online_TG_to_64_tsim60.0_repl_1.jld2"
-TO_data = load(TO_file_name);
-q_TO = TO_data["data"].q;
+## load LF data
+LF_file_name = @__DIR__()*"/output/LF/LF_TG_64_Re_800.0_tsim20.0.jld2"
+lf_data = load(LF_file_name);
+q_lf = stack(lf_data["qoihist"])
 
 let # plot lf QoI trajectories
     time_axis_lf = 0:0.05:20
-    time_axis_lf_long = 0:0.05:60
     time_axis_hf = 0:5e-3:20
     g = Figure(size=(1000,1000))
     ax = [Axis(g[i ÷ 2, i%2], 
@@ -64,10 +72,7 @@ let # plot lf QoI trajectories
     for i in 1:size(q_lf, 1)
         lines!(ax[i], time_axis_hf[:], q_ref[i,1:length(time_axis_hf)], color=:black, label = "HF")
         lines!(ax[i], time_axis_lf[:], q_lf[i,1:length(time_axis_lf)], color=:blue, label = "LF")
-        lines!(ax[i], time_axis_lf[:], q_smag[i,1:length(time_axis_lf)], color=:red, label = "Smag")
-        lines!(ax[i], time_axis_lf[:], q_wale[i,1:length(time_axis_lf)], color=:green, label = "WALE")
         lines!(ax[i], time_axis_lf[:], q_track[i,1:length(time_axis_lf)], color=:orange, linestyle = :dash, label = "Track")
-        lines!(ax[i], time_axis_lf_long[:], q_TO[i,1:length(time_axis_lf_long)], color=:purple, linestyle = :dash, label = "TO")
     end
     axislegend(ax[6], position=:rc)
     ax[5].xlabel="t"
@@ -76,10 +81,101 @@ let # plot lf QoI trajectories
     #save(fig_folder*"/Qoi_trajectories_nomodel_smag.pdf", g)
 end
 
-# plot trajectories of TO sims
-TO_file_name = @__DIR__()*"/output/TO_LRS/LinReg1/TO_online_TG_to_64_tsim20.0_repl_2.jld2"
-TO_data = load(TO_file_name);
-q_TO = TO_data["data"].q;
+c_vals = 0.01:0.02:0.10
+qs_smag = []
+for c in c_vals
+    smag_file_name = @__DIR__()*"/output/LF/smag/smag_TG_$(c)_64_Re_800.0_tsim20.0.jld2"
+    smag_data = load(smag_file_name);
+    q_smag = stack(smag_data["qoihist"])
+    push!(qs_smag, q_smag)
+end
+
+
+let # plot lf QoI trajectories
+    time_axis_lf = 0:0.05:20
+    time_axis_hf = 0:5e-3:20
+    g = Figure(size=(800, 600))
+    ax = [Axis(g[i ÷ 2, i%2], 
+        title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+        for i in 0:size(q_lf, 1)-1]
+    for i in 1:size(q_lf, 1)
+        lines!(ax[i], time_axis_hf[:], q_ref[i,1:length(time_axis_hf)], color=:black, linewidth=2, label = "HF")
+        lines!(ax[i], time_axis_lf[:], q_lf[i,1:length(time_axis_lf)], color=:blue, label = "LF")
+        for (j, c) in enumerate(c_vals)
+            q_smag = qs_smag[j]
+            lines!(ax[i], time_axis_lf[:], q_smag[i,1:length(time_axis_lf)], alpha=0.7, label = "Smag c=$(round(c,digits=2))")
+        end
+    end
+    g[:,2] = Legend(g, ax[6])
+    ax[5].xlabel="t"
+    ax[6].xlabel="t"
+    display(g)
+    save(fig_folder*"/Qoi_trajectories_nomodel_smag.pdf", g)
+end
+
+c_vals = 0.2:0.1:0.6
+qs_wale = []
+for c in c_vals
+    wale_file_name = @__DIR__()*"/output/LF/wale/wale_TG_$(c)_64_Re_800.0_tsim20.0.jld2"
+    wale_data = load(wale_file_name);
+    q_wale = stack(wale_data["qoihist"])
+    push!(qs_wale, q_wale)
+end
+
+let # plot lf QoI trajectories
+    time_axis_lf = 0:0.05:20
+    time_axis_hf = 0:5e-3:20
+    g = Figure(size=(800, 600))
+    ax = [Axis(g[i ÷ 2, i%2], 
+        title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+        for i in 0:size(q_lf, 1)-1]
+    for i in 1:size(q_lf, 1)
+        lines!(ax[i], time_axis_hf[:], q_ref[i,1:length(time_axis_hf)], color=:black, linewidth=2, label = "HF")
+        lines!(ax[i], time_axis_lf[:], q_lf[i,1:length(time_axis_lf)], color=:blue, label = "LF")
+        for (j, c) in enumerate(c_vals)
+            q_wale = qs_wale[j]
+            lines!(ax[i], time_axis_lf[:], q_wale[i,1:length(time_axis_lf)], alpha = 0.7 ,label = "WALE c=$(round(c,digits=2))")
+        end
+    end
+    g[:,2] = Legend(g, ax[6])
+    ax[5].xlabel="t"
+    ax[6].xlabel="t"
+    display(g)
+    save(fig_folder*"/Qoi_trajectories_nomodel_WALE.pdf", g)
+end
+
+n_replicas = 3
+qs_TO = []
+for i in 1:n_replicas
+    TO_file_name = @__DIR__()*"/output/TO_LRS/LinReg2/TO_online_TG_to_64_tsim20.0_repl_$(i).jld2"
+    TO_data = load(TO_file_name);
+    q_TO = TO_data["data"].q;
+    push!(qs_TO, q_TO)
+end
+
+let # plot lf QoI trajectories
+    time_axis_lf = 0:0.05:20
+    time_axis_hf = 0:5e-3:20
+    g = Figure(size=(800, 600))
+    ax = [Axis(g[i ÷ 2, i%2], 
+        title = L"%$(qois[i+1][1])_{[%$(qois[i+1][2]), %$(qois[i+1][3])]}")
+        for i in 0:size(q_lf, 1)-1]
+    HF, LF, TO = nothing, nothing, nothing
+    for i in 1:size(q_lf, 1)
+        HF = lines!(ax[i], time_axis_hf[:], q_ref[i,1:length(time_axis_hf)], color=:black, label = "HF")
+        LF = lines!(ax[i], time_axis_lf[:], q_lf[i,1:length(time_axis_lf)], color=:blue, label = "LF")
+        for j in 1:n_replicas
+            TO = lines!(ax[i], time_axis_lf[:], qs_TO[j][i,1:length(time_axis_lf)], color=:orange, alpha = 0.5 ,linestyle = :solid, label = "TO")
+        end
+    end
+    g[:,2] = Legend(g, [HF, LF, TO], ["HF", "LF", "TO 5x"])
+    ax[5].xlabel="t"
+    ax[6].xlabel="t"
+    display(g)
+    #save(fig_folder*"/Qoi_trajectories_nomodel_smag.pdf", g)
+end
+
+
 
 
 # plot fields
