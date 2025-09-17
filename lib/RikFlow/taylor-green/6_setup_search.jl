@@ -8,7 +8,7 @@ fixed_parameters = (
                     hist_len = 5, # number of history point included in the linear regression
                     lambda = 0,   # regularization strength in linear regression
                     train_range = (1,401), # range of training data to use when fitting linear regression (we used Δt = 0.05, so this is timeunit 0 to 20)
-                    n_replicas = 3, # number of replicas to run when evaluating the model online
+                    n_replicas = 5, # number of replicas to run when evaluating the model online
                     
                     # stuff you might want to explore
                     model_noise = :MVG,   # noise model for residual of linear regression options :MVG multi variate gaussian, :no_noise no noise added to linreg, :model_noise use the same noise as during tracking (see "tracking_noise")
