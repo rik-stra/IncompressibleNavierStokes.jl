@@ -61,7 +61,7 @@ kwargs = (;
 
 
 data_track = load(track_file, "data_train");
-dQ_data = data_track.dQ[:,1:5];
+dQ_data = data_track.dQ[:,1:10];
 
 u_start_file_name = @__DIR__() *"/output/filtered_initial_field.jld2"
 ustart = ArrayType(load(u_start_file_name, "u_start"));
