@@ -69,6 +69,31 @@ const T_INT_MAX = 0.3017
 const DEFAULT_TRACK_FILE = get(ENV, "RIKFLOW_TRACK_FILE",
     raw"C:\Users\rik\Documents\julia_code\IncompressibleNavierStokes.jl\lib\RikFlow\exp_square_HIT\output\new\data_track2_dns512_les64_Re2000.0_tsim100.0.jld2")
 
+"""
+The **10 TU** tracked record, which is the one the archived online runs launched from.
+
+🔴 Not the same record as `DEFAULT_TRACK_FILE`, and the difference is the whole point of the
+validation IC. `paper_runs/online_sgs.jl:50` reads
+`data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2` (line 52 has the 100 TU file
+commented out) and takes `ustart = fields[1].u` and `dQ_data = dQ[:, 1:100]` from it. The two
+records are two realisations whose `dQ` decorrelates to ~1 standard deviation past step 1000
+(`claude_memory.md` gotcha #39), so a validation run built from the 100 TU record could only ever
+agree with the archive approximately. Built from *this* record, the inputs are the archive's own.
+"""
+const VALIDATION_TRACK_FILE = get(ENV, "RIKFLOW_TRACK10_FILE",
+    raw"C:\Users\rik\Documents\julia_code\IncompressibleNavierStokes.jl\lib\RikFlow\exp_square_HIT\paper_runs\output\tracking\tracking\data_track_trackingnoise_std_0.0_Re2000.0_tsim10.0_replica1.jld2")
+
+"""
+The archived online driver's model-seed base: `Xoshiro(seeds.to + i + 2)` with `seeds.to = 234`
+(`6_online_TO_LRS.jl:37-41,83` and `paper_runs/online_sgs.jl:84`), so replica `i` used
+`Xoshiro(236 + i)`.
+
+The validation run reuses it — that is what makes the comparison against the archive exact rather
+than merely distributional. D6's scoring runs deliberately do **not**: they use
+`hash((:d6, k, member))`, so no scored member shares a stream with an archived replica.
+"""
+const ARCHIVE_SEED_BASE = 236
+
 const DEFAULT_IC_DIR = joinpath(@__DIR__, "output", "d6_ics")
 
 """
@@ -317,7 +342,96 @@ function build_d6_ics(; K::Integer = 180, track_file = DEFAULT_TRACK_FILE, outdi
     return sel
 end
 
+# --------------------------------------------------------------------------------------------
+# the validation IC
+# --------------------------------------------------------------------------------------------
+
+"Path of the validation package. A distinct name, for the reason in `build_validation_ic`."
+validation_path(dir = DEFAULT_IC_DIR) = joinpath(dir, "d6_ic_validation.jld2")
+
+"""
+    build_validation_ic(; track_file = VALIDATION_TRACK_FILE, outdir, nwarm, nlead, force)
+
+Build the one IC that is **not** for scoring: `fields[1]` of the 10 TU tracked record, i.e. the
+initial condition every archived online run launched from.
+
+🔑 **Why it exists.** A D6 run from here has `n_k = 0`, so `ou_advance = 0` and the OU chain starts
+at zero — which is exactly what the archived driver does, and is the identity point of the whole
+replay mechanism. Give it the archive's model seeds (`ARCHIVE_SEED_BASE`) and its `q` must
+reproduce the archived replica's first `nwarm + nlead + 1` columns. That is a correctness check on
+the entire D6 path — IC packaging, warm-up slicing, `ou_advance`, the driver, the output format —
+against a trajectory produced years earlier by different code.
+
+🔴 **It is deliberately kept out of `select_ics` and out of everything scored**, for two
+independent reasons, and merging it in would break both:
+
+ 1. `t_1 = 0` is **inside** M0's fit window, so its short-lead spread would be measured on data the
+    conditional mean has already seen. `select_ics` asserts `t_k > 10` precisely to exclude it.
+ 2. V28 requires D6's IC set to be **disjoint** from the archived runs' IC, which is this one.
+    `test_d6_ics.jl` asserts `!(1 in select_ics(; K).k)`; that test is only meaningful while this
+    package stays outside the selection.
+
+Hence the separate filename, and hence `run_d6.jl` writing its members as `d6_valid_ic1_m*.jld2`
+where the scorer's own glob cannot see them.
+"""
+function build_validation_ic(; track_file = VALIDATION_TRACK_FILE, outdir = DEFAULT_IC_DIR,
+                             nwarm::Integer = N_WARM, nlead::Integer = N_LEAD,
+                             force::Bool = false)
+    isfile(track_file) || error("no such tracking file: $track_file")
+    out = validation_path(outdir)
+    if isfile(out) && !force
+        @printf("validation IC exists, skipping: %s (%.2f MB)\n", basename(out),
+                filesize(out) / 2^20)
+        return out
+    end
+    mkpath(outdir)
+
+    @printf("reading %s (%.2f GB) ...\n", basename(track_file), filesize(track_file) / 2^30)
+    d, params_track = jldopen(track_file, "r") do io
+        haskey(io, "data_track") || error("no data_track in $track_file; keys = $(keys(io))")
+        io["data_track"], io["params_track"]
+    end
+
+    # The geometry checks that apply to *this* record. It is 10 TU, not 100, so `N_FIELDS` and
+    # `N_REF` do not; what must hold is the field grid and that the warm-up slice fits.
+    fields = d.fields
+    fields[1].n == 0 || error("fields[1] is at step $(fields[1].n), expected 0")
+    isapprox(fields[1].t, 0.0; atol = 1e-6) || error("fields[1].t = $(fields[1].t), expected 0")
+    params_track.savefreq == FIELD_STRIDE ||
+        error("params_track.savefreq = $(params_track.savefreq), expected $FIELD_STRIDE")
+    size(d.q, 2) == size(d.dQ, 2) + 1 || error("q is not one column longer than dQ")
+    size(d.dQ, 2) >= nwarm || error("record has $(size(d.dQ, 2)) dQ columns, need >= $nwarm")
+
+    rows = warmup_range(0, nwarm)
+    first(rows) == 1 && last(rows) == nwarm ||
+        error("the warm-up slice at n = 0 is $(rows), expected 1:$nwarm")
+    dQ_warm = Array(d.dQ[:, rows])
+    any(isnan, dQ_warm) && error("warm-up slice contains NaN")
+    u = Array(fields[1].u)
+    any(isnan, u) && error("field contains NaN")
+
+    params = NamedTuple{PARAM_KEYS}(map(k -> getproperty(params_track, k), PARAM_KEYS))
+    provenance = (; source = abspath(track_file), source_bytes = filesize(track_file),
+                  built = string(now()), nwarm, nlead, K = 0, spacing_tu = NaN,
+                  nref = size(d.dQ, 2))
+    jldsave(out; u, n_k = 0, t_k = 0.0, k = 1, ordinal = 0, dQ_warm,
+            q_at_ic = Array(d.q[:, ic_q_column(0)]), params, provenance,
+            validation = true, archive_seed_base = ARCHIVE_SEED_BASE)
+
+    @printf("wrote %s (%.2f MB)\n", basename(out), filesize(out) / 2^20)
+    println("  ⚠️  validation only: t_1 = 0 is inside M0's fit window and this is the archived " *
+            "runs' own IC,\n      so it is excluded from `select_ics` and from everything scored. " *
+            "Run it as ordinal 0.")
+    return out
+end
+
 if abspath(PROGRAM_FILE) == @__FILE__
-    K = isempty(ARGS) ? 180 : parse(Int, ARGS[1])
-    build_d6_ics(; K)
+    if !isempty(ARGS) && ARGS[1] == "validation"
+        build_validation_ic()
+    else
+        K = isempty(ARGS) ? 180 : parse(Int, ARGS[1])
+        build_d6_ics(; K)
+        println()
+        build_validation_ic()
+    end
 end

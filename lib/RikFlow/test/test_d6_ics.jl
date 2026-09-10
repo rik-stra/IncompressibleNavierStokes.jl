@@ -216,6 +216,56 @@ end
     end
 end
 
+@testitem "V29 the validation IC is the archive's own inputs, and stays out of the scored set" default_imports = false setup = [D6, TrackedData] begin
+    using Test
+    using JLD2
+    # 🔑 Ordinal 0 exists to check the D6 path against the archived online runs: same initial
+    # condition, so `n_k = 0` and `ou_advance = 0` -- the identity point of the replay -- and the
+    # archive's own model seeds. For that to mean anything the package must carry the archive's
+    # inputs exactly, and it must never leak into anything scored.
+    @test D6.ARCHIVE_SEED_BASE == 236
+    @test D6.ARCHIVE_SEED_BASE == 234 + 2          # `Xoshiro(seeds.to + i + 2)`, seeds.to = 234
+
+    # It is not in the selection, at any K, and not in the manifest. Both must hold: `t_1 = 0` is
+    # inside M0's fit window, and V28 needs the scored set disjoint from the archived runs' IC.
+    for K in (5, 180, 346)
+        @test !(1 in D6.select_ics(; K).k)
+    end
+    @test D6.validation_path() != D6.ic_path(1)     # separate filenames, not just separate indices
+
+    p = D6.validation_path()
+    rec = TrackedData.hit10()
+    if !isfile(p) || rec === nothing
+        @test_skip "validation IC not built (analysis/build_d6_ics.jl validation)"
+    else
+        d = load(p)
+        @test d["validation"] === true
+        @test d["k"] == 1
+        @test d["ordinal"] == 0
+        @test d["n_k"] == 0
+        @test d["t_k"] == 0.0
+        @test d["archive_seed_base"] == D6.ARCHIVE_SEED_BASE
+        @test size(d["u"]) == (66, 66, 66, 3)
+        @test !any(isnan, d["u"])
+        @test d["provenance"].nwarm == D6.N_WARM
+        @test d["provenance"].nlead == D6.N_LEAD
+
+        # 🔴 Built from the **10 TU** record, which is what the archived online driver launched
+        # from (`paper_runs/online_sgs.jl:50`). The 100 TU record shares the initial field but its
+        # `dQ` is a different realisation (gotcha #39), so a package built from it could only ever
+        # agree with the archive approximately.
+        @test occursin("tsim10.0", d["provenance"].source)
+        @test !occursin("data_track2", d["provenance"].source)
+
+        # And the two inputs the archive actually consumed, bit-for-bit.
+        @test size(d["dQ_warm"]) == (size(rec.dQ, 1), D6.N_WARM)
+        @test d["dQ_warm"] == rec.dQ[:, D6.warmup_range(0)]
+        @test d["dQ_warm"] == rec.dQ[:, 1:100]     # the archived driver's literal slice
+        @test d["q_at_ic"] == rec.q[:, D6.ic_q_column(0)]
+        @test d["q_at_ic"] == rec.q[:, 1]
+    end
+end
+
 @testitem "V29 the forecast length and the record's grid are what the plan says" default_imports = false setup = [D6] begin
     using Test
     # These constants are quoted in the handoff, in `metrics.md` section 5 and in the run driver, and

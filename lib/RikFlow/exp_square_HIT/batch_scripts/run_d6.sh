@@ -8,7 +8,15 @@
 # run_d6.jl maps ordinal -> k through select_ics, so the pilot's 5 ICs are the first 5 of the same
 # 180 the full run uses and scaling up renumbers nothing.
 #
-# PILOT first: --array=1-5, ~17 MB of IC packages to copy. Read the wall time from the logs and
+# 🔑 VALIDATION FIRST, and it is one task: `--array=0`, or just `julia --project tools/run_d6.jl 0`.
+# Ordinal 0 is `fields[1]` of the 10 TU tracked record -- the initial condition every archived
+# online run launched from -- so n_k = 0, ou_advance = 0 (the identity point of the replay) and the
+# model seeds are the archive's own, Xoshiro(236 + member). Its `q` must then reproduce the archived
+# LinReg1 replica's first 1309 columns; `compare_validation` in analysis/score_d6.jl checks it.
+# That is the correctness check on the whole D6 path against a trajectory produced by different
+# code years earlier, and it costs one task. Do it before the pilot.
+#
+# PILOT next: --array=1-5, ~17 MB of IC packages to copy. Read the wall time from the logs and
 # write the measured s/TU into meta_files/handoff_p2c_d6.md section 2 -- the plan's two SBU figures
 # differ by 10x and neither should be trusted. Then change to --array=1-180 (add %20 to cap
 # concurrency if the queue prefers it) and change nothing else.

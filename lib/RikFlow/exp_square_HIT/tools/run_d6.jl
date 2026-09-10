@@ -84,6 +84,18 @@ record of what was drawn.
 member_seed(k::Integer, member::Integer) = hash((:d6, Int(k), Int(member)))
 
 """
+    validation_seed(member)
+
+The **archived** driver's seed for replica `member`: `Xoshiro(seeds.to + i + 2)` with
+`seeds.to = 234` (`6_online_TO_LRS.jl:37-41,83`), i.e. `Xoshiro(236 + member)`.
+
+Used only by ordinal 0. Reusing the archive's stream is what makes the validation run comparable
+to the archived trajectory column by column instead of merely in distribution; every *scored*
+member goes through `member_seed` and therefore shares a stream with nothing archived.
+"""
+validation_seed(member::Integer) = UInt64(ARCHIVE_SEED_BASE + Int(member))
+
+"""
     load_ic(ordinal; dir = ic_dir())
 
 The IC package for array-task `ordinal`, with the manifest cross-checked against `select_ics`.
@@ -93,6 +105,18 @@ catches an IC set built with a different `K`, `nlead` or record from the one thi
 which would otherwise show up only as a silently misaligned truth at scoring time.
 """
 function load_ic(ordinal::Integer; dir = ic_dir())
+    # 🔑 Ordinal 0 is the validation IC -- `fields[1]` of the 10 TU record, the archived runs' own
+    # initial condition. It is not in the manifest and must not be: it sits inside M0's fit window
+    # and V28 needs D6's scored set disjoint from it. See `build_validation_ic`.
+    if ordinal == 0
+        p = validation_path(dir)
+        isfile(p) || error("no validation IC at $p; run " *
+                           "`julia --project=analysis analysis/build_d6_ics.jl validation`")
+        pkg = load(p)
+        get(pkg, "validation", false) || error("$p is not marked as a validation package")
+        pkg["n_k"] == 0 || error("validation IC is at step $(pkg["n_k"]), expected 0")
+        return pkg
+    end
     man = load(manifest_path(dir))
     K = man["K"]
     1 <= ordinal <= K || error("ordinal $ordinal is outside 1..$K")
@@ -123,6 +147,7 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
     backend = gpu ? CUDABackend() : IncompressibleNavierStokes.CPU()
 
     pkg = load_ic(ordinal)
+    validation = get(pkg, "validation", false)
     k, n_k, t_k = pkg["k"], pkg["n_k"], pkg["t_k"]
     params_ic = pkg["params"]
     dQ_warm = pkg["dQ_warm"]
@@ -154,6 +179,14 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
             gpu ? "GPU (CuArray)" : "CPU (Array)", M, nt, nwarm, nlead, tsim, Δt)
     @printf("  model %s: hist_len = %d, hist_var = %s\n", basename(mdl), hist_len, hist_var)
     @printf("  ou_advance = %d, savefreq = %d (> nt, so no fields)\n", n_k, nt + 1)
+    if validation
+        println("  🔑 VALIDATION run, not a scored one. This is the archived runs' own initial")
+        println("     condition, so ou_advance = 0 -- the identity point of the replay -- and the")
+        @printf("     model seeds are the archive's, Xoshiro(%d + member). Output goes to\n",
+                ARCHIVE_SEED_BASE)
+        println("     d6_valid_ic1_m*.jld2, which the scorer's glob cannot see. Compare it with")
+        println("     `compare_validation` in analysis/score_d6.jl.")
+    end
     flush(stdout)
 
     ustart = ArrayType(pkg["u"])
@@ -161,14 +194,15 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
 
     t_all = time()
     for member in 1:M
-        out = joinpath(od, "d6_online_ic$(k)_m$(member).jld2")
+        out = joinpath(od, validation ? "d6_valid_ic$(k)_m$(member).jld2" :
+                                        "d6_online_ic$(k)_m$(member).jld2")
         if isfile(out) && !force
             @printf("  member %2d/%d: exists, skipping\n", member, M)
             flush(stdout)
             continue
         end
 
-        seed = member_seed(k, member)
+        seed = validation ? validation_seed(member) : member_seed(k, member)
         q_hist = ArrayType{T}(zeros(T, nq, hist_len))
         hist_var == :q_star_q && (q_hist = cat(q_hist, q_hist, dims = 1))
         sampler = RikFlow.LinReg(mdl, Xoshiro(seed), ArrayType;
@@ -194,7 +228,7 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
                             "relative; the IC is not at the step the package claims")
 
         jldsave(out; q = Array(data.q), dQ = Array(data.dQ), tau = Array(data.tau),
-                k, n_k, t_k, ordinal, member, seed, ou_advance = n_k,
+                k, n_k, t_k, ordinal, member, seed, ou_advance = n_k, validation,
                 nwarm, nlead, M, model = abspath(mdl), hist_len, hist_var,
                 tsim, Δt, wall_seconds = wall,
                 julia = string(VERSION), device = gpu ? "cuda" : "cpu", written = string(now()))
@@ -214,6 +248,7 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    isempty(ARGS) && error("usage: run_d6.jl <ordinal>   (1..K, the array task id)")
+    isempty(ARGS) && error("usage: run_d6.jl <ordinal>   (1..K the array task id; " *
+                           "0 = the validation IC, fields[1] of the 10 TU record)")
     run_ic(parse(Int, ARGS[1]))
 end

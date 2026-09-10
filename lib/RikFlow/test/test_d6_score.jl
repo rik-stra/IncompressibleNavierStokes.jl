@@ -159,6 +159,22 @@ end
         @test_throws ErrorException D6Score.load_members(dir)
     end
     @test D6Score.load_members(mktempdir()) === nothing
+
+    # 🔑 The validation run (ordinal 0) must be invisible to the scorer's glob. It is the archived
+    # runs' own IC, inside M0's fit window, so including it would put an IC the conditional mean has
+    # seen into the rank histograms and break V28's disjointness. The separation is by filename --
+    # `d6_valid_*` against `d6_online_*` -- so that no filtering step can be forgotten.
+    mktempdir() do dir
+        D6Score.write_run(dir, 42, 4100, 1; nwarm = 100, nt = 1308, nq = 6)
+        D6Score.write_run(dir, 42, 4100, 2; nwarm = 100, nt = 1308, nq = 6)
+        # a validation run beside them, named as `run_d6.jl` names it
+        src = joinpath(dir, "d6_online_ic42_m1.jld2")
+        cp(src, joinpath(dir, "d6_valid_ic1_m1.jld2"))
+        cp(src, joinpath(dir, "d6_valid_ic1_m2.jld2"))
+        ens = D6Score.load_members(dir)
+        @test ens.ks == [42]          # not [1, 42]
+        @test ens.M == 2              # and it did not become a ragged 4-member ensemble
+    end
 end
 
 @testitem "V28 lead grids are per QoI, in physical time, and inside the run" default_imports = false setup = [D6Score] begin

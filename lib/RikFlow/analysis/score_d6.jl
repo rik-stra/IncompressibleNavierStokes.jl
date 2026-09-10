@@ -46,7 +46,10 @@ using Dates
 const HERE = @__DIR__
 const SRC = normpath(joinpath(HERE, "..", "src"))
 include(joinpath(SRC, "ts_score.jl"))
+include(joinpath(HERE, "extract_qois.jl"))
 include(joinpath(HERE, "build_d6_ics.jl"))
+# `load_ensemble`, for the ordinal-0 validation comparison against the archived LinReg1 runs.
+include(joinpath(HERE, "extract_archive.jl"))
 
 const OUT = joinpath(HERE, "output")
 const DT = 2.5e-3                      # HIT LES time step, TU
@@ -141,6 +144,75 @@ function load_members(dir = D6_DIR)
         first.(byic[k]) == collect(1:Ms[1]) || error("IC $k has member ids $(first.(byic[k]))")
     end
     return (; ks, M = Ms[1], files = byic)
+end
+
+"""
+    compare_validation(; dir = D6_DIR, io = stdout)
+
+Check the validation run (ordinal 0) against the archived online ensemble it should reproduce.
+
+🔑 **What makes this a correctness check and not a plausibility argument.** The validation IC is
+`fields[1]` of the 10 TU tracked record -- the archived runs' own initial condition, so `n_k = 0`,
+`ou_advance = 0` and the OU chain starts at zero, exactly as the archived driver leaves it -- and
+`run_d6.jl` gives its members the archive's own model seeds, `Xoshiro(236 + member)`. Every input is
+therefore the archive's, so the output must be too: member `i`'s `q` against archived replica `i`'s
+first `size(q, 2)` columns. Agreement there exercises the whole D6 path at once: IC packaging, the
+warm-up slice, `ou_advance` at its identity point, the driver, and the output format -- against a
+trajectory produced years earlier by different code.
+
+Reported per replica as a relative rms in units of each QoI's own standard deviation, plus whether
+the columns are bit-identical. ⚠️ Bit-identity is the ideal but not the acceptance criterion: the
+archive was produced by an older RikFlow, and Float32 differences of a few ulp in the first steps
+amplify. What would indicate a real defect is disagreement that is *large from step 1* -- a wrong
+warm-up slice, a misphased chain, or a seed mismatch -- rather than growth from round-off.
+"""
+function compare_validation(; dir = D6_DIR, io = stdout)
+    isdir(dir) || (println(io, "no run directory at $dir"); return nothing)
+    pat = r"^d6_valid_ic(\d+)_m(\d+)\.jld2$"
+    files = sort([(parse(Int, m[2]), joinpath(dir, f))
+                  for f in readdir(dir) for m in (match(pat, f),) if m !== nothing])
+    if isempty(files)
+        println(io, "no validation runs in $dir (run `tools/run_d6.jl 0`)")
+        return nothing
+    end
+    arch = try
+        load_ensemble("LinReg1")
+    catch err
+        println(io, "no archived LinReg1 ensemble to compare against: ", err)
+        return nothing
+    end
+
+    println(io, "\nValidation: ordinal 0 against the archived LinReg1 ensemble")
+    @printf(io, "  archive: %s root, %d replicas\n", string(arch.root), length(arch.q))
+    @printf(io, "  %8s %10s %12s   %s\n", "member", "identical", "max rel rms", "per-QoI rel rms")
+    rows = NamedTuple[]
+    for (member, path) in files
+        d = load(path)
+        get(d, "validation", false) ||
+            error("$path is not marked as a validation run; the glob picked up a scored file")
+        member <= length(arch.q) ||
+            (println(io, "  member $member has no archived replica"); continue)
+        a = Float64.(d["q"])
+        b = Float64.(arch.q[member])
+        n = min(size(a, 2), size(b, 2))
+        sd = vec(std(view(b, :, 1:n); dims = 2))
+        e = vec(sqrt.(mean(abs2, view(a, :, 1:n) .- view(b, :, 1:n); dims = 2))) ./ sd
+        ident = view(d["q"], :, 1:n) == view(arch.q[member], :, 1:n)
+        @printf(io, "  %8d %10s %12.3e   %s\n", member, ident, maximum(e),
+                join((@sprintf("%8.1e", x) for x in e), " "))
+        push!(rows, (; member, identical = ident, rel = e, nsteps = n, seed = d["seed"]))
+    end
+    if !isempty(rows)
+        worst = maximum(maximum(r.rel) for r in rows)
+        nid = count(r -> r.identical, rows)
+        @printf(io, "  => %d of %d bit-identical; worst relative rms %.3e over %d columns\n",
+                nid, length(rows), worst, rows[1].nsteps)
+        println(io, worst < 1e-2 ?
+                "  ✅ the D6 path reproduces the archived trajectory from the archived inputs." :
+                "  🔴 disagreement is large. Check the warm-up slice, ou_advance and the seed " *
+                "before trusting\n     anything scored -- see `compare_validation`'s docstring.")
+    end
+    return rows
 end
 
 """
@@ -362,8 +434,11 @@ function preview(; io = stdout)
     end
     @printf(io, "  last reference column used: %d of %d\n",
             truth_column(last(sel.n), maximum(union_grid(leads))), N_REF + 1)
-    println(io, "\nNo runs found. Submit exp_square_HIT/batch_scripts/run_d6.sh, pull the output " *
-                "back into\n$(D6_DIR), then re-run this script.")
+    println(io, "\nNo scored runs found. Submit exp_square_HIT/batch_scripts/run_d6.sh, pull the " *
+                "output back into\n$(D6_DIR), then re-run this script.")
+    # The validation run is independent of the scored set and worth reporting on its own, because
+    # it is the check that has to pass before the scored numbers mean anything.
+    compare_validation(; io)
     return leads
 end
 
@@ -390,6 +465,10 @@ function main(; dir = D6_DIR, preview_only::Bool = false, outdir = OUT, io = std
     report_grids(leads; io)
     @printf(io, "\nD6: %d initial conditions x %d members from %s\n", length(ens.ks), ens.M, dir)
     @printf(io, "truth: %s\n", truth.source)
+
+    # The validation run first: if the D6 path does not reproduce the archived trajectory from the
+    # archived inputs, nothing below is worth reading.
+    compare_validation(; dir, io)
 
     cl = clamp_report(ens)
     @printf(io, "clamp: fired on %d of %d forecast steps (%.3g%%)%s\n",
