@@ -6,7 +6,7 @@ spread–skill) and RH-3 (lead-resolved rank histograms) need. Design and ration
 `lib/RikFlow/analysis/results.md`.
 
 **State at time of writing (2026-09-10):** everything is built, the offline suite is green at
-**1453 tests**, and `run_d6.jl` has **run end to end on CPU** — ordinal 1, 120 steps, `q0` matching
+**1461 tests**, and `run_d6.jl` has **run end to end on CPU** — ordinal 1, 120 steps, `q0` matching
 the record to 6.0e-04, no `fields` in the output, and `ou_advance` changing the trajectory by 0.503
 max relative deviation. But **nothing has run on a GPU**, so no D6 number exists yet.
 
