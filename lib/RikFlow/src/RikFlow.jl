@@ -71,6 +71,9 @@ export starred_gain
 
 include("post_processing_funcs.jl")
 export ks_dist
+export getspectrum
+# `energy_spectra_comparison` is declared empty in `post_processing_funcs.jl` and implemented in
+# `ext/RikFlowMakieExt.jl`, so that RikFlow does not drag the Makie stack into every load.
 export energy_spectra_comparison
 
 

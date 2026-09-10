@@ -133,6 +133,22 @@ if ou_advance != 0
     Δt_solver = T(tsim) / nt
     @assert Δt_solver == T(Δt) "online_sgs: ou_advance needs tsim/Δt integral so the replay and " *
         "the reference step the OU chain identically; got Δt = $(Δt), tsim/nt = $(Δt_solver)"
+    # 🔴 `freeze` must be 1, and this refuses rather than generalises.
+    #
+    # `solve_unsteady` advances the chain only on iterations where `mod(stepper.n, freeze) == 0`,
+    # and it advances by `Δt * freeze` (`solver.jl:62,103`). So `n_k` reference solver steps
+    # correspond to `ceil(n_k / freeze)` advances of size `Δt * freeze`, not to `n_k` advances of
+    # size `Δt`. At `freeze = 1` the two coincide, which is exactly why a freeze-blind replay looks
+    # right on HIT -- `params_track.ou_bodyforce.freeze = 1` there -- and would be wrong on both
+    # count and step size for the `freeze = 10` DNS family that sits in the same archive.
+    #
+    # The generalisation is not written here because the cancellation of the priming advance would
+    # have to be re-measured for it, and `analysis/ou_replay.jl` measures the count per `freeze`
+    # for exactly that purpose. Until someone needs it, refusing is the honest behaviour.
+    @assert ou_bodyforce.freeze == 1 "online_sgs: ou_advance = $ou_advance with freeze = " *
+        "$(ou_bodyforce.freeze). The replay is only derived for freeze == 1; at freeze != 1 the " *
+        "solver advances the chain every freeze steps by Δt*freeze, so n_k advances of Δt is " *
+        "wrong on both count and step size. See analysis/ou_replay.jl."
     OU_advance!(; setup.ou_setup, Δt = Δt_solver, n = ou_advance)
 end
 

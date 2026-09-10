@@ -9,6 +9,8 @@
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+PDMats = "90014a1f-27ba-587c-ab20-58faa44d9150"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -19,5 +21,13 @@ TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
 
 [compat]
 JLD2 = "0.4, 0.5, 0.6"
+# Pinned to match `lib/RikFlow/Project.toml` exactly -- see the long note there. These two are the
+# only non-stdlib additions to this environment, and they are here for one reason: without them the
+# suite can *read* the archived residual model but cannot *sample* it, which is precisely the gap
+# that let a breaking PDMats change reach the deployed sampler unnoticed. Distributions is pure
+# Julia, so the design this file describes -- no IncompressibleNavierStokes, CUDA, Makie or Lux --
+# is intact.
+Distributions = "=0.25.117"
+PDMats = "=0.11.32"
 TestItemRunner = "1"
 julia = "1.9"

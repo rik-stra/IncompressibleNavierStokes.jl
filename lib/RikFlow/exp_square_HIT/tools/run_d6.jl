@@ -22,11 +22,21 @@
 #     condition -- which inflates skill without inflating spread and biases the spread-skill ratio
 #     downward, toward a false "over-confident" verdict. Verified by measurement in
 #     `analysis/ou_replay.jl`; see `claude_memory.md` gotcha #33.
-#  2. **`savefreq > nt`, so no velocity fields are written.** `params_track` carries
+#  2. **`savefreq > nt`, so at most the single `t = 0` field is held.** `params_track` carries
 #     `savefreq = 100`; at 1308 steps that is ~13 snapshots x 3.3 MB per run, i.e. **80 GB** over
-#     1800 runs against **160 MB** of QoIs. `fieldsaver` appends only when `state.n % nupdate == 0`
-#     and its handler fires only on updates (`processors.jl:306-316`), so `nupdate = nt + 1` yields
-#     an empty list. Asserted after every run, not assumed.
+#     1800 runs against **160 MB** of QoIs.
+#
+#     🔴 **`savefreq > nt` does NOT give zero fields, and an earlier version of this comment said
+#     it did.** `fieldsaver` appends when `state.n % nupdate == 0` (`processors.jl:306-316`), and
+#     `qoisaver`'s initializer does `state[] = state[]` -- *"invokes all processors on initial
+#     state!"*, `RikFlow.jl:332` -- which is what gives `q` its `nstep+1` columns and therefore the
+#     offset the whole index alignment rests on. `fieldsaver` is registered **before** `qoisaver`
+#     (`LFsims.jl:61,159`, deliberately), so it is already listening at that notification and
+#     `0 % anything == 0`. Measured 2026-09-10: exactly **1** field, always.
+#
+#     That is 3.3 MB of transient memory per run and **nothing on disk**: `jldsave` below writes
+#     `q`, `dQ` and `tau` and no `fields` key at all, which is what actually prevents the 80 GB.
+#     The assertion therefore allows the one initial field and refuses any more.
 #  3. **The IC and the forcing are shared across the M members; only the model seed varies.** That
 #     is what makes the rank histogram measure the surrogate's own dispersion and nothing else.
 #
@@ -213,9 +223,19 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
         wall = time() - t0
 
         # 🔴 The 80 GB guard. If this ever fires, stop -- do not "clean up afterwards".
-        isempty(data.fields) ||
-            error("member $member wrote $(length(data.fields)) velocity fields; savefreq = " *
-                  "$(nt + 1) should have written none. 1800 runs of this is 80 GB.")
+        #
+        # One field is expected and unavoidable: the `t = 0` snapshot that `qoisaver`'s
+        # `state[] = state[]` forces through the already-registered `fieldsaver` (see item 2 in the
+        # header). More than one means `savefreq` is not doing its job. None of them reaches disk --
+        # `jldsave` below writes no `fields` key -- so this bounds transient memory, and
+        # `smoke_d6.jl` separately asserts the written file carries no fields.
+        nfields = length(data.fields)
+        nfields <= 1 ||
+            error("member $member wrote $nfields velocity fields; savefreq = $(nt + 1) should " *
+                  "have written at most the one t = 0 snapshot. 1800 runs of ~13 is 80 GB.")
+        all(f -> f.n == 0, data.fields) ||
+            error("member $member saved a field at step(s) $([f.n for f in data.fields]); only " *
+                  "the t = 0 snapshot is expected at savefreq = $(nt + 1)")
         size(data.q, 2) == nt + 1 ||
             error("q has $(size(data.q, 2)) columns, expected nt + 1 = $(nt + 1)")
         # The run's first `q` column is the QoIs of `ustart`, so it must be the reference column the

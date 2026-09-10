@@ -97,15 +97,25 @@ count in `0:nsteps+probe` and reporting which ones match bit-for-bit.
 Reported, not assumed. The whole `ou_advance` design rests on this number, and reading it off the
 source is how an off-by-one survives.
 """
-function check_advance_count(; nsteps::Int = 25, probe::Int = 4)
-    @printf("mini-solve: %d steps on an 8^3 grid, Δt = %g, rng_seed = %d\n",
-            nsteps, HIT_DT, HIT_OU.rng_seed)
-    ref = solver_state(nsteps)
+function check_advance_count(; nsteps::Int = 25, probe::Int = 4, freeze::Int = 1)
+    ou = (; HIT_OU..., freeze)
+    @printf("mini-solve: %d steps on an 8^3 grid, Δt = %g, freeze = %d, rng_seed = %d\n",
+            nsteps, HIT_DT, freeze, ou.rng_seed)
+    ref = solver_state(nsteps; ou)
     @printf("  solver left state %s, |state| = %.6e\n", string(size(ref)), sqrt(sum(abs2, ref)))
 
+    # 🔑 The replay has to be probed at the step size the solver actually uses, `Δt * freeze`
+    # (`solver.jl:62,103`), not `Δt`. With `freeze = 1` the two coincide, which is why a
+    # freeze-blind replay looks correct on HIT and is wrong everywhere else.
     matches = Int[]
     for m in 0:(nsteps + probe)
-        replay_state(m) == ref && push!(matches, m)
+        replay_state(m; ou, Δt = HIT_DT * freeze) == ref && push!(matches, m)
+    end
+    if freeze != 1
+        blind = [m for m in 0:(nsteps + probe) if replay_state(m; ou, Δt = HIT_DT) == ref]
+        @printf("  a freeze-blind replay (Δt instead of Δt*freeze) matches at: %s\n",
+                isempty(blind) ? "nothing — so getting freeze wrong is detectable, not silent" :
+                string(blind))
     end
 
     if isempty(matches)
@@ -115,19 +125,34 @@ function check_advance_count(; nsteps::Int = 25, probe::Int = 4)
     for m in matches
         @printf("  match at %d advances  (nstep %+d)\n", m, m - nsteps)
     end
-    ok = matches == [nsteps + 1]
-    if ok
+    # What the source predicts: one priming call (`solver.jl:61-63`) plus one per iteration whose
+    # `stepper.n` is divisible by `freeze` (`:102-104`).
+    expected = count(m -> mod(m, freeze) == 0, 0:(nsteps - 1)) + 1
+    @printf("  source predicts %d = 1 priming + %d in-loop\n", expected, expected - 1)
+    ok = matches == [expected]
+    if ok && freeze == 1
         println("  ✅ exactly one match, at nstep + 1, as `online_sgs`'s ou_advance assumes.")
         println("     A forecast pre-advanced by n_k then takes the same priming advance and the")
         println("     same first-iteration advance the reference did, so the two cancel.")
+    elseif ok
+        println("  ✅ matches the source's prediction. Note the count is NOT nstep + 1 here, and")
+        println("     the step size is Δt*freeze — which is why `online_sgs` refuses to replay")
+        println("     unless freeze == 1 rather than guessing the generalisation.")
     else
-        println("  🔴 the match is not the expected {nstep + 1}. `ou_advance = n_k` is then WRONG")
+        println("  🔴 the match is not what the source predicts. `ou_advance = n_k` is then WRONG")
         println("     and the spread-skill ratio it feeds is biased. Fix before running anything.")
     end
-    return (; ok, matches, nsteps)
+    return (; ok, matches, nsteps, freeze, expected)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    r = check_advance_count()
-    r.ok || exit(1)
+    # `freeze = 1` is HIT's, and the only case `online_sgs(; ou_advance)` accepts. `freeze = 10` is
+    # the DNS reference's, measured here so that the refusal in `online_sgs` rests on a measurement
+    # rather than on caution.
+    results = map((1, 10)) do freeze
+        r = check_advance_count(; freeze)
+        println()
+        r
+    end
+    all(r -> r.ok, results) || exit(1)
 end

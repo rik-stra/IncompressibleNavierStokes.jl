@@ -188,6 +188,51 @@ end
     end
 end
 
+@testitem "G1 the archived residual model is samplable, not merely readable" default_imports = false setup = [Archive] begin
+    using Test, Random, LinearAlgebra, Distributions
+    # 🔴 This test exists because 1422 passing tests said nothing about it.
+    #
+    # `LinReg.jld2` stores its residual model as a serialised
+    # `MvNormal{Float64, PDMat{Float64, Matrix{Float64}}}`. PDMats later gained a third type
+    # parameter -- `PDMat{T,S,C}` -- **inside the 0.11 patch series**, so on a newer PDMats JLD2
+    # cannot map the stored two-parameter type onto the installed three-parameter one and returns a
+    # `JLD2.ReconstructedMutable` instead. Everything in this suite kept working, because
+    # `Archive.mvg` reads `μ` and `Σ` through `getproperty` precisely to tolerate that. But the
+    # **deployed** path calls `rand(rng, stoch_distr)` on every step
+    # (`src/time_series_methods.jl:150`), and there is no `rand` method for a reconstruction --
+    # so the D6 smoke test died there while the suite stayed green.
+    #
+    # The pins in `test/Project.toml` and `lib/RikFlow/Project.toml` are what keep this passing.
+    # If it fails, the archived model is unloadable by the deployed sampler and no online run is
+    # possible, whatever the rest of the suite says.
+    if !Archive.available()
+        @test_skip false
+    else
+        names = filter(n -> Archive.where_is(n) !== nothing, ("LinReg1", "LinReg64", "LinReg74"))
+        @test !isempty(names)
+        for name in names
+            sd = Archive.fit(name).stoch_distr
+            # The type resolved to the installed one, rather than being reconstructed.
+            @test sd isa Distributions.MvNormal
+            mu, Sig = Archive.mvg(sd)
+            nq = length(mu)
+            @test nq == 6
+            @test size(Sig) == (nq, nq)
+            @test issymmetric(Sig) || Sig ≈ Sig'
+            @test isposdef(Sig)
+
+            # What the deployed sampler actually does, and that it is reproducible.
+            x = rand(Xoshiro(1), sd)
+            @test length(x) == nq
+            @test all(isfinite, x)
+            @test x == rand(Xoshiro(1), sd)
+            @test x != rand(Xoshiro(2), sd)
+            # The draw is on the residual's own scale, not wildly off it.
+            @test all(abs.(x .- mu) .<= 12 .* sqrt.(diag(Sig)))
+        end
+    end
+end
+
 @testitem "G1 the frozen and working fits agree where both exist" default_imports = false setup = [Archive] begin
     using Test, LinearAlgebra
     # The two roots are different *runs* -- the working repository's online trajectories are the

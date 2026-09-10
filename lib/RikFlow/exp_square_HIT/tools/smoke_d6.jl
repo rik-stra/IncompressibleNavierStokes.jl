@@ -3,8 +3,12 @@
 # plan P2's pre-flight was HIT, 1 TU, 400 steps, 1 replica, about 0.01 SBU. This is that, plus the
 # two checks D6 adds:
 #
-#   * 🔴 `savefreq > nt` really produced **no** velocity fields. That is the difference between
-#     160 MB and 80 GB over the full 1800 runs, and it is silent if wrong.
+#   * 🔴 the written output carries **no** velocity fields. That is the difference between 160 MB
+#     and 80 GB over the full 1800 runs, and it is silent if wrong. ⚠️ Note what is and is not
+#     claimed: `savefreq > nt` still leaves **one** `t = 0` field in memory, because `qoisaver`'s
+#     `state[] = state[]` (`RikFlow.jl:332`) notifies the already-registered `fieldsaver`. What
+#     keeps the disk cost at zero is that `run_d6.jl`'s `jldsave` has no `fields` key, and that is
+#     what is asserted here.
 #   * 🔴 `ou_advance` is actually wired through and actually changes the trajectory. The unit tests
 #     prove the replay is correct arithmetic and `analysis/ou_replay.jl` proves the advance count is
 #     right, but neither touches `online_sgs`. If the keyword were dropped on the floor between the
@@ -27,7 +31,20 @@ using CUDA
 include(joinpath(@__DIR__, "run_d6.jl"))
 
 const SMOKE_DIR = joinpath(EXP_DIR, "output", "D6_smoke")
-const SMOKE_LEAD = 300          # 100 warm-up + 300 = 400 steps = 1 TU, plan P2's pre-flight
+
+"""
+Forecast steps for the pre-flight. Default 300, so with the 100 warm-up steps the run is 400 steps
+= 1 TU, which is plan P2's pre-flight and its ~0.01 SBU figure. Leave it alone on Snellius.
+
+⚠️ `D6_SMOKE_LEAD` shortens it, and the reason is the CPU. On a GPU this whole script is ~10 s of
+compute; on a CPU the same 640 solver steps (400 here plus 2 x 120 for the `ou_advance`
+comparison) take 5-20 minutes, because every step carries several 64^3 FFTs for `compute_QoI` plus
+`to_sgs_term`. All three things this script actually decides -- the output keys and shapes, that
+**no velocity fields were written**, and that **`ou_advance` changes the trajectory** -- are settled
+in the first handful of steps, so `D6_SMOKE_LEAD=20` is a complete check in about two minutes when
+you only want to know whether the pipeline runs at all.
+"""
+const SMOKE_LEAD = parse(Int, get(ENV, "D6_SMOKE_LEAD", "300"))
 
 """
     trajectory(pkg; ou_advance, nlead = 20, seed = 1)
@@ -57,7 +74,11 @@ function trajectory(pkg; ou_advance::Int, nlead::Int = 20, seed = 1)
 end
 
 function main()
-    @printf("D6 pre-flight, %s\n", CUDA.functional() ? "GPU" : "CPU")
+    @printf("D6 pre-flight, %s, %d forecast steps%s\n", CUDA.functional() ? "GPU" : "CPU",
+            SMOKE_LEAD, SMOKE_LEAD == 300 ? " (plan P2's 1 TU pre-flight)" : " (SHORTENED)")
+    SMOKE_LEAD == 300 || @warn "D6_SMOKE_LEAD = $SMOKE_LEAD, not the 300 that makes this plan P2's " *
+                               "1 TU pre-flight. Fine as a pipeline check; do not quote a timing " *
+                               "or an SBU figure from it."
     flush(stdout)
 
     # --- 1. the pre-flight run -----------------------------------------------------------------
@@ -80,10 +101,12 @@ function main()
             filesize(joinpath(SMOKE_DIR, files[1])) / 1024,
             d["wall_seconds"] / (nt * 2.5e-3))
 
-    # 🔴 The 80 GB check. `run_ic` asserts it too; asserted again here because it is the one that
-    # decides whether the full array is affordable.
+    # 🔴 The 80 GB check, and the one that actually decides whether the full array is affordable:
+    # not "were fields computed" but "were fields *written*". `run_ic` bounds the in-memory count
+    # at the single t = 0 snapshot; this asserts none of it reaches the file.
     @assert !haskey(d, "fields") "output carries velocity fields; savefreq did not suppress them"
-    println("  no velocity fields written: ok")
+    @printf("  no velocity fields in the output file: ok  (%.0f kB total)\n",
+            filesize(joinpath(SMOKE_DIR, files[1])) / 1024)
 
     # --- 2. the clamp, counted exactly ---------------------------------------------------------
     # A step on which the stabiliser fired has an identically zero `dQ` column. Measured everywhere

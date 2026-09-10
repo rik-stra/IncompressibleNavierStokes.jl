@@ -13,7 +13,7 @@ cd lib/RikFlow      # from the fork root
 julia --startup-file=no --project=analysis analysis/extract_archive.jl   # cache D3 and D5
 julia --startup-file=no --project=analysis analysis/score_m0_ddn.jl      # -> output/paper4_scores.jld2
 julia --startup-file=no --project=analysis analysis/plot_paper4.jl       # -> figures/*.png
-julia --startup-file=no --project=test     test/runtests.jl              # 1397 tests
+julia --startup-file=no --project=test     test/runtests.jl              # 1453 tests
 ```
 
 **Data.** HIT. `D1` the 100 TU tracked record, `D3` the 100 TU HF reference (40 001 points),
@@ -621,7 +621,7 @@ is band-selective, and the paper can say which mechanism each band needs.
 
 ## 8. Test coverage
 
-`julia --startup-file=no --project=test test/runtests.jl` — **1397 tests, all passing.** Run
+`julia --startup-file=no --project=test test/runtests.jl` — **1453 tests, all passing.** Run
 directly rather than through `Pkg.test`, because the suite deliberately has no RikFlow dependency:
 the `ts_*` layer is stdlib-only, so CI never loads IncompressibleNavierStokes, CUDA, Makie or Lux.
 
