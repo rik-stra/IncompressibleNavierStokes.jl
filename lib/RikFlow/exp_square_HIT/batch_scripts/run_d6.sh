@@ -1,0 +1,39 @@
+#!/bin/bash
+# D6: the multi-IC ensemble. One array task = one initial condition = M members, run sequentially.
+#
+# Submit from exp_square_HIT/ , as the other scripts in this directory are:
+#     sbatch batch_scripts/run_d6.sh
+#
+# $SLURM_ARRAY_TASK_ID is the **ordinal** (1..K) of the initial condition, NOT the field index k.
+# run_d6.jl maps ordinal -> k through select_ics, so the pilot's 5 ICs are the first 5 of the same
+# 180 the full run uses and scaling up renumbers nothing.
+#
+# PILOT first: --array=1-5, ~17 MB of IC packages to copy. Read the wall time from the logs and
+# write the measured s/TU into meta_files/handoff_p2c_d6.md section 2 -- the plan's two SBU figures
+# differ by 10x and neither should be trusted. Then change to --array=1-180 (add %20 to cap
+# concurrency if the queue prefers it) and change nothing else.
+#
+# ~19 s per member is the extrapolation from plan P2's one measured smoke run (1 TU, 400 steps,
+# 5.8 s), so ~3.5 min of compute per task plus Julia startup and compilation. 30 minutes is
+# generous; tighten it once the pilot has measured it.
+
+#SBATCH -J d6
+#SBATCH -t 30:00
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --array=1-5
+#SBATCH -o logs/d6_%A_%a.out
+#SBATCH -e logs/d6_%A_%a.err
+
+# Depot with the trailing colon, as every other script in this repository has it. ⚠️ The handoff
+# said /scratch-shared/$USER/.julia_a100: ; the repository's own scripts use $HOME/julia/julia_<gpu>
+# and that is what is followed here.
+export JULIA_DEPOT_PATH=$HOME/julia/julia_a1003:
+
+mkdir -p logs output/D6
+
+# Optional; run_d6.jl falls back to output/d6_ics and then to the local analysis build directory.
+# export D6_IC_DIR=$PWD/output/d6_ics
+# export D6_MODEL=$PWD/output/TO_LRS/LinReg1/LinReg.jld2
+
+julia --project tools/run_d6.jl $SLURM_ARRAY_TASK_ID

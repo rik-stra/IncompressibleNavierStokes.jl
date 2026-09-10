@@ -38,20 +38,42 @@ end
     ⚠️ Two archive key names for the same object -- HIT writes `data_track`, the channel
     `data_train` -- but `extract_qois.jl` has already normalised that away and stored the key it
     found under `"key"`, so this loader reads flat names.
+
+    🔴 **An ambiguous pattern raises; it does not pick one.** This used to return
+    `first(sort(hits))`, and `hit100()`'s pattern `"tsim100.0"` matched **eight** files in
+    `analysis/data/` -- the tracked record, the HF reference and six `online_*` ensembles. It
+    returned the right one only because `data_track2_...` happens to sort before `hf_reference_...`
+    and `online_...`. Rename a file or add a record and a test asking for the tracked record would
+    silently have been handed an online ensemble, which is a different object entirely and would
+    not have looked wrong. Erroring is the whole point: a test that cannot find its data skips, but
+    a test that is handed the wrong data passes.
     """
     function load_cache(pattern::AbstractString)
         isdir(DATA) || return nothing
         hits = filter(f -> occursin(pattern, f) && endswith(f, "_qois.jld2"), readdir(DATA))
         isempty(hits) && return nothing
-        p = joinpath(DATA, first(sort(hits)))
+        length(hits) == 1 || error("load_cache(\"$pattern\") is ambiguous: it matches " *
+                                   "$(length(hits)) caches, $(sort(hits)). Narrow the pattern.")
+        p = joinpath(DATA, only(hits))
         d = load(p)
         return (; q = d["q"], q_star = d["q_star"], dQ = get(d, "dQ", nothing),
                 tau = get(d, "tau", nothing), name = basename(p))
     end
 
-    hit10() = load_cache("tsim10.0_replica1")
-    hit100() = load_cache("tsim100.0")
-    channel() = load_cache("channel")
+    # Each pattern is pinned to exactly one cache. `hit10` is the 4 000-step record V1, G1 and the
+    # spectrum checks all run on -- small on purpose, so the suite stays fast; `hit100` is the
+    # 40 000-step record D6's truth and `score_m0_ddn.jl` come from.
+    hit10() = load_cache("data_track_trackingnoise_std_0.0")
+    hit100() = load_cache("data_track2")
+
+    # ⚠️ The channel tracked record: extracted 2026-09-05 and **called by nothing**, four days
+    # before the HIT-only focus (`claude_memory.md` decisions log, 2026-09-09). Kept, not deleted:
+    # it is 386 kB in a gitignored directory and remaking it means another 39 MB read of a file that
+    # lives outside the repository, and the channel archive is complete and waiting for the focus
+    # to lift. 🔑 Worth knowing when it does: this record is **Float64** where both HIT records are
+    # Float32, so its coefficient-level diagnostics -- `rho(Ctilde)`, the H-infinity gain -- are
+    # trustworthy in a way HIT's provably are not (gotcha #26).
+    channel() = load_cache("LF_6qoi_track_channel")
 
     """
         train_slices(rec, train_range)

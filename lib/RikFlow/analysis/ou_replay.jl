@@ -1,0 +1,133 @@
+# The OU replay, and the one check on it that needs the solver.
+#
+# 🔴 This is D6's highest-risk item. A forecast launched from `fields[k]` must start with the forcing
+# chain the reference had at step `n_k`. `Setup` starts every chain at zero, so launching from
+# `fields[k]` without replaying puts every member's forcing `n_k` steps out of phase with the field
+# it was handed. That inflates skill without inflating spread and biases the spread-skill ratio
+# **downward** -- toward a false "over-confident" verdict, which is the direction that looks like a
+# real finding. The existing HIT drivers are correct only because they launch from `fields[1]`,
+# where `n_1 = 0` and a zero state is the right state.
+#
+# The replay itself is `OU_advance!` in `src/ouforcer.jl`, and `online_sgs(; ou_advance = n_k)`
+# applies it. Its arithmetic -- the Markov property, determinism, `n = 0` being a no-op, and
+# equality with the real `OU_forcing_step!` -- is asserted in `lib/RikFlow/test/test_ou.jl`, which
+# is stdlib-only and runs everywhere.
+#
+# What that suite cannot see is **how many times a solve advances the chain**, because that is a
+# property of `solve_unsteady`, not of the OU code. This driver measures it on a CPU mini-solve.
+# It is the decisive check: if the count is wrong the misphase is silent and every downstream number
+# is untrustworthy.
+#
+# 🔑 The answer, and it is not the obvious one. `solve_unsteady` advances the chain **`nstep + 1`**
+# times for `nstep` steps: once at `solver.jl:61-63`, before the loop, and once per iteration at
+# `solver.jl:102-104`. So the forcing seen by step `it` is the state after `it + 1` advances. The
+# reference's step `n_k + 1` -- the first step a forecast from `fields[k]` has to match -- therefore
+# used the state after `n_k + 2` advances, and a forecast that pre-advances by `n_k` and then takes
+# its own priming advance plus its own first iteration arrives at exactly `n_k + 2`. The two extra
+# advances cancel **because both runs make them**, which is why `ou_advance = n_k` is right and why
+# it would not be right if the priming call existed on only one side.
+#
+# Usage (the solver environment, not `analysis/`; this is the only analysis file that needs it):
+#   julia --startup-file=no --project=. lib/RikFlow/analysis/ou_replay.jl
+
+using IncompressibleNavierStokes
+using Random
+using Printf
+
+"HIT's forcing parameters, from `params_track.ou_bodyforce` on the 100 TU tracked record."
+const HIT_OU = (T_L = 0.01, e_star = 0.1, k_f = sqrt(2), freeze = 1, rng_seed = 333)
+
+"HIT's time step. `100.0f0 / 40000 === Float32(2.5e-3)`, so the reference and a 1308-step forecast
+step the chain identically -- which `online_sgs` asserts before it replays anything."
+const HIT_DT = Float32(2.5e-3)
+
+"""
+    mini_setup(; n = 8, ou = HIT_OU, T = Float32)
+
+A tiny periodic CPU setup carrying HIT's OU forcing. Small enough to solve in a second, and the OU
+chain it builds is the same object the 64^3 runs build: `OU_setup` sizes `state` by the forced
+wavenumbers, which depend on `k_f` alone, so an 8^3 grid and a 64^3 grid carry the *same* chain.
+That is what makes a mini-solve decisive rather than merely suggestive.
+"""
+function mini_setup(; n::Int = 8, ou = HIT_OU, T = Float32)
+    Setup(;
+        x = ntuple(α -> LinRange(T(0), T(1), n + 1), 3),
+        Re = T(2000),
+        ou_bodyforce = ou,
+    )
+end
+
+"""
+    replay_state(nsteps; n = 8, ou = HIT_OU, Δt = HIT_DT)
+
+The OU state after `nsteps` advances, computed without the solver. Returns a plain `Array` copy.
+
+Offline counterpart of what `online_sgs(; ou_advance)` does in place: the state is a function of
+`(rng_seed, nsteps, Δt)` and nothing else, so this reproduces any run's chain from its parameters.
+"""
+function replay_state(nsteps::Integer; n::Int = 8, ou = HIT_OU, Δt = HIT_DT)
+    setup = mini_setup(; n, ou)
+    OU_advance!(; setup.ou_setup, Δt, n = nsteps)
+    return Array(setup.ou_setup.state)
+end
+
+"""
+    solver_state(nsteps; n = 8, ou = HIT_OU, Δt = HIT_DT)
+
+The OU state left behind by an actual `solve_unsteady` of `nsteps` steps. Returns a plain `Array`
+copy.
+"""
+function solver_state(nsteps::Integer; n::Int = 8, ou = HIT_OU, Δt = HIT_DT)
+    setup = mini_setup(; n, ou)
+    T = eltype(setup.grid.x[1])
+    tsim = T(Δt) * nsteps
+    @assert round(Int, tsim / Δt) == nsteps "mini-solve step count is not $nsteps"
+    ustart = IncompressibleNavierStokes.vectorfield(setup)
+    psolver = psolver_spectral(setup)
+    solve_unsteady(; setup, ustart, tlims = (T(0), tsim), Δt = T(Δt), psolver)
+    return Array(setup.ou_setup.state)
+end
+
+"""
+    check_advance_count(; nsteps = 25, probe = 4)
+
+Measure how many `OU_advance!` steps reproduce a `solve_unsteady` of `nsteps` steps, by trying every
+count in `0:nsteps+probe` and reporting which ones match bit-for-bit.
+
+Reported, not assumed. The whole `ou_advance` design rests on this number, and reading it off the
+source is how an off-by-one survives.
+"""
+function check_advance_count(; nsteps::Int = 25, probe::Int = 4)
+    @printf("mini-solve: %d steps on an 8^3 grid, Δt = %g, rng_seed = %d\n",
+            nsteps, HIT_DT, HIT_OU.rng_seed)
+    ref = solver_state(nsteps)
+    @printf("  solver left state %s, |state| = %.6e\n", string(size(ref)), sqrt(sum(abs2, ref)))
+
+    matches = Int[]
+    for m in 0:(nsteps + probe)
+        replay_state(m) == ref && push!(matches, m)
+    end
+
+    if isempty(matches)
+        @printf("  🔴 NO advance count in 0:%d reproduces the solver's state.\n", nsteps + probe)
+        return (; ok = false, matches, nsteps)
+    end
+    for m in matches
+        @printf("  match at %d advances  (nstep %+d)\n", m, m - nsteps)
+    end
+    ok = matches == [nsteps + 1]
+    if ok
+        println("  ✅ exactly one match, at nstep + 1, as `online_sgs`'s ou_advance assumes.")
+        println("     A forecast pre-advanced by n_k then takes the same priming advance and the")
+        println("     same first-iteration advance the reference did, so the two cancel.")
+    else
+        println("  🔴 the match is not the expected {nstep + 1}. `ou_advance = n_k` is then WRONG")
+        println("     and the spread-skill ratio it feeds is biased. Fix before running anything.")
+    end
+    return (; ok, matches, nsteps)
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    r = check_advance_count()
+    r.ok || exit(1)
+end
