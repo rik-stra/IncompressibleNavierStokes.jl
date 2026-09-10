@@ -53,12 +53,22 @@ jobs:
             Pkg.activate("lib/NeuralClosure")
             # Pkg.instantiate()
             Pkg.test(; coverage=true)
+      # RikFlow's time-series layer. Run directly rather than through `Pkg.test`: the suite
+      # deliberately has no RikFlow dependency, so that it does not pull in CUDA, Makie or Lux for
+      # tests of stdlib-only code. See lib/RikFlow/test/Project.toml.
+      - name: Test RikFlow time-series layer
+        shell: julia --color=yes {0}
+        run: |
+            using Pkg
+            Pkg.activate("lib/RikFlow/test")
+            Pkg.instantiate()
+            include("lib/RikFlow/test/runtests.jl")
       # - uses: julia-actions/julia-runtest@v1
       #   with:
       #     annotate: true
       - uses: julia-actions/julia-processcoverage@v1
         with:
-          directories: src,ext,lib/NeuralClosure/src
+          directories: src,ext,lib/NeuralClosure/src,lib/RikFlow/src
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info

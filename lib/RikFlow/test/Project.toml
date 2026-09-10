@@ -1,0 +1,23 @@
+# Test environment for the RikFlow time-series layer.
+#
+# Deliberately does NOT depend on RikFlow itself. The `ts_*.jl` files are stdlib-only by design
+# (`analysis/fit_offline.jl:7-8`) and the tests `include` them directly, so the whole suite runs
+# without loading IncompressibleNavierStokes, CUDA, Makie or Lux. That keeps CI minutes cheap and
+# keeps a GPU-less machine able to run the verification matrix. Consequence: this suite is run as
+# `julia --project=lib/RikFlow/test lib/RikFlow/test/runtests.jl`, not via `Pkg.test`, because
+# `Pkg.test` would force the package under test -- and its dependency tree -- to load.
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
+
+[compat]
+JLD2 = "0.4, 0.5, 0.6"
+TestItemRunner = "1"
+julia = "1.9"

@@ -93,6 +93,7 @@ function online_sgs(;
     ArrayType = Array,
     backend,
     ou_bodyforce = none,
+    ou_advance::Int = 0,
     kwargs...,
 )
 T = typeof(Re)
@@ -110,6 +111,30 @@ Setup(;
 
 # Number of time steps to save
 nt = round(Int, tsim / Δt)
+
+# Replay the OU forcing chain to the reference step this initial condition was taken from.
+#
+# `ou_advance = 0` is the default and leaves `Setup`'s zero state untouched, so every archived run
+# reproduces exactly and nothing already computed shifts. It is non-zero only for the multi-IC
+# ensemble D6, where `ustart` is `fields[k].u` at reference step `n_k` and the forcing that produced
+# that field is `n_k` steps into its own chain. Launching such a run from a zero state leaves every
+# member's forcing out of phase with its initial condition, which inflates skill without inflating
+# spread and biases the spread-skill ratio downward -- see `OU_advance!` and
+# `meta_files/handoff_p2c_d6.md` section 3 step 2.
+#
+# 🔑 The chain must be replayed with the step size the *reference* used, and continued with the step
+# size *this* run uses. `solve_unsteady` does not step with the `Δt` it is given: it re-derives
+# `Δt = (tend - tstart) / nstep` (`solver.jl:98-99`). The two agree only when `tsim / Δt` is
+# integral, so that is asserted rather than assumed -- silently stepping the replay at a different
+# Δt would reintroduce exactly the misphase this keyword exists to remove.
+if ou_advance != 0
+    isnothing(ou_bodyforce) &&
+        error("online_sgs: ou_advance = $ou_advance was given but ou_bodyforce is nothing")
+    Δt_solver = T(tsim) / nt
+    @assert Δt_solver == T(Δt) "online_sgs: ou_advance needs tsim/Δt integral so the replay and " *
+        "the reference step the OU chain identically; got Δt = $(Δt), tsim/nt = $(Δt_solver)"
+    OU_advance!(; setup.ou_setup, Δt = Δt_solver, n = ou_advance)
+end
 
 to_setup_les = RikFlow.TO_Setup(; 
         qois,

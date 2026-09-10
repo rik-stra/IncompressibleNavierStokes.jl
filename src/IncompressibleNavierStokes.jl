@@ -64,7 +64,11 @@ license = "MIT"
 # Documenter cannot find the docstring and complains.
 # Reapply the docstring here to keep Documenter happy.
 s = @doc(KernelAbstractions.CPU)
-@doc s.text[1] KernelAbstractions.CPU
+# `Markdown.MD` lost its `text` field: on Julia 1.12 it carries `content` and `meta`, and
+# `s.text[1]` is a `FieldError` that stops the whole package precompiling. Purely a Documenter
+# nicety, but it made the package unloadable on a current Julia, which is where the CPU-only
+# verification of the OU replay runs (`lib/RikFlow/analysis/ou_replay.jl`).
+@doc (isdefined(s, :text) ? s.text[1] : s.content[1]) KernelAbstractions.CPU
 
 # # Easily retrieve value from Val
 # (::Val{x})() where {x} = x

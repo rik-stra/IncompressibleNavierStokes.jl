@@ -4,3 +4,5 @@ taylor-green/figures
 channel/ref_data_vreman/Chan180_FD2_basic_u.txt
 paper_data.zip
 time_solvers/time_results.txt
+analysis/figures
+analysis/data

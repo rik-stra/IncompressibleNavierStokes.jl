@@ -10,6 +10,7 @@ using Infiltrator
 #using TensorOperations
 #import cuTENSOR
 using KernelAbstractions
+using LinearAlgebra
 using Statistics
 using Distributions
 using Random
@@ -32,7 +33,41 @@ include("HIT_setups/LFsims.jl")
 export track_ref
 export online_sgs
 
-include("scale.jl")
+# Time-series layer. `ts_scaling.jl` replaces the former `scale.jl`: same three functions, plus a
+# `Scaling` struct that carries the normalization convention as data instead of leaving it in a
+# call-site constant (`meta_files/plan.md` section 0 item 6). The rest of the `ts_*` files are
+# stdlib-only by design so that a test or a driver can `include` them bare, without loading
+# IncompressibleNavierStokes or CUDA; that is why they need `using LinearAlgebra` above rather than
+# a dependency of their own.
+include("ts_scaling.jl")
+export Scaling, fit_scaling, as_scaling, scaling_pair, assert_convention, is_centred
+export SCALING_VERSION
+
+include("ts_history.jl")
+export HistorySpec, build_history, HistoryBuffer, inputvec
+
+include("ts_models.jl")
+export JointModel, pacf_to_ar, ar_roots, decorrelation_time
+
+include("ts_fit.jl")
+export fit_ridge, fit_joint
+
+include("ts_score.jl")
+export autocorr, ljung_box, residual_battery, correlation_time, ks_distance
+export nll_gaussian, crps_gaussian, crps_ensemble, crps_ensemble_mean
+export rank_histogram, ranks, jolliffe_primo, n_eff, block_bootstrap_indices
+export summed_ks, ensemble_ks, ks_noise_floor, delta_rho, stability_fraction, spread_skill
+export clamp_census, norm_cdf, norm_pdf
+# #17 lead-resolved and RH-3, both of which need the multi-IC ensemble D6.
+export lead_grid, union_grid, lead_positions, spread_skill_by_lead, rank_histogram_by_lead
+export climatological_skill, saturation_lead
+
+include("ts_rollout.jl")
+export rollout, closed_loop_matrix, spectral_radius, trajectory_stats
+
+include("ts_spectrum.jl")
+export gram_diagnostics, pinv_gap, coefficient_blocks, total_block_sum, companion, rho
+export starred_gain
 
 include("post_processing_funcs.jl")
 export ks_dist

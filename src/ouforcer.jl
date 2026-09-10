@@ -102,15 +102,64 @@ ou_setup = (;
 )
 end
 
-function OU_forcing_step!(; ou_setup, Δt)
-    (; T_L, Var, N_f, mask, rng, num_dims, E, z, f_hat) = ou_setup
+"""
+    OU_state_step!(; ou_setup, Δt)
+
+Advance the OU chain's `state` by one step, and do nothing else.
+
+Split out of [`OU_forcing_step!`](@ref) so the state can be advanced without paying for the forcing
+field, which is the expensive half -- an O(N_f^3 N^3) partial inverse transform per step. It is what
+[`OU_advance!`](@ref) calls to replay a chain over tens of thousands of steps.
+
+🔑 The split has to be exact, and the reason it is: the state update is the **only** part of a
+forcing step that touches `rng`, so `n` state steps consume the same random stream as `n` full
+forcing steps and leave `state` bit-identical. `f_hat` and `f` are left stale by a replay, which is
+safe because `solve_unsteady` calls `OU_forcing_step!` followed by `OU_get_force!` before every use
+of the body force (`solver.jl:61-63,87-89,102-104`). `lib/RikFlow/test/test_ou.jl` asserts both
+properties against the real `OU_forcing_step!` rather than trusting this comment.
+"""
+function OU_state_step!(; ou_setup, Δt)
+    (; T_L, Var, rng, num_dims, z) = ou_setup
 
     # Generate random numbers
     randn!(rng, z)
     # Update the state  shape: N_d x num_dims
     ou_setup.state[:,:] .= ou_setup.state[:,:] .*(1-Δt/T_L) .+ sqrt(2 * Var * Δt/T_L) .* z[:,1:num_dims] .+ 1im * sqrt(2 * Var * Δt/T_L) .* z[:, num_dims+1:2*num_dims]
 
-        
+    return ou_setup
+end
+
+"""
+    OU_advance!(; ou_setup, Δt, n)
+
+Replay the OU chain forward by `n` steps of size `Δt`, without the solver and without building the
+forcing field. Returns `ou_setup`.
+
+`OU_setup` starts every chain at `state .= 0` with `rng = Xoshiro(rng_seed)`, and
+`OU_state_step!` is a pure Markov update reading only that `rng`, so the state after `n` steps is a
+function of `(rng_seed, n, Δt)` and of nothing else -- not of the flow, the grid or the solver.
+That is what licenses replay at all.
+
+🔴 Why this exists. A run launched from a snapshot taken at reference step `n_k` must start with the
+chain the reference had at that step. Launching from a zero state instead puts every member's
+forcing `n_k` steps out of phase with the field it was handed, which inflates skill without
+inflating spread and biases a spread-skill ratio **downward** -- toward a false "over-confident"
+verdict. The existing HIT drivers are correct only because they launch from `fields[1]`, where
+`n_1 = 0` and the zero state is the right state (`meta_files/handoff_p2c_d6.md` section 3 step 2).
+"""
+function OU_advance!(; ou_setup, Δt, n::Integer)
+    n >= 0 || error("OU_advance!: n must be non-negative, got n = $n")
+    for _ in 1:n
+        OU_state_step!(; ou_setup, Δt)
+    end
+    return ou_setup
+end
+
+function OU_forcing_step!(; ou_setup, Δt)
+    (; mask, num_dims, E, f_hat) = ou_setup
+
+    OU_state_step!(; ou_setup, Δt)
+
     if num_dims ==2
         for d in 1:num_dims
             f_hat[d][mask] .= ou_setup.state[:,d]
@@ -144,4 +193,4 @@ end
 
 
 
-export OU_setup, OU_forcing_step!, OU_get_force!
+export OU_setup, OU_state_step!, OU_advance!, OU_forcing_step!, OU_get_force!
