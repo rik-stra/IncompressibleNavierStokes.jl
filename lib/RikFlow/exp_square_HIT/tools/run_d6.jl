@@ -370,8 +370,8 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
     # the script says so rather than printing a number that would be wrong.
     if length(walls) > 1
         steady = sort(walls[2:end])[cld(length(walls) - 1, 2)]
-        @printf("  compile+first member %.1f s (per array task, once) · steady %.1f s/member = " *
-                "%.3f s/TU\n", walls[1], steady, steady / tsim)
+        @printf("  compile+first member %.1f s (per array task, once) · steady %.1f s/member = %.3f s/TU\n",
+               walls[1], steady, steady / tsim)
         @printf("  ⚠️  write the STEADY %.3f s/TU into handoff_p2c_d6.md section 2, not the\n",
                 steady / tsim)
         @printf("      first-member figure. plan's two SBU figures differ by 10x; the SBU rate for\n")
