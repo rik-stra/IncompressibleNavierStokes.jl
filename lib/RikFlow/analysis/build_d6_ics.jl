@@ -253,6 +253,34 @@ record says it is, before it spends nineteen seconds forecasting from the wrong 
 ic_q_column(n_k::Integer) = n_k + 1
 
 """
+    q_window_range(n_k, ncol; half = 2)
+
+Reference `q` columns to ship with an IC package, and the offset of each from the IC's own column.
+
+🔑 **Why a window and not just the one column.** The driver has to check on the compute node that
+the field it was handed really is at step `n_k`, before it spends ten members on it. Comparing the
+run's recomputed `q[:, 1]` against a single stored value cannot do that: a one-step misalignment
+moves these QoIs by 2e-4 to 3e-3 relative, which is the same size as other, benign discrepancies —
+in particular `Z[16,32]`, where the current code and the archived code disagree by ~1.06e-3 on the
+*same* field (`claude_memory.md` gotcha #45). An absolute threshold therefore cannot separate
+"wrong step" from "known code difference", and the 1e-3 one that shipped first could not.
+
+With a window the test becomes scale-free: the claimed column must be the **best** match among its
+neighbours. Any discrepancy that is constant across columns — which a code difference in one QoI is
+— cancels out of that comparison entirely. Measured margin at the right column: 1.2e-7 median
+relative against ~9e-4 one column away, about 7000x.
+
+Returns `(cols, offsets)`; `offsets[j] == 0` marks the IC's own column. Clamped at the ends of the
+record, so `n_k = 0` yields offsets `0:half`.
+"""
+function q_window_range(n_k::Integer, ncol::Integer; half::Integer = 2)
+    c = ic_q_column(n_k)
+    lo = max(1, c - half)
+    hi = min(ncol, c + half)
+    return lo:hi, (lo - c):(hi - c)
+end
+
+"""
     build_d6_ics(; K = 180, track_file, outdir, force = false)
 
 Slice the tracked record once and write one `d6_ic_<k>.jld2` per selected initial condition.
@@ -324,8 +352,11 @@ function build_d6_ics(; K::Integer = 180, track_file = DEFAULT_TRACK_FILE, outdi
         any(isnan, u) && error("field k = $k contains NaN")
         fields[k].n == n_k || error("field k = $k is at step $(fields[k].n), expected $n_k")
 
+        wcols, woff = q_window_range(n_k, size(d.q, 2))
         jldsave(out; u, n_k, t_k, k, ordinal = i, dQ_warm,
-                q_at_ic = Array(d.q[:, ic_q_column(n_k)]), params, provenance)
+                q_at_ic = Array(d.q[:, ic_q_column(n_k)]),
+                q_window = Array(d.q[:, wcols]), q_window_offsets = collect(woff),
+                params, provenance)
         written += 1
         bytes += filesize(out)
     end
@@ -414,9 +445,11 @@ function build_validation_ic(; track_file = VALIDATION_TRACK_FILE, outdir = DEFA
     provenance = (; source = abspath(track_file), source_bytes = filesize(track_file),
                   built = string(now()), nwarm, nlead, K = 0, spacing_tu = NaN,
                   nref = size(d.dQ, 2))
+    wcols, woff = q_window_range(0, size(d.q, 2))
     jldsave(out; u, n_k = 0, t_k = 0.0, k = 1, ordinal = 0, dQ_warm,
-            q_at_ic = Array(d.q[:, ic_q_column(0)]), params, provenance,
-            validation = true, archive_seed_base = ARCHIVE_SEED_BASE)
+            q_at_ic = Array(d.q[:, ic_q_column(0)]),
+            q_window = Array(d.q[:, wcols]), q_window_offsets = collect(woff),
+            params, provenance, validation = true, archive_seed_base = ARCHIVE_SEED_BASE)
 
     @printf("wrote %s (%.2f MB)\n", basename(out), filesize(out) / 2^20)
     println("  ⚠️  validation only: t_1 = 0 is inside M0's fit window and this is the archived " *
@@ -426,12 +459,16 @@ function build_validation_ic(; track_file = VALIDATION_TRACK_FILE, outdir = DEFA
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    if !isempty(ARGS) && ARGS[1] == "validation"
-        build_validation_ic()
+    # `--force` rewrites packages that already exist, which is what a change to the package format
+    # needs (the `q_window` addition of 2026-09-11, for instance).
+    force = "--force" in ARGS
+    args = filter(!=("--force"), ARGS)
+    if !isempty(args) && args[1] == "validation"
+        build_validation_ic(; force)
     else
-        K = isempty(ARGS) ? 180 : parse(Int, ARGS[1])
-        build_d6_ics(; K)
+        K = isempty(args) ? 180 : parse(Int, args[1])
+        build_d6_ics(; K, force)
         println()
-        build_validation_ic()
+        build_validation_ic(; force)
     end
 end

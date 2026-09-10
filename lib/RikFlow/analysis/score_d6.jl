@@ -59,6 +59,16 @@ const SEED = 20260909
 const LABELS = ["Z[0,6]", "E[0,6]", "Z[7,15]", "E[7,15]", "Z[16,32]", "E[16,32]"]
 
 """
+Index of `Z[16,32]`, named because it is excluded from the validation verdict.
+
+Commit `09954be1` (2025-06-04, *"exclude derivative of nyqist freq"*) changed how that QoI is
+computed and **every archived record predates it**, so it is a different quantity today
+(`claude_memory.md` gotcha #45). Derived with `findfirst` rather than hard-coded, so a change to the
+QoI set cannot leave a stale `5` behind pointing at the wrong band.
+"""
+const IZ1632 = something(findfirst(==("Z[16,32]"), LABELS))
+
+"""
 Integral timescale per QoI, in TU, measured on the reference `dQ` (`analysis/results.md` section 1).
 
 🔴 Not one number. These span a factor 36.8, and `T_exp` disagrees with `T_int` by up to 4x within a
@@ -160,11 +170,22 @@ first `size(q, 2)` columns. Agreement there exercises the whole D6 path at once:
 warm-up slice, `ou_advance` at its identity point, the driver, and the output format -- against a
 trajectory produced years earlier by different code.
 
-Reported per replica as a relative rms in units of each QoI's own standard deviation, plus whether
-the columns are bit-identical. ⚠️ Bit-identity is the ideal but not the acceptance criterion: the
-archive was produced by an older RikFlow, and Float32 differences of a few ulp in the first steps
-amplify. What would indicate a real defect is disagreement that is *large from step 1* -- a wrong
-warm-up slice, a misphased chain, or a seed mismatch -- rather than growth from round-off.
+Reported per replica **and per QoI** as a relative rms in units of each QoI's own standard
+deviation, plus whether the columns are bit-identical.
+
+⚠️ Bit-identity is the ideal but not the acceptance criterion: the archive was produced by an older
+RikFlow, and Float32 differences of a few ulp in the first steps amplify. What would indicate a real
+defect is disagreement that is *large from step 1* -- a wrong warm-up slice, a misphased chain, or a
+seed mismatch -- rather than growth from round-off.
+
+🔴 **`Z[16,32]` is expected to disagree, and by a known amount.** Commit `09954be1` (2025-06-04,
+*"exclude derivative of nyqist freq"*) changed how it is computed, and every archived record
+predates it: the masks keep the Nyquist shell in the `[16,32]` band while `∂` no longer does, so
+today's `Z[16,32]` is a **different quantity**, off by ~1.06e-3 on an identical velocity field
+(`claude_memory.md` gotcha #45, reproduced both ways). `E[16,32]` is unaffected because it never
+goes through `curl`. **So read the other five QoIs as the reproduction test and this one as
+expected-to-differ** -- it is not evidence of a D6 defect, and a `Z[16,32]` offset of that size is
+the sign that everything is working as understood.
 """
 function compare_validation(; dir = D6_DIR, io = stdout)
     isdir(dir) || (println(io, "no run directory at $dir"); return nothing)
@@ -184,7 +205,7 @@ function compare_validation(; dir = D6_DIR, io = stdout)
 
     println(io, "\nValidation: ordinal 0 against the archived LinReg1 ensemble")
     @printf(io, "  archive: %s root, %d replicas\n", string(arch.root), length(arch.q))
-    @printf(io, "  %8s %10s %12s   %s\n", "member", "identical", "max rel rms", "per-QoI rel rms")
+    @printf(io, "  %8s %10s %12s   %s\n", "member", "identical", "max ex Z16", "per-QoI rel rms")
     rows = NamedTuple[]
     for (member, path) in files
         d = load(path)
@@ -198,12 +219,19 @@ function compare_validation(; dir = D6_DIR, io = stdout)
         sd = vec(std(view(b, :, 1:n); dims = 2))
         e = vec(sqrt.(mean(abs2, view(a, :, 1:n) .- view(b, :, 1:n); dims = 2))) ./ sd
         ident = view(d["q"], :, 1:n) == view(arch.q[member], :, 1:n)
-        @printf(io, "  %8d %10s %12.3e   %s\n", member, ident, maximum(e),
-                join((@sprintf("%8.1e", x) for x in e), " "))
+        # 🔴 The verdict excludes Z[16,32] (index 5): it is a *different quantity* today than when
+        # the archive was written (gotcha #45), so taking the max over all six QoIs would report a
+        # known convention change as a reproduction failure. It is still printed, and flagged.
+        worst5 = maximum(e[i] for i in eachindex(e) if i != IZ1632)
+        @printf(io, "  %8d %10s %12.3e   %s%s\n", member, ident, worst5,
+                join((@sprintf("%8.1e", x) for x in e), " "),
+                e[IZ1632] > 1e-4 ?
+                    @sprintf("   [Z16-32 %.1e — gotcha #45, expected]", e[IZ1632]) : "")
         push!(rows, (; member, identical = ident, rel = e, nsteps = n, seed = d["seed"]))
     end
     if !isempty(rows)
-        worst = maximum(maximum(r.rel) for r in rows)
+        worst = maximum(maximum(r.rel[i] for i in eachindex(r.rel) if i != IZ1632)
+                        for r in rows)
         nid = count(r -> r.identical, rows)
         @printf(io, "  => %d of %d bit-identical; worst relative rms %.3e over %d columns\n",
                 nid, length(rows), worst, rows[1].nsteps)

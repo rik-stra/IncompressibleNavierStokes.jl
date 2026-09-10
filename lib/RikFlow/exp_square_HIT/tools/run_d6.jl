@@ -106,6 +106,94 @@ member goes through `member_seed` and therefore shares a stream with nothing arc
 validation_seed(member::Integer) = UInt64(ARCHIVE_SEED_BASE + Int(member))
 
 """
+    check_ic_alignment(q0, q_window, offsets; qois, median_tol = 1e-4, margin = 10.0)
+
+Verify on the compute node that the field the driver was handed really is at the step its package
+claims, by asking which reference column it best matches.
+
+🔴 **Why this is a comparison and not a threshold.** The first version of this check asserted
+`maximum(abs.(q0 - q_at_ic) ./ abs.(q_at_ic)) < 1e-3` against a single stored column. That cannot
+work, and it failed the first validation run at 1.06e-3. Two discrepancies live in that range and
+they mean opposite things:
+
+  * **a one-step misalignment** moves these QoIs by 2.1e-4 to 3.2e-3 relative — the thing to catch;
+  * **`Z[16,32]`** disagrees by **1.06e-3** between the current code and the archived code on the
+    *same* velocity field, reproducibly and on CPU as well as GPU (`claude_memory.md` gotcha #45).
+    The other five QoIs recompute to 6e-8 to 2.2e-7, i.e. Float32 round-off.
+
+So an absolute bound on the max over QoIs cannot separate "wrong step" from "known code
+difference". Two changes fix that:
+
+ 1. **Compare across columns, not against a tolerance.** The claimed column must be the *best*
+    match in its window. Any discrepancy that is constant across neighbouring columns — which a
+    per-QoI code difference is — cancels out of that comparison entirely.
+ 2. **Aggregate with the median over QoIs, not the maximum.** The median ignores one bad band by
+    construction. Measured: **1.2e-7** at the right column against **~9e-4** one column away, a
+    margin of roughly 7000x, where the max-based statistic had no margin at all.
+
+Returns `(; ok, message, report, best_offset, median_rel, per_qoi)`. `report` is printed by the
+driver for member 1 so the per-QoI numbers are in the log whether or not the check passes — that is
+what turns the next failure into one line instead of an investigation.
+"""
+function check_ic_alignment(q0::AbstractVector, q_window::AbstractMatrix,
+                            offsets::AbstractVector; qois = nothing,
+                            median_tol::Real = 1e-4, margin::Real = 10.0)
+    labels = qois === nothing ? ["q$i" for i in eachindex(q0)] :
+             ["$(q[1])[$(q[2]),$(q[3])]" for q in qois]
+    relof(c) = abs.(Float64.(q0) .- Float64.(view(q_window, :, c))) ./
+               max.(abs.(Float64.(view(q_window, :, c))), floatmin(Float64))
+    med(v) = (s = sort(v); n = length(s);
+              isodd(n) ? s[(n + 1) ÷ 2] : (s[n ÷ 2] + s[n ÷ 2 + 1]) / 2)
+
+    meds = [med(relof(c)) for c in axes(q_window, 2)]
+    icentre = findfirst(==(0), offsets)
+    icentre === nothing && return (; ok = false,
+        message = "IC package's q_window_offsets $(collect(offsets)) contains no 0, so the IC's " *
+                  "own column is not in the window; rebuild with analysis/build_d6_ics.jl",
+        report = "", best_offset = nothing, median_rel = NaN, per_qoi = Float64[])
+
+    ibest = argmin(meds)
+    per = relof(icentre)
+
+    io = IOBuffer()
+    println(io, "  IC alignment (recomputed q[:,1] against the record's own column):")
+    @printf(io, "    %-10s %15s %15s %12s\n", "QoI", "run q[:,1]", "record", "rel")
+    for i in eachindex(q0)
+        flag = per[i] > 1e-3 ? "  <- see gotcha #45" : ""
+        @printf(io, "    %-10s %15.7e %15.7e %12.3e%s\n", labels[i], Float64(q0[i]),
+                Float64(q_window[i, icentre]), per[i], flag)
+    end
+    @printf(io, "    median rel at offset 0: %.3e   (tolerance %.0e)\n", meds[icentre], median_tol)
+    @printf(io, "    neighbours:")
+    for (j, off) in pairs(offsets)
+        j == icentre && continue
+        @printf(io, "  %+d: %.2e", off, meds[j])
+    end
+    println(io)
+    report = String(take!(io))
+
+    if offsets[ibest] != 0
+        return (; ok = false, report,
+            message = "IC MISALIGNED: the run's q[:,1] matches the record at offset " *
+                      "$(offsets[ibest]) (median rel $(meds[ibest])), not at the package's own " *
+                      "column (offset 0, median rel $(meds[icentre])). The field is not at step " *
+                      "the package claims.\n" * report,
+            best_offset = offsets[ibest], median_rel = meds[icentre], per_qoi = per)
+    end
+    runner = minimum(meds[j] for j in eachindex(meds) if j != icentre)
+    if !(meds[icentre] <= median_tol && runner >= margin * meds[icentre])
+        return (; ok = false, report,
+            message = "IC alignment is not convincing: median rel at offset 0 is " *
+                      "$(meds[icentre]) (tolerance $median_tol) and the nearest neighbour is " *
+                      "$runner, a margin of $(runner / meds[icentre])x against the required " *
+                      "$(margin)x.\n" * report,
+            best_offset = 0, median_rel = meds[icentre], per_qoi = per)
+    end
+    return (; ok = true, message = "", report, best_offset = 0, median_rel = meds[icentre],
+            per_qoi = per)
+end
+
+"""
     load_ic(ordinal; dir = ic_dir())
 
 The IC package for array-task `ordinal`, with the manifest cross-checked against `select_ics`.
@@ -162,6 +250,10 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
     params_ic = pkg["params"]
     dQ_warm = pkg["dQ_warm"]
     q_at_ic = pkg["q_at_ic"]
+    haskey(pkg, "q_window") || error("IC package has no q_window: it predates the alignment " *
+        "check (2026-09-11). Rebuild with analysis/build_d6_ics.jl and re-copy.")
+    q_window = pkg["q_window"]
+    q_window_offsets = pkg["q_window_offsets"]
     nwarm = pkg["provenance"].nwarm
     nlead = nlead === nothing ? pkg["provenance"].nlead : Int(nlead)
     nlead == pkg["provenance"].nlead ||
@@ -203,6 +295,7 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
     params = (; params_ic..., tsim, Δt, ArrayType, backend, savefreq = nt + 1)
 
     t_all = time()
+    walls = Float64[]                  # per-member wall time; member 1 carries the compilation
     for member in 1:M
         out = joinpath(od, validation ? "d6_valid_ic$(k)_m$(member).jld2" :
                                         "d6_online_ic$(k)_m$(member).jld2")
@@ -243,9 +336,9 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
         # on what step the IC is at" -- the package carries the record's value, this compares it
         # against QoIs recomputed here from the field itself.
         q0 = Array(data.q)[:, 1]
-        rel = maximum(abs.(q0 .- q_at_ic) ./ max.(abs.(q_at_ic), eps(T)))
-        rel < 1e-3 || error("run's q[:,1] differs from the record's q at step $n_k by $rel " *
-                            "relative; the IC is not at the step the package claims")
+        chk = check_ic_alignment(q0, q_window, q_window_offsets; qois = params_ic.qois)
+        chk.ok || error(chk.message)
+        member == 1 && print(chk.report)
 
         jldsave(out; q = Array(data.q), dQ = Array(data.dQ), tau = Array(data.tau),
                 k, n_k, t_k, ordinal, member, seed, ou_advance = n_k, validation,
@@ -253,16 +346,41 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
                 tsim, Δt, wall_seconds = wall,
                 julia = string(VERSION), device = gpu ? "cuda" : "cpu", written = string(now()))
 
+        push!(walls, wall)
         @printf("  member %2d/%d: %.1f s (%.2f s/TU), q0 agrees to %.1e, %.0f kB\n",
                 member, M, wall, wall / tsim, rel, filesize(out) / 1024)
         flush(stdout)
     end
 
     total = time() - t_all
-    @printf("done: ordinal %d (k = %d), %d members in %.1f s (%.1f s/member, %.3f s/TU)\n",
-            ordinal, k, M, total, total / M, total / (M * tsim))
-    @printf("  ⚠️  write the measured s/TU into handoff_p2c_d6.md section 2; the plan's two SBU\n")
-    @printf("      figures differ by 10x and neither should be trusted.\n")
+    @printf("done: ordinal %d (k = %d), %d members in %.1f s (%.1f s/member)\n",
+            ordinal, k, M, total, total / M)
+
+    # 🔴 Cost reporting, and why it is not `total / (M * tsim)`.
+    #
+    # Member 1 pays the whole solver + TO compilation, once per Julia process. Measured on Snellius
+    # 2026-09-10 (gpu_a100, 400 steps, M = 1): wall 62.6 s of which only ~3.6 s was stepping --
+    # `itertime` fell 0.013 -> 0.29 -> 0.057 -> 0.009 -> **0.0089** s/step as it warmed up. So the
+    # naive `wall / tsim` read **62.55 s/TU** against a true steady rate of **3.56 s/TU**: a factor
+    # 18 on the one number the handoff asks you to record, and worst exactly on the short runs
+    # people do first. plan P2's own 5.8 s/TU smoke figure has the same defect.
+    #
+    # So: quote the **median over members 2..M** as the rate, because those pay no compilation, and
+    # report member 1 separately as the per-task constant. With M = 1 there is no such member and
+    # the script says so rather than printing a number that would be wrong.
+    if length(walls) > 1
+        steady = sort(walls[2:end])[cld(length(walls) - 1, 2)]
+        @printf("  compile+first member %.1f s (per array task, once) · steady %.1f s/member = " *
+                "%.3f s/TU\n", walls[1], steady, steady / tsim)
+        @printf("  ⚠️  write the STEADY %.3f s/TU into handoff_p2c_d6.md section 2, not the\n",
+                steady / tsim)
+        @printf("      first-member figure. plan's two SBU figures differ by 10x; the SBU rate for\n")
+        @printf("      this partition has to come from Snellius accounting, not from either of them.\n")
+    elseif !isempty(walls)
+        @printf("  ⚠️  M = 1, so this run is all compilation: %.1f s wall is NOT a rate. Re-run\n",
+                walls[1])
+        @printf("      with M > 1, or read the steady `itertime` off the solver's own log.\n")
+    end
     flush(stdout)
     return nothing
 end
