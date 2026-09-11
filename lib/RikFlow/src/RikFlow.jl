@@ -21,9 +21,119 @@ using CUDA
 #using Optimisers, Zygote
 
 
+# ---------------------------------------------------------------------------------------------
+# Bridge to upstream IncompressibleNavierStokes >= 5.
+#
+# Upstream's `Setup` is a pure grid description: `Setup(; x, boundary_conditions, backend,
+# workgroupsize)`, with no `Re`, `closure_model`, `bodyforce`, `temperature` or `ArrayType`, and
+# with the grid fields hoisted to the top level instead of living under `setup.grid`. Physics moved
+# to `params`, forcing moved to `force!` and its cache.
+#
+# 🔑 That setup is a plain `NamedTuple`, so RikFlow can extend it at its own call sites rather than
+# forking `Setup`. `rf_setup` does exactly that: upstream's setup, plus the three fields our code
+# genuinely needs. This is what let `src/setup.jl` be deleted in the merge instead of carried.
+#
+#   `Re`             — RikFlow reads it for the element type (`typeof(setup.Re)`) in a dozen places
+#                      and as the physical parameter in `rf_params`. Kept as the single source of
+#                      truth; `viscosity` is derived from it, never stored beside it.
+#   `ArrayType`      — `TO_Setup` and `OU_setup` allocate with it. Upstream carries `backend`
+#                      instead, but the two are not interchangeable for the raw
+#                      `ArrayType{ComplexF32,3}(undef, …)` constructions in `ouforcer.jl`.
+#   `nans_detected`  — the channel by which `qoisaver` tells `solve_unsteady` to stop.
+# ---------------------------------------------------------------------------------------------
+
+"""
+    rf_setup(; x, Re, boundary_conditions = periodic, ArrayType = Array, backend = CPU(), workgroupsize = 64)
+
+Upstream's `Setup` extended with the fields RikFlow needs. Use this everywhere RikFlow used to call
+`Setup(; x, Re, ArrayType, backend, ou_bodyforce)`.
+
+⚠️ `ou_bodyforce` is **not** a keyword here. OU forcing is no longer a property of the setup: build
+it with `ou_force_cache(setup; T_L, e_star, k_f, rng_seed, freeze)` and pass the result to
+`solve_unsteady` as `force_cache`, together with `force! = ou_navierstokes!`. See `rf_solve`.
+
+⚠️ `boundary_conditions` is keyed by field upstream — `(; u = ((PeriodicBC(), PeriodicBC()), …))`.
+The default here is periodic in every direction, which is what every HIT case uses.
+"""
+function rf_setup(;
+    x,
+    Re,
+    boundary_conditions = (; u = ntuple(d -> (PeriodicBC(), PeriodicBC()), length(x))),
+    ArrayType = Array,
+    backend = IncompressibleNavierStokes.CPU(),
+    workgroupsize = 64,
+)
+    base = IncompressibleNavierStokes.Setup(; x, boundary_conditions, backend, workgroupsize)
+    (; base..., Re, ArrayType, nans_detected = zeros(Bool))
+end
+
+"""
+    rf_params(setup)
+
+The `params` named tuple `solve_unsteady` now requires. Upstream has no default for it.
+
+🔴 `viscosity = 1 / Re`, matching what base's `diffusion!` computed internally
+(`visc = use_viscosity ? 1 / Re : one(Re)`). Storing `Re` and deriving `viscosity` in this one
+place keeps a single source of truth; holding both in the setup would let them drift silently.
+"""
+rf_params(setup) = (; viscosity = 1 / setup.Re)
+
+"""
+    rf_smag_force_cache(setup; c_s, ou_bodyforce = nothing)
+
+Force cache for [`rf_smag_navierstokes!`](@ref): upstream's Smagorinsky closure, optionally on top
+of the OU body force.
+
+Replaces the old `setup = (; setup..., closure_model = smagorinsky_closure_natural)` plus
+`solve_unsteady(; θ = c_s)`. Upstream removed both: `setup` no longer carries a closure and the
+stepper no longer applies one, so the closure is part of the right-hand side like any other force,
+and its constant travels in the cache rather than in `θ`.
+
+🔴 The kernels are upstream's `smagorinsky_closure!`, not the `smagorinsky_closure_natural` this
+fork used to call. Rik's decision of 2026-09-11 (map section 9, Q2). They are different code
+computing the same model, so the Smagorinsky baseline is not numerically the one paper 2 reports,
+and by the same decision (Q3) that difference is not measured.
+"""
+function rf_smag_force_cache(setup; c_s, ou_bodyforce = nothing)
+    ou = isnothing(ou_bodyforce) ? (;) : ou_force_cache(setup; ou_bodyforce...)
+    (;
+        ou...,
+        c_s,
+        closure_force = vectorfield(setup),
+        closure_cache = IncompressibleNavierStokes.get_cache(
+            IncompressibleNavierStokes.smagorinsky_closure!,
+            setup,
+        ),
+    )
+end
+
+"""
+    rf_smag_navierstokes!(force, state, t; setup, cache, viscosity)
+
+Navier-Stokes plus a Smagorinsky closure, plus the OU body force when the cache carries one.
+
+As with [`ou_navierstokes!`](@ref), this adds the *current* forcing and never advances the OU
+chain: it runs once per Runge-Kutta stage. The advance is in `solve_unsteady`, once per step.
+"""
+function rf_smag_navierstokes!(force, state, t; setup, cache, viscosity)
+    IncompressibleNavierStokes.navierstokes!(force, state, t; setup, cache, viscosity)
+    IncompressibleNavierStokes.smagorinsky_closure!(
+        cache.closure_force,
+        state.u,
+        cache.c_s,
+        cache.closure_cache,
+        setup,
+    )
+    force.u .+= cache.closure_force
+    haskey(cache, :bodyforce) && (force.u .+= cache.bodyforce)
+    nothing
+end
+
 include("time_series_methods.jl")
 include("filter.jl")
 export FaceAverage, VolumeAverage
+export rf_setup, rf_params
+export rf_smag_force_cache, rf_smag_navierstokes!
 
 include("HIT_setups/create_ref_data.jl")
 export create_ref_data
@@ -71,10 +181,14 @@ export starred_gain
 
 include("post_processing_funcs.jl")
 export ks_dist
+export rf_spectral_stuff
 export getspectrum
 # `energy_spectra_comparison` is declared empty in `post_processing_funcs.jl` and implemented in
 # `ext/RikFlowMakieExt.jl`, so that RikFlow does not drag the Makie stack into every load.
 export energy_spectra_comparison
+# Same pattern: declared empty here, implemented in `ext/RikFlowMakieExt.jl`.
+function rf_energy_spectrum_plot end
+export rf_energy_spectrum_plot
 
 
 """
@@ -147,10 +261,10 @@ function get_vi_functions(to_setup)
 end
 
 function get_masks_and_partials(QoIs, setup, ArrayType, mirror_y)
-    N = setup.grid.Np
-    Lx = setup.grid.xlims[1][2] - setup.grid.xlims[1][1]
-    Ly = setup.grid.xlims[2][2] - setup.grid.xlims[2][1]
-    Lz = setup.grid.xlims[3][2] - setup.grid.xlims[3][1]
+    N = setup.Np
+    Lx = setup.xlims[1][2] - setup.xlims[1][1]
+    Ly = setup.xlims[2][2] - setup.xlims[2][1]
+    Lz = setup.xlims[3][2] - setup.xlims[3][1]
     if mirror_y
         N = N.*[1,2,1]
         Ly = Ly*2
@@ -209,7 +323,7 @@ end
     Compute the QoIs from the Fourier transformed fields
 """
 function compute_QoI(u_hat, w_hat, to_setup, setup)
-    (; dimension, xlims) = setup.grid
+    (; dimension, xlims) = setup
     ArrayType = setup.ArrayType
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
@@ -238,7 +352,7 @@ end
     Compute QoI densities from the Fourier transformed fields
 """
 function compute_filtered_qoi_fields(u_hat, w_hat, to_setup, setup)
-    (; dimension, xlims) = setup.grid
+    (; dimension, xlims) = setup
     ArrayType = setup.ArrayType
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
@@ -267,18 +381,18 @@ end
 Compute the Fourier transform of the field. Returns an 4D array, velocity components stacked along last dimension.
 """
 function get_u_hat(u, setup, TO_Setup)
-    (; dimension) = setup.grid
+    (; dimension) = setup
     d = dimension()
     # interpolate u to cell centers
     #u_c = interpolate_u_p(u, setup)
     if TO_Setup.mirror_y
-        u1 = u[setup.grid.Iu[1], 1]
+        u1 = u[setup.Iu[1], 1]
         u1 = cat(u1, -1 .*reverse(u1, dims=2), dims= 2)
-        u2 = u[setup.grid.Iu[2], 2]
+        u2 = u[setup.Iu[2], 2]
         #z = zeros(typeof(setup.Re),size(u2)[1], 1, size(u2)[3])
-        z = fill!(similar(setup.grid.x[1], size(u2)[1], 1, size(u2)[3]), 0)
+        z = fill!(similar(setup.x[1], size(u2)[1], 1, size(u2)[3]), 0)
         u2 = cat(u2, z, -1 .*reverse(u2, dims=2),z, dims= 2)
-        u3 = u[setup.grid.Iu[3], 3]
+        u3 = u[setup.Iu[3], 3]
         u3 = cat(u3, -1 .*reverse(u3, dims=2), dims= 2)
 
         u = stack([u1, u2, u3], dims=4)
@@ -291,12 +405,14 @@ function get_u_hat(u, setup, TO_Setup)
 end
 
 function select_physical_fourier_points(a, setup)
-    if eltype(setup.boundary_conditions[a]) == PeriodicBC
-        return setup.grid.Iu[a]
-    elseif eltype(setup.boundary_conditions[a]) == DirichletBC{Nothing}
-        return setup.grid.Ip
+    # ⚠️ `boundary_conditions` is keyed by field since the upstream merge: `.u[a]`, not `[a]`.
+    bc = setup.boundary_conditions.u[a]
+    if eltype(bc) == PeriodicBC
+        return setup.Iu[a]
+    elseif eltype(bc) == DirichletBC{Nothing}
+        return setup.Ip
     else
-        error("Boundary condition not recognized")
+        error("Boundary condition not recognized: $(eltype(bc)) in direction $a")
     end
 end
 
@@ -405,7 +521,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
 end
 
 function innerpoducts(x,y,setup; mirror_y = false)
-    (; dimension, xlims) = setup.grid
+    (; dimension, xlims) = setup
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
     if mirror_y
@@ -431,8 +547,8 @@ function compute_cij(ip, to_setup)
     return cij
 end
 
-using IncompressibleNavierStokes: timestep!, create_stepper, get_state, default_psolver, 
-    ode_method_cache, AbstractODEMethod, AbstractRungeKuttaMethod, RKMethods, processor, apply_bc_u!
+using IncompressibleNavierStokes: timestep!, create_stepper, get_state, default_psolver,
+    get_cache, AbstractODEMethod, AbstractRungeKuttaMethod, RKMethods, processor, apply_bc_u!
 
 """
 AbstractODEMethod for the Tau-orthogonal method, which extends the RK44 method.
@@ -445,29 +561,51 @@ end
 
 export TOMethod
 
-IncompressibleNavierStokes.create_stepper(method::TOMethod; setup, psolver, u, temp, t, n = 0) =
-    create_stepper(method.rk_method; setup, psolver, u, temp, t, n)
+# The three methods TOMethod has to provide, ported to the IncompressibleNavierStokes >= 5 stepper
+# interface. Three things changed and all three are here:
+#
+#   `create_stepper`    `u, temp` became a single `state` container (`(; u)` for us).
+#   `ode_method_cache`  renamed to `get_cache` and re-signatured: it now takes `state` as well,
+#                       because the cache is built by `map(similar, state)`.
+#   `timestep!`         takes the right-hand side `force!` as a positional argument, `θ` became
+#                       `params`, and `cache` split into `ode_cache` and `force_cache`.
+#
+# The TO step itself is unchanged: run the RK step, then add the SGS term. The SGS term is applied
+# *after* the full step rather than inside it, which is why upstream dropping the in-stepper
+# closure hook does not affect us.
 
-IncompressibleNavierStokes.ode_method_cache(method::TOMethod, setup) =
- ode_method_cache(method.rk_method, setup)
+IncompressibleNavierStokes.create_stepper(method::TOMethod; setup, psolver, state, t, n = 0) =
+    create_stepper(method.rk_method; setup, psolver, state, t, n)
 
-function IncompressibleNavierStokes.timestep!(method::TOMethod, stepper, Δt; θ = nothing, cache)
+IncompressibleNavierStokes.get_cache(method::TOMethod, state, setup) =
+    get_cache(method.rk_method, state, setup)
+
+function IncompressibleNavierStokes.timestep!(
+    method::TOMethod,
+    force!,
+    stepper,
+    Δt;
+    params = nothing,
+    ode_cache,
+    force_cache,
+)
     (; rk_method, to_setup) = method
     (; setup) = stepper
-    (; dimension) = setup.grid
+    (; dimension) = setup
     D = dimension()
 
     # RK step
-    stepper = timestep!(method.rk_method, stepper, Δt; θ, cache)
+    stepper = timestep!(rk_method, force!, stepper, Δt; params, ode_cache, force_cache)
 
     # to method
-    sgs = to_sgs_term(stepper.u, setup, to_setup, stepper)
+    u = stepper.state.u
+    sgs = to_sgs_term(u, setup, to_setup, stepper)
     # add SGS term to u
     for a in 1:D
-        stepper.u[select_physical_fourier_points(a, setup),a] .+= sgs[:,:,:,a]
+        u[select_physical_fourier_points(a, setup),a] .+= sgs[:,:,:,a]
     end
 
-    apply_bc_u!(stepper.u, stepper.t, setup)
+    apply_bc_u!(u, stepper.t, setup)
     stepper
 end
 

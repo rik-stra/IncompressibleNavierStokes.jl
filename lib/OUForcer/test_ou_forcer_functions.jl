@@ -1,3 +1,10 @@
+# ⚠️ Scratch/demo scripts, updated mechanically to the IncompressibleNavierStokes >= 5 API at the
+# upstream merge. They are NOT verified to run, and they did not run before the merge either:
+# `OU_setup` takes `rng_seed`, never an `rng` object, so the `rng = Xoshiro(...)` below has always
+# been an unknown-keyword error. The OU forcing itself lives in `src/ouforcer.jl` and is exercised
+# by `lib/RikFlow/exp_square_HIT/tools/small_case.jl` and `lib/RikFlow/analysis/ou_replay.jl`;
+# those are the checks that matter for it (handoff item 22a, item 27).
+
 if false
     include("src/OUForcer.jl")
     include("../../src/IncompressibleNavierStokes.jl")
@@ -23,11 +30,9 @@ T = Float64
 
 n = 32
 axis = range(0.0, 1., n + 1)
-setup = Setup(;
+setup = RikFlow.rf_setup(;
     x = (axis, axis, axis),
     Re = 5e3,
-    bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
-    issteadybodyforce = true,
     ArrayType = ArrayType,
 );
 

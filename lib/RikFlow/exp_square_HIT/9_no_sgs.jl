@@ -56,13 +56,15 @@ params = (;
     savefreq = 1000);
 
 # Build setup and assemble operators
-setup = Setup(;
+setup = rf_setup(;
     x = ntuple(α -> LinRange(params.lims[α]..., params.nles[1][α] + 1), params.D),
     Re=params.Re,
     ArrayType,
     backend = CUDABackend(),
-    params.ou_bodyforce,
 );
+
+# Forcing moved out of the setup at the upstream merge: it is the right-hand side and its cache.
+force_cache = ou_force_cache(setup; params.ou_bodyforce...);
 
 # Number of time steps to save
 nt = round(Int, params.tsim / params.Δt)
@@ -80,8 +82,14 @@ psolver = psolver_spectral(setup);
 @info "Solving LF sim (no SGS)"
 (; u, t), outputs = solve_unsteady(;
     # method = LMWray3(; T),
+    # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
+    # merge; pinned so this keeps the pre-merge integrator.
+    method = RKMethods.RK44(; T = eltype(ustart)),
     setup, 
-    ustart,
+    start = (; u = ustart),
+    force! = ou_navierstokes!,
+    force_cache,
+    params = rf_params(setup),
     tlims = (T(0), params.tsim),
     params.Δt,
     processors = (;

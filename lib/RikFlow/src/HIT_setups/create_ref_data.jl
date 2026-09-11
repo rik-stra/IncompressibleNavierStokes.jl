@@ -33,21 +33,27 @@ function create_ref_data(;
     end
 
     # Build setup and assemble operators
-    dns = Setup(;
+    dns = rf_setup(;
         x = ntuple(α -> LinRange(lims[α]..., ndns[α] + 1), D),
         Re,
         ArrayType,
         backend,
-        ou_bodyforce,
         kwargs...,
     )
+
+    # Forcing is no longer part of the setup: it is the right-hand side and its cache.
+    force!, force_cache = if isnothing(ou_bodyforce)
+        navierstokes!, nothing
+    else
+        ou_navierstokes!, ou_force_cache(dns; ou_bodyforce...)
+    end
 
     if isnothing(ustart)
         ustart = vectorfield(dns)
     end
 
     les = [
-        Setup(;
+        rf_setup(;
             x = ntuple(α -> LinRange(lims[α]..., nles[α] + 1), D),
             Re,
             ArrayType,
@@ -83,7 +89,16 @@ function create_ref_data(;
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
         setup = _dns,
-        ustart,
+        # 🔴 Pin the time stepper. Upstream changed `solve_unsteady`'s default from
+        # `RKMethods.RK44` to `LMWray3` at the merge, so every call that relied on the default
+        # silently changed time integrator - including this one, which produces the HF reference.
+        # Left implicit, the 19.3 GPU-hour DNS re-run would have used a different scheme from the
+        # archive it has to reproduce. Pinned rather than trusted.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        force!,
+        force_cache,
+        params = rf_params(_dns),
         docopy = false,
         tlims = (T(0), tsim),
         Δt,
@@ -126,13 +141,19 @@ function spinnup(;
     T = typeof(Re)
 
     # Build setup and assemble operators
-    dns = Setup(;
+    dns = rf_setup(;
         x = ntuple(α -> LinRange(lims[α]..., ndns[α] + 1), D),
         Re,
-        ou_bodyforce,
         backend,
         ArrayType,
     )
+
+    # Forcing is the right-hand side now, not a setup field.
+    force!, force_cache = if isnothing(ou_bodyforce)
+        navierstokes!, nothing
+    else
+        ou_navierstokes!, ou_force_cache(dns; ou_bodyforce...)
+    end
 
     # Since the grid is uniform and identical for x and y, we may use a specialized
     # spectral pressure solver
@@ -150,7 +171,13 @@ function spinnup(;
     (; u, t), outputs =
         solve_unsteady(;
         #method = RKMethods.Wray3(),
-        setup = _dns, ustart, tlims = (T(0), tburn),
+        # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
+        # merge; pinned so this keeps the pre-merge integrator.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        setup = _dns, start = (; u = ustart), tlims = (T(0), tburn),
+        force!,
+        force_cache,
+        params = rf_params(_dns),
         docopy = false,
         Δt,
         kwargs...,

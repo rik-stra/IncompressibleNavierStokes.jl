@@ -16,7 +16,7 @@ u_start_800 = stack(load(filename, "u_start"));
 n = 800
 Δx_hf = 1/n
 axis_x = range(0.0, 1., n + 1)
-setup_HF = Setup(;
+setup_HF = rf_setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
 state_HF = (;u = u_start_800, t=0., temp=0);
@@ -27,19 +27,19 @@ u_start_512 = stack(load(filename, "u_start"));
 n = 512
 Δx = 1/n
 axis_x = range(0.0, 1., n + 1)
-setup_LF = Setup(;
+setup_LF = rf_setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
 state_LF = (;u = u_start_512, t=0., temp=0);
 
-scales = get_scale_numbers(u_start_800, setup_HF)
+scales = turbulence_statistics(u_start_800, setup_HF, 1/setup_HF.Re)
 println("Scale numbers: $(scales)")
 
 
-fig = energy_spectrum_plot([state_HF, state_LF]; setup = [setup_HF, setup_LF], npoint = 100, sloperange = [2,16], v_lines = [scales.λ, scales.η, Δx_hf], slopeoffset = 1.9,
+fig = rf_energy_spectrum_plot([state_HF, state_LF]; setup = [setup_HF, setup_LF], npoint = 100, sloperange = [2,16], v_lines = [scales.l_tay, scales.l_kol, Δx_hf], slopeoffset = 1.9,
  scale_numbers = scales, plot_wavelength = true, plot_n_spectra = 2)
 #display(fig)
-v = [scales.λ, scales.η, Δx_hf]
+v = [scales.l_tay, scales.l_kol, Δx_hf]
 v_labels = ["λ", "η", "Δx"]
 for i in 1:3
     text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1e-15*1.2), align = (:left, :bottom), color = :black)

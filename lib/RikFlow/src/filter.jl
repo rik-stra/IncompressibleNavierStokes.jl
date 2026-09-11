@@ -26,8 +26,7 @@ struct VolumeAverage <: AbstractFilter end
     Φ(vectorfield(setup_les), u, setup_les, compression)
 
 function (::FaceAverage)(v, u, setup_les, comp)
-    (; grid, backend, workgroupsize) = setup_les
-    (; dimension, Nu, Iu) = grid
+    (; backend, workgroupsize, dimension, Nu, Iu) = setup_les
     D = dimension()
     @kernel function Φ!(v, u, ::Val{α}, face, I0) where {α}
         I = @index(Global, Cartesian)
@@ -49,11 +48,10 @@ end
 
 "Reconstruct DNS velocity `u` from LES velocity `v`."
 function reconstruct!(u, v, setup_dns, setup_les, comp)
-    (; grid, boundary_conditions, backend, workgroupsize) = setup_les
-    (; dimension, N) = grid
+    (; boundary_conditions, backend, workgroupsize, dimension, N) = setup_les
     D = dimension()
     e = Offset(D)
-    @assert all(bc -> bc[1] isa PeriodicBC && bc[2] isa PeriodicBC, boundary_conditions)
+    @assert all(bc -> bc[1] isa PeriodicBC && bc[2] isa PeriodicBC, boundary_conditions.u)
     @kernel function R!(u, v, ::Val{α}, volume) where {α}
         J = @index(Global, Cartesian)
         I = oneunit(J) + comp * J
@@ -80,10 +78,9 @@ reconstruct(v, setup_dns, setup_les, comp) =
     reconstruct!(vectorfield(setup_dns), v, setup_dns, setup_les, comp)
 
 function (::VolumeAverage)(v, u, setup_les, comp)
-    (; grid, boundary_conditions, backend, workgroupsize) = setup_les
-    (; dimension, N, Nu, Iu) = grid
+    (; boundary_conditions, backend, workgroupsize, dimension, N, Nu, Iu) = setup_les
     D = dimension()
-    @assert all(bc -> bc[1] isa PeriodicBC && bc[2] isa PeriodicBC, boundary_conditions)
+    @assert all(bc -> bc[1] isa PeriodicBC && bc[2] isa PeriodicBC, boundary_conditions.u)
     @kernel function Φ!(v, u, ::Val{α}, volume, I0) where {α}
         I = @index(Global, Cartesian)
         J = I0 + comp * (I - oneunit(I))
@@ -146,7 +143,7 @@ filtersaver(dns, les, filters, compression, to_setup_les; nupdate = 1, n_plot = 
         (results, state) -> (; results..., comptime = time() - results.comptime),
     ) do state
         comptime = time()
-        (; x) = dns.grid
+        (; x) = dns
         T = eltype(x[1])
 
         dnsobs = Observable((; state[].u, state[].t, state[].n))

@@ -133,7 +133,7 @@ function assert_nyquist_in_top_band(p)
         nstep = 1,
     )
 
-    N = setup.grid.Np
+    N = setup.Np
     @assert all(==(N[1]), N) "small case assumes a cubic LES grid, got $N"
     iseven(N[1]) || error("LES grid $N has no Nyquist mode; the small case needs an even grid")
 
@@ -176,9 +176,9 @@ function assert_nyquist_in_top_band(p)
     nretained
 end
 
-"LES `Setup` for the small case, with no forcing (used only for mask inspection)."
+"LES setup for the small case, with no forcing (used only for mask inspection)."
 function les_setup(p)
-    Setup(;
+    rf_setup(;
         x = ntuple(α -> LinRange(p.lims[α]..., p.n_les + 1), p.D),
         p.Re,
         p.ArrayType,
@@ -202,21 +202,28 @@ The OU chain is seeded per `Setup`, so this solve and stage 1's each start the c
 """
 function burn_in(p)
     (; T) = p
-    dns = Setup(;
+    dns = rf_setup(;
         x = ntuple(α -> LinRange(p.lims[α]..., p.n_dns + 1), p.D),
         p.Re,
         p.ArrayType,
         p.backend,
-        ou_bodyforce = (; p.forcing..., freeze = 10),
     )
+    # Forcing lives in the force cache since the upstream merge, not in the setup.
+    force_cache = ou_force_cache(dns; p.forcing..., freeze = 10)
     psolver = psolver_spectral(dns)
     ustart = vectorfield(dns)
 
     @printf("burn-in: %d^3 DNS, tburn = %g, %d steps\n",
         p.n_dns, p.tburn, round(Int, p.tburn / p.dt_dns))
     (; u, t), _ = solve_unsteady(;
+        # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
+        # merge; pinned so this keeps the pre-merge integrator.
+        method = RKMethods.RK44(; T = eltype(ustart)),
         setup = dns,
-        ustart,
+        start = (; u = ustart),
+        force! = ou_navierstokes!,
+        force_cache,
+        params = rf_params(dns),
         docopy = false,
         tlims = (T(0), p.tburn),
         Δt = p.dt_dns,

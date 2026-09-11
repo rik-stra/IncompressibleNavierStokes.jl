@@ -59,15 +59,18 @@ params = (;
 
 for c_s in smag_vals
     # Build setup and assemble operators
-    setup = Setup(;
+    setup = rf_setup(;
         x = ntuple(α -> LinRange(params.lims[α]..., params.nles[1][α] + 1), params.D),
         Re=params.Re,
         ArrayType,
         backend,
-        params.ou_bodyforce,
     );
-    closure_model = IncompressibleNavierStokes.smagorinsky_closure_natural
-    setup = (; setup..., closure_model)
+
+    # The closure moved from `setup.closure_model` + `θ` into the right-hand side and its cache.
+    # 🔴 These are upstream's Smagorinsky kernels, not the `smagorinsky_closure_natural` this
+    # script used before the merge (map section 9, Q2) - a different implementation of the same
+    # model, so this baseline is not numerically the one paper 2 reports.
+    force_cache = rf_smag_force_cache(setup; c_s = T(c_s), params.ou_bodyforce);
 
     # Number of time steps to save
     nt = round(Int, params.tsim / params.Δt)
@@ -84,9 +87,14 @@ for c_s in smag_vals
     # Solve
     @info "Solving LF sim (SMAG)"
     (; u, t), outputs = solve_unsteady(; 
+            # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
+            # merge; pinned so this keeps the pre-merge integrator.
+            method = RKMethods.RK44(; T = eltype(ustart)),
             setup,
-            θ = T(c_s), 
-            ustart,
+            start = (; u = ustart),
+            force! = rf_smag_navierstokes!,
+            force_cache,
+            params = rf_params(setup),
             tlims = (T(0), params.tsim),
             params.Δt,
             processors = (;

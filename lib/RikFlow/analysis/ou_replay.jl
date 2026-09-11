@@ -50,11 +50,14 @@ wavenumbers, which depend on `k_f` alone, so an 8^3 grid and a 64^3 grid carry t
 That is what makes a mini-solve decisive rather than merely suggestive.
 """
 function mini_setup(; n::Int = 8, ou = HIT_OU, T = Float32)
-    Setup(;
+    setup = rf_setup(;
         x = ntuple(α -> LinRange(T(0), T(1), n + 1), 3),
         Re = T(2000),
-        ou_bodyforce = ou,
     )
+    # Since the upstream merge the chain lives in the force cache, not in the setup, so this
+    # returns both. Everything below reads `force_cache.ou_setup` where it used to read
+    # `setup.ou_setup`.
+    (setup, ou_force_cache(setup; ou...))
 end
 
 """
@@ -66,9 +69,9 @@ Offline counterpart of what `online_sgs(; ou_advance)` does in place: the state 
 `(rng_seed, nsteps, Δt)` and nothing else, so this reproduces any run's chain from its parameters.
 """
 function replay_state(nsteps::Integer; n::Int = 8, ou = HIT_OU, Δt = HIT_DT)
-    setup = mini_setup(; n, ou)
-    OU_advance!(; setup.ou_setup, Δt, n = nsteps)
-    return Array(setup.ou_setup.state)
+    _, force_cache = mini_setup(; n, ou)
+    OU_advance!(; force_cache.ou_setup, Δt, n = nsteps)
+    return Array(force_cache.ou_setup.state)
 end
 
 """
@@ -78,14 +81,26 @@ The OU state left behind by an actual `solve_unsteady` of `nsteps` steps. Return
 copy.
 """
 function solver_state(nsteps::Integer; n::Int = 8, ou = HIT_OU, Δt = HIT_DT)
-    setup = mini_setup(; n, ou)
-    T = eltype(setup.grid.x[1])
+    setup, force_cache = mini_setup(; n, ou)
+    T = eltype(setup.x[1])
     tsim = T(Δt) * nsteps
     @assert round(Int, tsim / Δt) == nsteps "mini-solve step count is not $nsteps"
     ustart = IncompressibleNavierStokes.vectorfield(setup)
     psolver = psolver_spectral(setup)
-    solve_unsteady(; setup, ustart, tlims = (T(0), tsim), Δt = T(Δt), psolver)
-    return Array(setup.ou_setup.state)
+    solve_unsteady(;
+        # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
+        # merge; pinned so this keeps the pre-merge integrator.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        setup,
+        start = (; u = ustart),
+        force! = ou_navierstokes!,
+        force_cache,
+        params = rf_params(setup),
+        tlims = (T(0), tsim),
+        Δt = T(Δt),
+        psolver,
+    )
+    return Array(force_cache.ou_setup.state)
 end
 
 """
@@ -105,7 +120,7 @@ function check_advance_count(; nsteps::Int = 25, probe::Int = 4, freeze::Int = 1
     @printf("  solver left state %s, |state| = %.6e\n", string(size(ref)), sqrt(sum(abs2, ref)))
 
     # 🔑 The replay has to be probed at the step size the solver actually uses, `Δt * freeze`
-    # (`solver.jl:62,103`), not `Δt`. With `freeze = 1` the two coincide, which is why a
+    # (the OU block in `solve_unsteady`), not `Δt`. With `freeze = 1` the two coincide, which is why a
     # freeze-blind replay looks correct on HIT and is wrong everywhere else.
     matches = Int[]
     for m in 0:(nsteps + probe)
@@ -125,8 +140,8 @@ function check_advance_count(; nsteps::Int = 25, probe::Int = 4, freeze::Int = 1
     for m in matches
         @printf("  match at %d advances  (nstep %+d)\n", m, m - nsteps)
     end
-    # What the source predicts: one priming call (`solver.jl:61-63`) plus one per iteration whose
-    # `stepper.n` is divisible by `freeze` (`:102-104`).
+    # What the source predicts: one priming call (before the loop) plus one per iteration whose
+    # `stepper.n` is divisible by `freeze`.
     expected = count(m -> mod(m, freeze) == 0, 0:(nsteps - 1)) + 1
     @printf("  source predicts %d = 1 priming + %d in-loop\n", expected, expected - 1)
     ok = matches == [expected]

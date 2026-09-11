@@ -24,13 +24,19 @@ function track_ref(;
     # Build setup and assemble operators
 
     setup = 
-    Setup(;
+    rf_setup(;
         x = ntuple(α -> LinRange(lims[α]..., nles[1][α] + 1), D),
         Re,
         ArrayType,
-        ou_bodyforce,
         backend,
     )
+
+    # Forcing is the right-hand side and its cache now, not a setup field.
+    force!, force_cache = if isnothing(ou_bodyforce)
+        navierstokes!, nothing
+    else
+        ou_navierstokes!, ou_force_cache(setup; ou_bodyforce...)
+    end
 
     # Number of time steps to save
     nt = round(Int, tsim / Δt)
@@ -49,10 +55,13 @@ function track_ref(;
 
     # Solve
     @info "Solving LF sim (track ref)"
-    println("setup.ou ", setup.ou_bodyforce)
+    println("ou forcing: ", isnothing(ou_bodyforce) ? "none" : ou_bodyforce)
     (; u, t), outputs =
             solve_unsteady(; setup, 
-            ustart,
+            start = (; u = ustart),
+            force!,
+            force_cache,
+            params = rf_params(setup),
             method = TOMethod(; to_setup = to_setup_les), 
             tlims = (T(0), tsim),
             Δt,
@@ -101,20 +110,26 @@ T = typeof(Re)
 # Build setup and assemble operators
 
 setup = 
-Setup(;
+rf_setup(;
     x = ntuple(α -> LinRange(lims[α]..., nles[1][α] + 1), D),
     Re,
     ArrayType,
     backend,
-    ou_bodyforce,
 )
+
+# Forcing is the right-hand side and its cache now, not a setup field.
+force!, force_cache = if isnothing(ou_bodyforce)
+    navierstokes!, nothing
+else
+    ou_navierstokes!, ou_force_cache(setup; ou_bodyforce...)
+end
 
 # Number of time steps to save
 nt = round(Int, tsim / Δt)
 
 # Replay the OU forcing chain to the reference step this initial condition was taken from.
 #
-# `ou_advance = 0` is the default and leaves `Setup`'s zero state untouched, so every archived run
+# `ou_advance = 0` is the default and leaves `OU_setup`'s zero state untouched, so every archived run
 # reproduces exactly and nothing already computed shifts. It is non-zero only for the multi-IC
 # ensemble D6, where `ustart` is `fields[k].u` at reference step `n_k` and the forcing that produced
 # that field is `n_k` steps into its own chain. Launching such a run from a zero state leaves every
@@ -124,7 +139,7 @@ nt = round(Int, tsim / Δt)
 #
 # 🔑 The chain must be replayed with the step size the *reference* used, and continued with the step
 # size *this* run uses. `solve_unsteady` does not step with the `Δt` it is given: it re-derives
-# `Δt = (tend - tstart) / nstep` (`solver.jl:98-99`). The two agree only when `tsim / Δt` is
+# `Δt = (tend - tstart) / nstep` (the non-adaptive branch of `solve_unsteady`). The two agree only when `tsim / Δt` is
 # integral, so that is asserted rather than assumed -- silently stepping the replay at a different
 # Δt would reintroduce exactly the misphase this keyword exists to remove.
 if ou_advance != 0
@@ -136,7 +151,7 @@ if ou_advance != 0
     # 🔴 `freeze` must be 1, and this refuses rather than generalises.
     #
     # `solve_unsteady` advances the chain only on iterations where `mod(stepper.n, freeze) == 0`,
-    # and it advances by `Δt * freeze` (`solver.jl:62,103`). So `n_k` reference solver steps
+    # and it advances by `Δt * freeze` (the OU block in `solve_unsteady`). So `n_k` reference solver steps
     # correspond to `ceil(n_k / freeze)` advances of size `Δt * freeze`, not to `n_k` advances of
     # size `Δt`. At `freeze = 1` the two coincide, which is exactly why a freeze-blind replay looks
     # right on HIT -- `params_track.ou_bodyforce.freeze = 1` there -- and would be wrong on both
@@ -149,7 +164,7 @@ if ou_advance != 0
         "$(ou_bodyforce.freeze). The replay is only derived for freeze == 1; at freeze != 1 the " *
         "solver advances the chain every freeze steps by Δt*freeze, so n_k advances of Δt is " *
         "wrong on both count and step size. See analysis/ou_replay.jl."
-    OU_advance!(; setup.ou_setup, Δt = Δt_solver, n = ou_advance)
+    OU_advance!(; force_cache.ou_setup, Δt = Δt_solver, n = ou_advance)
 end
 
 to_setup_les = RikFlow.TO_Setup(; 
@@ -166,7 +181,10 @@ psolver = create_psolver(setup)
 @info "Solving LF sim (online SGS)"
 (; u, t), outputs =
         solve_unsteady(; setup, 
-        ustart,
+        start = (; u = ustart),
+        force!,
+        force_cache,
+        params = rf_params(setup),
         method = TOMethod(; to_setup = to_setup_les), 
         tlims = (T(0), tsim),
         Δt,

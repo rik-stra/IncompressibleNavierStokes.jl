@@ -25,15 +25,15 @@ let # energy spectrum HF
     n = 512
     Δx = 1/n
     axis_x = range(0.0, 1., n + 1)
-    setup = Setup(;
+    setup = rf_setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = Float32(2e3),);
     state = (;u = u_start, t=0., temp=0);
             
-    scales = get_scale_numbers(u_start, setup)
-    fig = energy_spectrum_plot(state; setup, npoint = 100, sloperange = [2,16], v_lines = [scales.λ, scales.η, Δx], slopeoffset = 1.8, scale_numbers = scales, plot_wavelength = true)
+    scales = turbulence_statistics(u_start, setup, 1/setup.Re)
+    fig = rf_energy_spectrum_plot(state; setup, npoint = 100, sloperange = [2,16], v_lines = [scales.l_tay, scales.l_kol, Δx], slopeoffset = 1.8, scale_numbers = scales, plot_wavelength = true)
     display(fig)
-    v = [scales.λ, scales.η, 1/n]
+    v = [scales.l_tay, scales.l_kol, 1/n]
     v_labels = ["λ", "η", "Δx"]
     for i in 1:3
         text!(fig[1,1], v_labels[i], position = (v[i]*0.96,1e-12*1.2), align = (:left, :bottom), color = :black)
@@ -48,13 +48,13 @@ let ## energy spectrum coarse grained
     n = 64
     Δx = 1/n
     axis_x = range(0.0, 1., n + 1)
-    setup = Setup(;
+    setup = rf_setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = Float32(2e3),);
     state = (;u = u_start_lf, t=0., temp=0);
-    scales_LF = get_scale_numbers(u_start_lf, setup)
-    scales = (;ϵ = 3.7794485)
-    fig = energy_spectrum_plot(state; setup, npoint = 100, sloperange = [2,16], v_lines = [6.5,15.5,32], slopeoffset = 1.8, scale_numbers = scales)
+    scales_LF = turbulence_statistics(u_start_lf, setup, 1/setup.Re)
+    scales = (; diss = 3.7794485f0)
+    fig = rf_energy_spectrum_plot(state; setup, npoint = 100, sloperange = [2,16], v_lines = [6.5,15.5,32], slopeoffset = 1.8, scale_numbers = scales)
     v_labels = ["[0,6]", "[7,15]", "[16,32]"]
     v = [3, 11, 24]
     for i in 1:3
@@ -84,15 +84,15 @@ let
     n = 64
     Δx = 1/n
     axis_x = range(0.0, 1., n + 1)
-    setup = Setup(;
+    setup = rf_setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = Float32(2e3),);
     states = [ u_ref,
             u_LinReg,
             u_no_sgs,
             u_smag,];
-    #scales = get_scale_numbers(u_ref[1], setup)
-    scales = (;ϵ = 3.7794485) # taken from HF_ref
+    #scales = turbulence_statistics(u_ref[1], setup, 1/setup.Re)
+    scales = (; diss = 3.7794485f0) # taken from HF_ref
     fig = energy_spectra_comparison(
             states,
             ["Ref",  "TO LRS h=5", "No model", "Smagorinsky",];
@@ -282,41 +282,41 @@ begin
     n = 64
     Δx = 1/n
     axis_x = range(0.0, 1., n + 1)
-    setup = Setup(;
+    setup = rf_setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = Float32(2e3),);
     state = (;u = u_final, t=0., temp=0);        
     # save to vtk
-    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/LinReg1_r1_T100", fieldnames = (:velocity, :Qfield))
+    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/LinReg1_r1_T100", fieldnames = (:velocity, :qcrit))
 
     fname = @__DIR__()*"/output/paper_data_HIT/no_model/2data_no_sgs_tsim100.0.jld2"
     no_sgs_data = load(fname, "data_online");
     n = 64
     axis_x = range(0.0, 1., n + 1)
-    setup = Setup(;
+    setup = rf_setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
     state = (;u = no_sgs_data.fields[end].u, t=0., temp=0);
-    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/LF_no_model_T100", fieldnames = (:velocity, :Qfield))
+    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/LF_no_model_T100", fieldnames = (:velocity, :qcrit))
 
     smag = load(
             @__DIR__()*"/output/paper_data_HIT/smag/data_smag_0.071_dns512_les64_Re2000.0_tsim100.0.jld2",
             "data_online");
     n = 64
     axis_x = range(0.0, 1., n + 1)
-    setup = Setup(;
+    setup = rf_setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
     state = (;u = smag.fields[end].u, t=0., temp=0);
-    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/Smag_0071_T100", fieldnames = (:velocity, :Qfield))
+    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/Smag_0071_T100", fieldnames = (:velocity, :qcrit))
 
     fname = @__DIR__()*"/output/paper_data_HIT/data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
     train_field = load(fname, "data_train").data[1].u[end];
     n = 64
     axis_x = range(0.0, 1., n + 1)
-    setup = Setup(;
+    setup = rf_setup(;
             x = (axis_x, axis_x, axis_x),
             Re = Float32(2e3),);
     state = (;u = train_field, t=0., temp=0);
-    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/Train_T100", fieldnames = (:velocity, :Qfield))
+    save_vtk(state; setup, filename = @__DIR__()*"/figures/vtks/Train_T100", fieldnames = (:velocity, :qcrit))
 end

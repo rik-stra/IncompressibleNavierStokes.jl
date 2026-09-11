@@ -12,7 +12,6 @@ Infiltrator = "5903a43b-9cc3-4c30-8d17-598619ec4e9b"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
-NeuralClosure = "099dac27-d7f2-4047-93d5-0baee36b9c25"
 Observables = "510215fc-4207-5dde-b226-833fc4488ee2"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
@@ -22,7 +21,6 @@ cuTENSOR = "011b41b2-24ef-40a8-b3eb-fa098493e9e1"
 
 [sources]
 IncompressibleNavierStokes = {path = "../.."}
-NeuralClosure = {path = "../NeuralClosure"}
 
 [compat]
 CairoMakie = "0.12.15"

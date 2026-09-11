@@ -1,3 +1,10 @@
+# ⚠️ Scratch/demo scripts, updated mechanically to the IncompressibleNavierStokes >= 5 API at the
+# upstream merge. They are NOT verified to run, and they did not run before the merge either:
+# `OU_setup` takes `rng_seed`, never an `rng` object, so the `rng = Xoshiro(...)` below has always
+# been an unknown-keyword error. The OU forcing itself lives in `src/ouforcer.jl` and is exercised
+# by `lib/RikFlow/exp_square_HIT/tools/small_case.jl` and `lib/RikFlow/analysis/ou_replay.jl`;
+# those are the checks that matter for it (handoff item 22a, item 27).
+
 if false
     include("src/RikFlow.jl")
     include("../../src/IncompressibleNavierStokes.jl")
@@ -20,17 +27,14 @@ ispath(outdir) || mkpath(outdir)
 
 n = 128
 axis = range(0.0, 1., n + 1)
-setup = Setup(;
+setup = RikFlow.rf_setup(;
     x = (axis, axis, axis),
     Re = 2e3,
-    ou_bodyforce = (; T_L = 0.01, e_star = 0.1, k_f = sqrt(2), rng = Xoshiro(25)),
     ArrayType = ArrayType,
 );
-setup = Setup(;
+setup = RikFlow.rf_setup(;
     x = (axis, axis, axis),
     Re = 2e3,
-    bodyforce = (dim, x, y, z, t) -> (dim == 1) * 0.5 * sinpi(2*y),
-    issteadybodyforce = true,
     ArrayType = ArrayType,
 );
 
@@ -42,7 +46,8 @@ ustart = vectorfield(setup);
 
 state, outputs = solve_unsteady(;
     setup,
-    ustart = ustart,
+    start = (; u = ustart),
+    params = RikFlow.rf_params(setup),
     tlims = tlims,
     #Δt = Δt,
     processors = (
@@ -74,7 +79,7 @@ heatmap(Array(state.u[1])[ :,30, :])
 
 n = 512
 axis = range(0.0, 1., n + 1)
-setup = Setup(;
+setup = RikFlow.rf_setup(;
     x = (axis, axis),
     Re = 7e3,
     ou_bodyforce = (; T_L = 0.02, e_star = 0.01, k_f = 2*sqrt(2), rng = Xoshiro(25)),
@@ -90,7 +95,8 @@ ustart = vectorfield(setup);
 
 state, outputs = solve_unsteady(;
     setup,
-    ustart = ustart,
+    start = (; u = ustart),
+    params = RikFlow.rf_params(setup),
     tlims = tlims,
     Δt = Δt,
     processors = (
