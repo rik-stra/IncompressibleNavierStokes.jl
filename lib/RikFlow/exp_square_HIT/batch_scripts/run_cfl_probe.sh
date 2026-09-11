@@ -24,7 +24,7 @@
 # Reuse the existing depot rather than building a third one. The CPU target multiversions the
 # precompiled code across Zen2, Zen4 and Icelake-server, so one depot serves the a100 and h100
 # partitions without recompiling per architecture — which is what makes sharing it safe.
-export JULIA_DEPOT_PATH=$HOME/julia/julia_a1003:
+export JULIA_DEPOT_PATH=$HOME/julia/julia_h100:
 export JULIA_CPU_TARGET="generic;znver2,clone_all;znver4,clone_all;icelake-server,clone_all"
 
 # Find the probe from whichever directory the job started in, and say so if it is neither.
