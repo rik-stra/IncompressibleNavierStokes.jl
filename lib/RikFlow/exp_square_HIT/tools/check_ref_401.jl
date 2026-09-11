@@ -30,6 +30,11 @@ pre-`09954be1` convention was wrong, not merely different, and the masks stay as
 
 ## Usage
 
+    # the initial-condition half: no time stepping, no GPU, runnable today
+    julia --startup-file=no --project=lib/RikFlow \
+        lib/RikFlow/exp_square_HIT/tools/check_ref_401.jl ic
+
+    # the full 401-field comparison: needs the DNS re-run to have produced a reference
     RIKFLOW_ARCHIVE=<dir> RIKFLOW_NEW_REFERENCE=<file.jld2> \
         julia --startup-file=no --project=lib/RikFlow \
         lib/RikFlow/exp_square_HIT/tools/check_ref_401.jl
@@ -39,8 +44,10 @@ skipped on read. Expect a large resident set and a slow load; this is not a scri
 loop.
 =#
 
+using IncompressibleNavierStokes
 using JLD2
 using Printf
+using RikFlow
 using Statistics
 
 const REFERENCE_FILE = "data_train_dns512_les64_Re2000.0_freeze_10_tsim100.0.jld2"
@@ -206,6 +213,88 @@ function compare_qois(new, old)
     ok
 end
 
+"""
+    check_ic()
+
+The half of this check that needs **no time stepping**, and therefore no GPU and no re-run.
+
+🔑 The archive's first stored field is the filtered *initial condition*: `data_train.data[1].u[1]`
+at `t = 0`, which is `u_start_spinnup_512_...jld2` pushed through `FaceAverage` at compression 8.
+Reproducing it costs zero solver steps, so it can run on a workstation today — while the other 400
+fields need the 19.3 GPU-hour re-run.
+
+What it actually tests is not trivial. It exercises, at full 512³ → 64³ production scale:
+
+  - `FaceAverage`, whose `setup_les` destructuring changed in the merge;
+  - `rf_setup` at production size, including `Re` and `ArrayType`;
+  - `get_masks_and_partials`, `get_u_hat`, `curl` and `compute_QoI` — the whole `∂` path;
+  - and hence the #45/#46 prediction itself, on the real archived field rather than the 64³ toy.
+
+🔴 The QoI half is the sharp one. Gotcha #45 measured, on this very field, that restoring the
+pre-`09954be1` behaviour reproduces the archived `Z[16,32]` to 1.9e-7 while the current code gives
+**1.058e-3**. That number is a fixed, published property of the archive, so this is a check with a
+known answer: five QoIs at the Float32 round-off floor and `Z[16,32]` at ~1.06e-3. Anything else
+means the merge moved the QoI path.
+
+⚠️ Reads ~3 GB (a 1.63 GB initial condition plus the 1.39 GB archive, which JLD2 cannot partially
+load). Run it once, not in a loop.
+"""
+function check_ic()
+    oldpath = archive_path()
+    isfile(oldpath) || error("no archive at $oldpath; set RIKFLOW_ARCHIVE")
+    icpath = get(
+        ENV,
+        "RIKFLOW_SPINNUP",
+        joinpath(dirname(oldpath), "u_start_spinnup_512_Re2000.0_freeze_10_tsim4.0.jld2"),
+    )
+    isfile(icpath) || error("no spin-up initial condition at $icpath; set RIKFLOW_SPINNUP")
+
+    T = Float32
+    n_dns, n_les = 512, 64
+    Re = T(2000)
+    lims = ((T(0), T(1)), (T(0), T(1)), (T(0), T(1)))
+    qois = [["Z", 0, 6], ["E", 0, 6], ["Z", 7, 15], ["E", 7, 15], ["Z", 16, 32], ["E", 16, 32]]
+
+    @printf("loading spin-up IC %s (%.2f GB)\n", icpath, filesize(icpath) / 1024^3)
+    ustart = load(icpath, "u_start")
+    ustart isa Tuple && (ustart = stack(ustart))
+    ustart = Array{T}(ustart)
+    @printf("  ustart %s\n", string(size(ustart)))
+
+    dns = rf_setup(; x = ntuple(a -> LinRange(lims[a]..., n_dns + 1), 3), Re)
+    les = rf_setup(; x = ntuple(a -> LinRange(lims[a]..., n_les + 1), 3), Re)
+    comp = n_dns ÷ n_les
+
+    @info "filtering 512^3 -> 64^3"
+    phi = vectorfield(les)
+    FaceAverage()(phi, ustart, les, comp)
+    IncompressibleNavierStokes.apply_bc_u!(phi, T(0), les)
+
+    to_setup = RikFlow.TO_Setup(; qois, to_mode = :CREATE_REF, ArrayType = Array,
+        setup = les, nstep = 1)
+    u_hat = RikFlow.get_u_hat(phi, les, to_setup)
+    w_hat = RikFlow.get_w_hat_from_u_hat(u_hat, to_setup)
+    q = RikFlow.compute_QoI(u_hat, w_hat, to_setup, les)
+
+    old = load_reference(oldpath)
+    println()
+    ok, _, _ = compare_fields([phi], [old.fields[1]])
+
+    println("\nQoIs of the filtered initial condition, against the archive's first column:")
+    qok = compare_qois(reshape(Float64.(q), :, 1), reshape(Float64.(old.qoi_hist[:, 1]), :, 1))
+
+    println()
+    if ok && qok
+        println("IC CHECK PASSED — the merged filter and QoI path reproduce the archive at full")
+        println("  512^3 -> 64^3 scale, with the deviation confined to Z[16,32] as #45/#46 predict.")
+        println("  The remaining 400 fields need the DNS re-run; nothing else here does.")
+    else
+        println("IC CHECK FAILED — this needs no time stepping, so a failure here is the filter,")
+        println("  the masks or the QoI evaluation, not chaos and not round-off accumulation.")
+    end
+    ok && qok
+end
+
 function main()
     newpath = new_reference_path()
     isempty(newpath) && error(
@@ -237,5 +326,9 @@ function main()
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    exit(main() ? 0 : 1)
+    # `ic` runs only the initial-condition half, which needs no time stepping and so no GPU and
+    # no re-run. With no argument, the full 401-field comparison runs and needs
+    # RIKFLOW_NEW_REFERENCE.
+    mode = isempty(ARGS) ? "full" : ARGS[1]
+    exit((mode == "ic" ? check_ic() : main()) ? 0 : 1)
 end
