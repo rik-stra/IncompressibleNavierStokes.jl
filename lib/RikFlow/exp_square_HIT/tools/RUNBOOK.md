@@ -5,16 +5,23 @@ spread–skill) and RH-3 (lead-resolved rank histograms) need. Design and ration
 `meta_files/handoff_p2c_d6.md`; the numbers, once there are any, go in
 `lib/RikFlow/analysis/results.md`.
 
-**State at time of writing (2026-09-10):** everything is built, the offline suite is green at
-**1461 tests**, and `run_d6.jl` has **run end to end on CPU** — ordinal 1, 120 steps, `q0` matching
-the record to 6.0e-04, no `fields` in the output, and `ou_advance` changing the trajectory by 0.503
-max relative deviation. But **nothing has run on a GPU**, so no D6 number exists yet.
+**State at time of writing (2026-09-11):** everything is built, the offline suite is green at
+**1482 tests**, and **steps 1 and 2 have both run on GPU on Snellius.** The smoke passed; the
+validation run (ordinal 0, 5 members, 1308 steps) passed its gate **5/5** with `dQ` bit-identical
+to paper 2's archive across all 100 replayed columns. Two things came out of it:
 
-⚠️ **Julia 1.13 is the open risk.** Snellius' juliaup default is 1.13.0, and the *old* pinned stack
-failed there twice (CUDA's `libnvml.jl` `ccall` parsing; `MakieCore` on `Core.TypeName.mt`). The
-dependency surgery of 2026-09-10 removed both causes — CUDA is now 5.11.3 and Makie is out of the
-compute path entirely — but **nobody has yet run 1.13 successfully**, so expect step 1 to be where
-you find out. Fallback if it still fails: the archive's own environment is on disk at
+- ✅ **The GPU random stream is unchanged** under CUDA 5.6.1 → 5.11.3 — `claude_memory.md` gotcha
+  **#43**, which only this run could answer, is closed.
+- 🔴 **The validation's acceptance criterion had to be rewritten**, because the original one was
+  unreachable by construction and failed a correct run. Gotcha **#48**, and step 2 below.
+
+🔴 **What is left: `--array=1-5`, then `--array=1-180`. No scored run exists yet, so there is still
+no D6 number.**
+
+✅ **Julia 1.13 is no longer a risk.** Snellius' juliaup default is 1.13.0 and the *old* pinned
+stack failed there twice (CUDA's `libnvml.jl` `ccall` parsing; `MakieCore` on `Core.TypeName.mt`);
+the dependency surgery of 2026-09-10 removed both causes, and the stack has now run on 1.13 on the
+GPU nodes. Fallback if it ever regresses: the archive's own environment is on disk at
 `julia_code/IncompressibleNavierStokes.jl/lib/RikFlow/Manifest.toml` (Julia 1.11.2, CUDA 5.6.1) —
 copy it in and use `julia +1.11`, adding `+1.11` to `batch_scripts/run_d6.sh` too.
 
@@ -74,14 +81,25 @@ julia --project -e 'using Pkg; Pkg.instantiate()'
 ⚠️ The depot matches the partition: `julia_a1003` for `gpu_a100`, `julia_h100` for `gpu_h100`.
 `batch_scripts/run_d6.sh` sets the a100 one.
 
-### 1 · Smoke test — first, and it is cheap
+### 1 · Smoke test — first, and it is cheap  ✅ passed on GPU 2026-09-11
 
 ```bash
 julia --project tools/smoke_d6.jl
 ```
 
 400 steps, one member, ~0.01 SBU. Asserts completion, every expected output key, `q` with
-`nt + 1` columns, no NaN, the clamp count, and two things that matter more than the rest:
+`nt + 1` columns, no NaN, the clamp count, and two things that matter more than the rest.
+
+**What it gave:** `q0` to 6.0e-04, no `fields` in a 36 kB output, clamp **0** of 300,
+`ou_advance` moving the trajectory by **0.503** — the same value the CPU run gave.
+
+⚠️ **Do not take a cost figure from this step.** At `M = 1` the whole run is compilation: it
+printed 62.55 s/TU against a steady stepping rate of 3.56 s/TU, a factor 18 (`claude_memory.md`
+gotcha #44). `run_d6.jl` now refuses to quote a rate at `M = 1` for that reason. And note that even
+3.56 is not the planning number — it is stepping only, where **4.102 s/TU** (step 2, `M = 5`) is
+wall per member including setup and the write. Budget with 4.102.
+
+The asserts:
 
 - 🔴 **that no velocity fields were written to the output file.** `params_track` carries
   `savefreq = 100`; at 1308 steps that is ~13 snapshots × 3.3 MB per run, i.e. **80 GB** over 1800
@@ -99,7 +117,7 @@ julia --project tools/smoke_d6.jl
   forcing would be out of phase with its own initial condition, the spread–skill ratio would be
   biased *downward* — toward a false "over-confident" verdict — and nothing would say so.
 
-### 2 · Validation — one task, before the pilot
+### 2 · Validation — one task, before the pilot  ✅ passed on GPU 2026-09-11
 
 ```bash
 D6_MEMBERS=5 julia --project tools/run_d6.jl 0        # or sbatch with --array=0
@@ -108,27 +126,52 @@ D6_MEMBERS=5 julia --project tools/run_d6.jl 0        # or sbatch with --array=0
 Ordinal 0 is `fields[1]` of the **10 TU** tracked record — the initial condition every archived
 online run launched from (`paper_runs/online_sgs.jl:50`; line 52 has the 100 TU file commented out).
 So `n_k = 0`, `ou_advance = 0` (the identity point of the replay), and the model seeds are the
-archive's own `Xoshiro(236 + member)`. Its `q` must then reproduce the archived `LinReg1` replica's
-first 1309 columns.
-
-That is the correctness check on the whole D6 path at once — IC packaging, warm-up slicing,
-`ou_advance`, the driver, the output format — against a trajectory produced years earlier by
-different code, and it costs one task. `D6_MEMBERS=5` matches the archive's five replicas; the
+archive's own `Xoshiro(236 + member)`. `D6_MEMBERS=5` matches the archive's five replicas; the
 default 10 works too and `compare_validation` reports the extra members as having no counterpart.
 
 Verified before any GPU time: the validation package's `q_at_ic` is bit-identical to **all five**
 archived replicas' `q[:, 1]`, and its `dQ_warm` to the archive's literal `dQ[:, 1:100]`.
 
-🔴 **After the 2026-09-10 dependency update, this step carries one specific job: confirming the
-GPU random stream.** The CPU streams were checked and are unchanged — 25 chained
-`randn!(Xoshiro(333), ::Matrix{Float32})` draws are **byte-identical** on Julia 1.11.9, 1.12.7 and
-1.13.0, so the archive's Julia, the workstation's and Snellius' all agree — and
-`Distributions`/`PDMats` are pinned to the archive's versions so the `rand(rng, ::MvNormal)` path
-is unchanged too. But in production `z` is a `CuArray`, so `randn!` runs through CUDA.jl, which went
-**5.6.1 → 5.11.3**. If CUDA changed how it fills a device array from a host `Xoshiro`, the OU
-forcing would shift on GPU while every CPU check still passed. **Nothing else in the pipeline would
-notice.** This comparison is the only thing that does — which is why it comes before the pilot, not
-after. See `claude_memory.md` gotchas #42 and #43.
+🔴 **What this step can and cannot ask for — read this before reading its output.** It is tempting
+to state the check as *"its `q` must reproduce the archived replica's first 1309 columns"*. That was
+the original wording, it was the original acceptance criterion, and it is **wrong in two independent
+ways** (`claude_memory.md` gotcha **#48**):
+
+1. **The statistic saturates.** Two *archived* replicas of LinReg1 — same code, same inputs, only
+   the seed differs — are **1.00 apart** in per-QoI relative rms over those 1309 columns (range
+   0.65–1.55 over the 10 pairs), because two draws from one stationary law are √2 apart by
+   construction. A `1e-2` threshold on it is unreachable however correct the code is.
+2. **The run is not the same dynamical system as the archive.** Commit `09954be1` zeroes the
+   Nyquist wavenumber before `∂` is built, and `∂` feeds `get_vi_functions`, so the Z-QoI direction
+   vectors and hence `tau` changed with it (gotchas #45, #46). Every archived record predates it.
+
+So the criterion is now **two windows, and they test different things**:
+
+- 🔒 **GATE — the replayed warm-up, columns `1:nwarm`.** There the sampler emits `spinnup_data`
+  verbatim, so `dQ[:, 1:100]` must be **bit-identical** to the archive's own slice. That is exact,
+  and it is the sharpest single check in the D6 path: it proves the warm-up slice, the history
+  layout and the deployment wiring at once. With `dQ` pinned, `q`'s drift over the same window is
+  the solver, the OU forcing and `tau` alone — gated at `1e-2` of a sd.
+- **REPORTED, never gated** — the divergence column, and the full-window rms printed *beside*
+  `replica_spread`'s archive-to-archive yardstick so a saturated number is never shown bare.
+
+⚠️ **The window in which this step tests the *sampler* is only ~50 columns wide**: `1:100` are
+replayed and test nothing about it, and by ~150 the pair has decorrelated. That is a property of the
+design, not a defect, and it is why the pilot is scored against the HF reference instead.
+
+**What it gave, 2026-09-11:** gate **5/5**, `dQ` bit-identical on all 100 columns for all five
+members, max `q` deviation 3.9e-3 against the 1e-2 gate, divergence crossing 0.1 at column
+**104–105** — four to five steps after the first *sampled* `dQ`.
+
+✅ **And it closed the one question only it could answer: the GPU random stream.** The CPU streams
+were already known unchanged — 25 chained `randn!(Xoshiro(333), ::Matrix{Float32})` draws are
+byte-identical on Julia 1.11.9, 1.12.7 and 1.13.0 — and `Distributions`/`PDMats` are pinned so the
+`rand(rng, ::MvNormal)` path is unchanged too. But in production `z` is a `CuArray`, so `randn!`
+runs through CUDA.jl, which went **5.6.1 → 5.11.3**, and a shifted device stream would have moved
+the OU forcing while every CPU check still passed. It did not: at **column 2 — one step** — the five
+non-`Z[16,32]` QoIs agree with the archive to **≤ 5.6e-07 of a sd**, and the deviation then grows
+smoothly 5.6e-7 → 2.3e-5 → 3.4e-4 → 3.9e-3. Round-off amplification, not a different draw. Gotchas
+#42 and #43, the latter now closed.
 
 ### 3 · Pilot
 
@@ -146,18 +189,27 @@ scp $SNEL:$D/D6/'*.jld2' exp_square_HIT/output/D6/    # from lib/RikFlow on the 
 julia --startup-file=no --project=analysis analysis/score_d6.jl
 ```
 
-`compare_validation` runs first, deliberately: if the D6 path does not reproduce the archived
-trajectory from the archived inputs, nothing scored below it is worth reading.
+`compare_validation` runs first, deliberately: if the D6 path does not reproduce the archive over
+the window that **has** a right answer, nothing scored below it is worth reading. Read its **GATE**
+block as the verdict and its **REPORTED** block as description — step 2 says why, and the gate is
+already known to pass 5/5.
 
-⚠️ **Bit-identity is the ideal, not the acceptance criterion.** The archive was produced by an older
-RikFlow, and Float32 differences of a few ulp in the first steps amplify. What indicates a real
-defect is disagreement that is **large from step 1** — a wrong warm-up slice, a misphased chain, or
-a seed mismatch — rather than growth from round-off.
+⚠️ **A full-window rms near 1.0 is saturation, not a defect.** `replica_spread` prints the
+archive's own replica-to-replica value beside it for exactly that reason. Do not reintroduce a
+threshold on that statistic; **V32** in `test/test_d6_score.jl` exists to stop it coming back.
 
-Then read the pilot's wall time from the logs and 🔴 **write the measured s/TU into
-`meta_files/handoff_p2c_d6.md` §2**, replacing plan's two SBU figures, which differ by 10×
-(§13 P2 says 1 TU ≈ 0.01 SBU; P2c's cost model uses 0.1023 SBU/TU) and neither of which should be
-trusted. Confirm ~90 kB per member and that the files carry no `fields` key.
+📈 Figures for this comparison:
+`julia --startup-file=no --project=analysis analysis/plot_validation.jl` writes
+`analysis/figures/d6_validation_{trajectories,divergence}.png`. The divergence panel is the one the
+verdict is read from.
+
+✅ **The cost figure is already measured** — `meta_files/handoff_p2c_d6.md` §2 carries it:
+**4.102 s/TU** steady (13.4 s per member, 1308 steps), ≈59 s compilation once per array task,
+**≈193 s per task**, **≈9.65 GPU-hours** for all 180, of which **31% is compilation**. 99 kB per
+member. So from the pilot just **confirm** those, and 🔴 **look up this partition's
+SBU-per-GPU-hour rate** (`accinfo` / `budget-overview`): plan's two SBU figures differ by 10×
+(§13 P2 says 1 TU ≈ 0.01 SBU; P2c's cost model uses 0.1023 SBU/TU) and only that rate settles it.
+Confirm too that the files carry no `fields` key.
 
 K = 5 proves the pipeline and the index alignment, not a histogram — five instances against eleven
 bins.
@@ -171,12 +223,17 @@ sbatch batch_scripts/run_d6.sh
 ```
 
 **Nothing else changes.** The ordinal → `k` map is `select_ics`'s and is deterministic, so the
-pilot's five stay the same five and no result is renumbered. Roughly 9.5 GPU-hours on the current
-estimate — the pilot replaces that guess. About 160 MB comes back.
+pilot's five stay the same five and no result is renumbered. **≈9.65 GPU-hours and ≈178 MB back**,
+both measured rather than estimated (step 4).
 
 ---
 
-## Two traps worth repeating
+## Three traps worth repeating
+
+⚠️ **`d6_valid_ic1_*` is `k = 1`, not ordinal 1.** The validation package hardcodes `k = 1`
+(`build_validation_ic`), and output filenames carry `k`, not the ordinal. Scored ICs start at
+`k = 42`, so there is no collision — but when you `scp` the validation results back, the glob is
+`d6_valid_ic1_m*.jld2` and it has nothing to do with ordinal 1.
 
 ⚠️ **An empty `.out` means not started, not hung.** Julia buffers stdout when redirected; every
 progress line in `run_d6.jl` and `smoke_d6.jl` is followed by `flush(stdout)`. Two healthy jobs have

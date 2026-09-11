@@ -435,3 +435,103 @@ end
                                                                 leads = [[1], [2]])
     @test_throws DimensionMismatch D6Score.rank_histogram_by_lead(fc, tr; grid = [1])
 end
+
+# V32 -- the validation criterion. Added 2026-09-11, after the first real validation run.
+#
+# The criterion this replaces was `max` per-QoI relative rms over all 1309 columns `< 1e-2`, and it
+# reported a correct run as a failure. Two facts killed it, and both are asserted here so the
+# criterion cannot drift back:
+#
+#   * that statistic **saturates**. Two draws from the same stationary law are √2 sd apart on it,
+#     whatever the model does, and two archived LinReg1 replicas measured 1.00 (range 0.65-1.55).
+#     A `1e-2` threshold on it therefore demands near-bit-identity from a chaotic, stochastic,
+#     Float32 system.
+#   * its premise -- "every input is the archive's, so the output must be too" -- is false after
+#     commit `09954be1`: `∂` feeds `get_vi_functions`, so `tau` changed and the run is not the same
+#     dynamical system as the archive (`claude_memory.md` gotchas #45, #46).
+#
+# The power that remains is in the replayed warm-up window, and the exact part of it -- `dQ`
+# bit-identity -- was never asserted at all before this.
+@testitem "V32 the validation gate is the replayed warm-up, and dQ there is exact" default_imports = false setup = [D6Score] begin
+    using Test
+    using Random
+    using Statistics
+
+    nq, nwarm, n = 6, 100, 1309
+    rng = Xoshiro(20260911)
+    base = cumsum(randn(rng, nq, n); dims = 2) .+ 10 .* randn(rng, nq)
+    dqa = randn(rng, nq, n - 1)
+    sd = vec(std(base; dims = 2))
+
+    # 1. A perfect reproduction passes and never diverges.
+    v = D6Score.validation_verdict(copy(base), base, copy(dqa), dqa, nwarm)
+    @test v.ok && v.dq_identical
+    @test v.gate == 0
+    @test v.diverge_col === nothing
+    @test v.nwarm == nwarm && v.n == n
+
+    # 2. dQ inside the warm-up is emitted verbatim from `spinnup_data`, so a single perturbed
+    #    element there is a defect however small -- the gate on `q` cannot see it, and that is
+    #    exactly the case the old criterion had no assertion for.
+    dqbad = copy(dqa)
+    dqbad[3, 42] = nextfloat(dqbad[3, 42])
+    v = D6Score.validation_verdict(copy(base), base, dqbad, dqa, nwarm)
+    @test !v.dq_identical
+    @test !v.ok
+    @test v.gate == 0            # q is still perfect; only the exact half fired
+
+    # 3. A perturbation present from column 1 -- a wrong slice, a misphased chain, a seed mismatch --
+    #    fails the gate.
+    qbad = copy(base)
+    qbad[1, :] .+= 0.1 * sd[1]
+    v = D6Score.validation_verdict(qbad, base, copy(dqa), dqa, nwarm)
+    @test !v.ok
+    @test v.gate > 1e-2
+
+    # 4. The same perturbation confined to Z[16,32] passes: it is a different quantity today than
+    #    when the archive was written (gotcha #45) and must not be read as a defect.
+    qz = copy(base)
+    qz[D6Score.IZ1632, :] .+= 0.1 * sd[D6Score.IZ1632]
+    v = D6Score.validation_verdict(qz, base, copy(dqa), dqa, nwarm)
+    @test v.ok
+    @test v.rel_full[D6Score.IZ1632] > 1e-2      # measured and reported, just not gated
+
+    # 5. Agreement over the warm-up followed by separation -- the real run's shape -- passes the
+    #    gate and reports where it parted company, past `nwarm`.
+    qdiv = copy(base)
+    qdiv[:, (nwarm + 5):end] .+= 3 .* sd
+    v = D6Score.validation_verdict(qdiv, base, copy(dqa), dqa, nwarm)
+    @test v.ok
+    @test v.diverge_col == nwarm + 5
+    @test maximum(v.rel_full) > 1.0              # the full-window rms is saturated ...
+    @test maximum(v.rel_warm) == 0               # ... while the window with an answer is exact
+end
+
+@testitem "V32 the full-window rms saturates, which is why it is not the criterion" default_imports = false setup = [D6Score] begin
+    using Test
+    using Random
+    using Statistics
+
+    # Two independent draws from one stationary law: no model, no bug, nothing shared but the law.
+    # Their relative rms is √2 by construction, so any threshold below that on this statistic is
+    # unreachable no matter how correct the code is.
+    nq, n, rng = 6, 4000, Xoshiro(4242)
+    a = randn(rng, nq, n) .* [1.0, 7.0, 0.3, 120.0, 2.0, 0.05] .+ [3.0, -1, 0, 50, 2, 0]
+    b = randn(rng, nq, n) .* [1.0, 7.0, 0.3, 120.0, 2.0, 0.05] .+ [3.0, -1, 0, 50, 2, 0]
+    sd = vec(std(a; dims = 2))
+    rel = vec(sqrt.(mean(abs2, a .- b; dims = 2))) ./ sd
+    @test all(x -> isapprox(x, sqrt(2); rtol = 0.05), rel)
+    @test minimum(rel) > 1e-2 * 100              # the retired threshold is 4 orders of magnitude off
+
+    # `replica_spread` reports that scale from the archive itself, so the report never shows a
+    # saturated number without the yardstick beside it.
+    ens = (; q = [a, b, a .+ 0.0])
+    sp = D6Score.replica_spread(ens, n)
+    @test sp.npairs == 3
+    @test sp.lo == 0.0                            # the identical pair
+    @test isapprox(sp.hi, sqrt(2); rtol = 0.05)
+
+    # A single replica has no pair, and that must read as "no scale", not as agreement.
+    sp1 = D6Score.replica_spread((; q = [a]), n)
+    @test sp1.npairs == 0 && isnan(sp1.median)
+end

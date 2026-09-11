@@ -156,36 +156,122 @@ function load_members(dir = D6_DIR)
     return (; ks, M = Ms[1], files = byic)
 end
 
+"Relative deviation, in units of each QoI's own sd, allowed across the replayed warm-up window."
+const VALID_GATE_TOL = 1e-2
+
+"Relative deviation at which two trajectories are called separated, for reporting the split column."
+const VALID_DIVERGE_TOL = 1e-1
+
+"""
+    validation_verdict(qr, qa, dqr, dqa, nwarm; gate_tol, diverge_tol, iexcl)
+
+Decide whether one validation member reproduces its archived replica, and say where it stops.
+
+🔴 **Why this is not an rms over the whole run, which is what it used to be.** The previous criterion
+was `max` per-QoI relative rms over all 1309 columns `< 1e-2`. Measured 2026-09-11, that criterion
+is **unreachable by construction** and was reporting correct behaviour as failure:
+
+  * **Two archived replicas of LinReg1** -- same code, same inputs, different seed -- are
+    **1.08 sd apart** on that statistic. The run scored 0.98-2.5. So the aggregate saturates at the
+    seed-to-seed scale and has no resolution left past roughly column 200; asking it for `1e-2`
+    demands near-bit-identity from a chaotic, stochastic, Float32 system.
+  * The docstring's premise -- *every input is the archive's, so the output must be too* -- is
+    **false** after commit `09954be1` (2025-06-04, *"exclude derivative of nyqist freq"*). That
+    commit zeroes the Nyquist wavenumber before `∂` is built, and `∂` feeds `get_vi_functions`
+    (`RikFlow.jl:141`), so the Z-QoI direction vectors and hence `tau` changed with it. The run is
+    **not the same dynamical system** as the archive, whatever inputs it is given
+    (`claude_memory.md` gotchas #45, #46).
+
+So the check is moved to where it has power. Two windows, and they test different things:
+
+ 1. **The warm-up, columns `1:nwarm`.** Here the sampler emits `spinnup_data` -- the archive's own
+    `dQ[:, 1:nwarm]` -- verbatim, so `dqr` must be **bit-identical** to `dqa` there. That is exact,
+    and it is the sharpest single check in the whole D6 path: it proves the IC package's warm-up
+    slice, the history layout and the deployment wiring at once. It was never asserted before.
+    With `dQ` pinned, any drift in `q` over the same window is the solver and the forcing alone --
+    IC alignment, `ou_advance` at its identity point, `tau`. Measured 3.9e-3 sd at column 100
+    against `gate_tol = 1e-2`; a wrong slice, a misphased chain or a seed mismatch is `O(1)` here.
+ 2. **Past the warm-up** the sampler runs, the trajectories separate, and separation is *expected*.
+    Reported, never gated: the first column at which the deviation crosses `diverge_tol`, and the
+    full-window rms **beside the archive's own replica-to-replica rms**, which is the scale at which
+    that statistic saturates.
+
+⚠️ The model-testing window is therefore narrow, and saying so is part of the result: columns
+`1:nwarm` are replayed and test nothing about the sampler, and by ~50 columns past `nwarm` the pair
+has decorrelated. Reproducing the archive's *trajectory* is not something this design can ask for.
+
+`iexcl` drops `Z[16,32]` from the verdict: it is a different quantity today than when the archive
+was written (gotcha #45), off by ~1.06e-3 relative on an identical velocity field, so including it
+would report a known convention change as a defect. It is still measured and printed.
+
+Returns `(; ok, dq_identical, gate, diverge_col, rel_full, rel_warm, nwarm, n)`.
+"""
+function validation_verdict(qr::AbstractMatrix, qa::AbstractMatrix,
+                            dqr::AbstractMatrix, dqa::AbstractMatrix, nwarm::Integer;
+                            gate_tol::Real = VALID_GATE_TOL,
+                            diverge_tol::Real = VALID_DIVERGE_TOL, iexcl::Integer = IZ1632)
+    n = min(size(qr, 2), size(qa, 2))
+    nw = min(Int(nwarm), n)
+    sd = vec(std(view(qa, :, 1:n); dims = 2))
+    dev(c) = abs.(view(qr, :, c) .- view(qa, :, c)) ./ sd
+    keep = [i for i in axes(qr, 1) if i != iexcl]
+
+    # The exact half: over the replayed window the sampler is emitting stored numbers, so anything
+    # but bit-identity means the warm-up slice or the history layout is wrong.
+    nd = min(size(dqr, 2), size(dqa, 2), nw)
+    dq_identical = nd > 0 && view(dqr, :, 1:nd) == view(dqa, :, 1:nd)
+
+    rel_warm = vec(sqrt.(mean(abs2, view(qr, :, 1:nw) .- view(qa, :, 1:nw); dims = 2))) ./ sd
+    rel_full = vec(sqrt.(mean(abs2, view(qr, :, 1:n) .- view(qa, :, 1:n); dims = 2))) ./ sd
+    gate = maximum(maximum(dev(c)[keep]) for c in 1:nw)
+    dcol = findfirst(c -> maximum(dev(c)[keep]) > diverge_tol, 1:n)
+
+    return (; ok = dq_identical && gate <= gate_tol, dq_identical, gate,
+            diverge_col = dcol, rel_full, rel_warm, nwarm = nw, n)
+end
+
+"""
+    replica_spread(ens, n)
+
+Relative rms between distinct archived replicas of one configuration over their first `n` columns,
+per QoI, as `(; median, lo, hi, npairs)`.
+
+🔑 **This is the number that makes the validation report readable.** The replicas differ only in
+their model seed, so this is what "as different as two correct runs of the same thing" measures on
+the same statistic -- 1.08 sd on LinReg1. Printing the run-vs-archive rms without it invites reading
+a saturated statistic as a defect, which is exactly what happened on 2026-09-11.
+"""
+function replica_spread(ens, n::Integer)
+    R = length(ens.q)
+    vals = Float64[]
+    npairs = 0
+    for i in 1:R, j in (i + 1):R
+        a, b = Float64.(ens.q[i]), Float64.(ens.q[j])
+        m = min(n, size(a, 2), size(b, 2))
+        sd = vec(std(view(a, :, 1:m); dims = 2))
+        append!(vals, vec(sqrt.(mean(abs2, view(a, :, 1:m) .- view(b, :, 1:m); dims = 2))) ./ sd)
+        npairs += 1
+    end
+    isempty(vals) && return (; median = NaN, lo = NaN, hi = NaN, npairs = 0)
+    s = sort(vals)
+    med = isodd(length(s)) ? s[(length(s) + 1) ÷ 2] :
+          (s[length(s) ÷ 2] + s[length(s) ÷ 2 + 1]) / 2
+    return (; median = med, lo = first(s), hi = last(s), npairs)
+end
+
 """
     compare_validation(; dir = D6_DIR, io = stdout)
 
-Check the validation run (ordinal 0) against the archived online ensemble it should reproduce.
+Check the validation run (ordinal 0) against the archived online ensemble it launched from.
 
-🔑 **What makes this a correctness check and not a plausibility argument.** The validation IC is
-`fields[1]` of the 10 TU tracked record -- the archived runs' own initial condition, so `n_k = 0`,
-`ou_advance = 0` and the OU chain starts at zero, exactly as the archived driver leaves it -- and
-`run_d6.jl` gives its members the archive's own model seeds, `Xoshiro(236 + member)`. Every input is
-therefore the archive's, so the output must be too: member `i`'s `q` against archived replica `i`'s
-first `size(q, 2)` columns. Agreement there exercises the whole D6 path at once: IC packaging, the
-warm-up slice, `ou_advance` at its identity point, the driver, and the output format -- against a
-trajectory produced years earlier by different code.
+The validation IC is `fields[1]` of the 10 TU tracked record -- the initial condition every archived
+online run started from (`paper_runs/online_sgs.jl:50`), so `n_k = 0`, `ou_advance = 0` is the
+identity point of the replay, and `run_d6.jl` gives its members the archive's own model seeds
+`Xoshiro(236 + member)`. What that buys, and what it does not, is `validation_verdict`'s docstring;
+the short version is that the **replayed warm-up window** is the part with a right answer, and the
+free-running remainder is reported rather than gated.
 
-Reported per replica **and per QoI** as a relative rms in units of each QoI's own standard
-deviation, plus whether the columns are bit-identical.
-
-⚠️ Bit-identity is the ideal but not the acceptance criterion: the archive was produced by an older
-RikFlow, and Float32 differences of a few ulp in the first steps amplify. What would indicate a real
-defect is disagreement that is *large from step 1* -- a wrong warm-up slice, a misphased chain, or a
-seed mismatch -- rather than growth from round-off.
-
-🔴 **`Z[16,32]` is expected to disagree, and by a known amount.** Commit `09954be1` (2025-06-04,
-*"exclude derivative of nyqist freq"*) changed how it is computed, and every archived record
-predates it: the masks keep the Nyquist shell in the `[16,32]` band while `∂` no longer does, so
-today's `Z[16,32]` is a **different quantity**, off by ~1.06e-3 on an identical velocity field
-(`claude_memory.md` gotcha #45, reproduced both ways). `E[16,32]` is unaffected because it never
-goes through `curl`. **So read the other five QoIs as the reproduction test and this one as
-expected-to-differ** -- it is not evidence of a D6 defect, and a `Z[16,32]` offset of that size is
-the sign that everything is working as understood.
+`Z[16,32]` is excluded from the verdict and flagged wherever it appears (gotcha #45).
 """
 function compare_validation(; dir = D6_DIR, io = stdout)
     isdir(dir) || (println(io, "no run directory at $dir"); return nothing)
@@ -205,7 +291,6 @@ function compare_validation(; dir = D6_DIR, io = stdout)
 
     println(io, "\nValidation: ordinal 0 against the archived LinReg1 ensemble")
     @printf(io, "  archive: %s root, %d replicas\n", string(arch.root), length(arch.q))
-    @printf(io, "  %8s %10s %12s   %s\n", "member", "identical", "max ex Z16", "per-QoI rel rms")
     rows = NamedTuple[]
     for (member, path) in files
         d = load(path)
@@ -213,33 +298,50 @@ function compare_validation(; dir = D6_DIR, io = stdout)
             error("$path is not marked as a validation run; the glob picked up a scored file")
         member <= length(arch.q) ||
             (println(io, "  member $member has no archived replica"); continue)
-        a = Float64.(d["q"])
-        b = Float64.(arch.q[member])
-        n = min(size(a, 2), size(b, 2))
-        sd = vec(std(view(b, :, 1:n); dims = 2))
-        e = vec(sqrt.(mean(abs2, view(a, :, 1:n) .- view(b, :, 1:n); dims = 2))) ./ sd
-        ident = view(d["q"], :, 1:n) == view(arch.q[member], :, 1:n)
-        # 🔴 The verdict excludes Z[16,32] (index 5): it is a *different quantity* today than when
-        # the archive was written (gotcha #45), so taking the max over all six QoIs would report a
-        # known convention change as a reproduction failure. It is still printed, and flagged.
-        worst5 = maximum(e[i] for i in eachindex(e) if i != IZ1632)
-        @printf(io, "  %8d %10s %12.3e   %s%s\n", member, ident, worst5,
-                join((@sprintf("%8.1e", x) for x in e), " "),
-                e[IZ1632] > 1e-4 ?
-                    @sprintf("   [Z16-32 %.1e — gotcha #45, expected]", e[IZ1632]) : "")
-        push!(rows, (; member, identical = ident, rel = e, nsteps = n, seed = d["seed"]))
+        v = validation_verdict(Float64.(d["q"]), Float64.(arch.q[member]),
+                               Float64.(d["dQ"]), Float64.(arch.dQ[member]), d["nwarm"])
+        push!(rows, (; member, seed = d["seed"], v...))
     end
-    if !isempty(rows)
-        worst = maximum(maximum(r.rel[i] for i in eachindex(r.rel) if i != IZ1632)
-                        for r in rows)
-        nid = count(r -> r.identical, rows)
-        @printf(io, "  => %d of %d bit-identical; worst relative rms %.3e over %d columns\n",
-                nid, length(rows), worst, rows[1].nsteps)
-        println(io, worst < 1e-2 ?
-                "  ✅ the D6 path reproduces the archived trajectory from the archived inputs." :
-                "  🔴 disagreement is large. Check the warm-up slice, ou_advance and the seed " *
-                "before trusting\n     anything scored -- see `compare_validation`'s docstring.")
+    isempty(rows) && return rows
+
+    nw, n = rows[1].nwarm, rows[1].n
+    println(io, "\n  GATE -- the replayed warm-up, columns 1:$nw. `dQ` is the archive's own slice")
+    println(io, "  emitted verbatim, so it must be bit-identical; `q` then moves under the solver,")
+    println(io, "  the OU forcing and `tau` alone.")
+    @printf(io, "  %8s %10s %14s %14s   %s\n",
+            "member", "dQ ident", "max dev ex Z16", "verdict", "per-QoI rel rms over warm-up")
+    for r in rows
+        @printf(io, "  %8d %10s %14.3e %14s   %s\n", r.member, r.dq_identical, r.gate,
+                r.ok ? "pass" : "FAIL",
+                join((@sprintf("%8.1e", x) for x in r.rel_warm), " "))
     end
+
+    println(io, "\n  REPORTED, not gated -- past the warm-up the sampler runs and the pair separates.")
+    sp = replica_spread(arch, n)
+    @printf(io, "  %8s %14s %14s   %s\n",
+            "member", "diverges at", "rel rms 1:$n", "per-QoI rel rms over the full window")
+    for r in rows
+        @printf(io, "  %8d %14s %14.3e   %s%s\n", r.member,
+                r.diverge_col === nothing ? "never" : string(r.diverge_col),
+                maximum(r.rel_full[i] for i in eachindex(r.rel_full) if i != IZ1632),
+                join((@sprintf("%8.1e", x) for x in r.rel_full), " "),
+                r.rel_full[IZ1632] > 1e-4 ?
+                    @sprintf("   [Z16-32 %.1e — gotcha #45, expected]", r.rel_full[IZ1632]) : "")
+    end
+    @printf(io, "  scale: two ARCHIVED replicas of this configuration are %.2f apart on the same\n",
+            sp.median)
+    @printf(io, "         statistic (range %.2f-%.2f over %d pairs), so a full-window rms near that\n",
+            sp.lo, sp.hi, sp.npairs)
+    println(io, "         value is saturation, not a defect. Only the gate above is a verdict.")
+
+    npass = count(r -> r.ok, rows)
+    @printf(io, "\n  => %d of %d members pass the warm-up gate (tol %.0e)\n",
+            npass, length(rows), VALID_GATE_TOL)
+    println(io, npass == length(rows) ?
+            "  ✅ IC packaging, warm-up slice, history layout, ou_advance and the solver path all\n" *
+            "     reproduce the archive over the window that has a right answer." :
+            "  🔴 the gate failed. Check the warm-up slice, ou_advance and the seed before " *
+            "trusting\n     anything scored -- see `validation_verdict`'s docstring.")
     return rows
 end
 
