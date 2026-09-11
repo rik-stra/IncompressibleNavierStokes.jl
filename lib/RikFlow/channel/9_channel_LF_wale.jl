@@ -30,20 +30,24 @@ nx_les = 64
 ny_les = 64
 nz_les = 32
 ArrayType = CuArray
+# Steady streamwise driving force for the channel. Was `Setup(; bodyforce, issteadybodyforce)`;
+# upstream removed both, along with `applybodyforce!`, so it is a force cache now.
+# ⚠️ The trailing `t` argument is gone: upstream builds the field with `velocityfield`, whose
+# `ufunc` takes `(dim, x...)` only. A steady force never used it.
+channel_bodyforce(dim, x, y, z) = 1 * (dim == 1)
+
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re = 180f,
-    bodyforce = (dim, x, y, z, t) -> 1 * (dim == 1),
-    issteadybodyforce = true,
     backend = CUDABackend(),
     ArrayType = ArrayType,
 )
 
-setup = Setup(;
+setup = rf_setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1), # tanh_grid(ylims..., ny + 1),
@@ -67,9 +71,15 @@ ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     # setup,
-    setup = (; setup..., closure_model = IncompressibleNavierStokes.wale_closure),
-    θ = T(c), 
-    ustart,
+    setup = setup,
+    # Closure moved from setup.closure_model + theta into the right-hand side.
+    # Upstream's kernels, not this fork's (map section 9, Q2).
+    force! = rf_eddyvisc_navierstokes!,
+    force_cache = rf_eddyvisc_force_cache(setup; model = WALE(T(c)), bodyforce = channel_bodyforce),
+    # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+    method = RKMethods.RK44(; T = eltype(ustart)),
+    start = (; u = ustart),
+    params = rf_params(setup),
     tlims = (0f, tsim),
     Δt,
     processors = (;

@@ -1,3 +1,9 @@
+# Steady streamwise driving force for the channel. Was `Setup(; bodyforce, issteadybodyforce)`;
+# upstream removed both, along with `applybodyforce!`, so it is a force cache now.
+# ⚠️ The trailing `t` argument is gone: upstream builds the field with `velocityfield`, whose
+# `ufunc` takes `(dim, x...)` only. A steady force never used it.
+channel_bodyforce(dim, x, y, z) = 1 * (dim == 1)
+
 using JLD2
 using RikFlow
 using IncompressibleNavierStokes
@@ -24,20 +30,18 @@ zlims = 0f, 4f / 3f * pi
 backend = CUDABackend()
 
 
-dns = Setup(;
-    boundary_conditions = (
+dns = rf_setup(;
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     x = (
         range(xlims..., nx + 1),
         range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
         range(zlims..., nz + 1)
     ),
     Re,
-    bodyforce = (dim, x, y, z, t) -> 1 * (dim == 1),
-    issteadybodyforce = true,
     backend,
     ArrayType = CuArray,
     );
@@ -75,8 +79,15 @@ ustart = velocityfield(dns, ustartfunc; psolver);
 
 (; u, t), outputs =
         solve_unsteady(;
+        # Steady driving force, formerly Setup(; bodyforce, issteadybodyforce).
+        # Without it the channel is unforced and decays to rest, silently.
+        force! = rf_bodyforce_navierstokes!,
+        force_cache = rf_steady_force_cache(dns, channel_bodyforce),
         setup = dns, 
-        ustart, 
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(dns), 
         tlims = (T(0), tburn),
         docopy = false,
         Δt,

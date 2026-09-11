@@ -44,11 +44,11 @@ qois = [["Z",0,1],["E", 0, 1],["Z",2,3],["E", 2, 3],["Z",4,5],["E", 4, 5]];
 
 ArrayType = CuArray
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re,
     backend = CUDABackend(),
     ArrayType,
@@ -71,7 +71,7 @@ out_dir = TO_folder*"/$(name)/"
 
 for i in 1:n_replicas
 
-    setup = Setup(;
+    setup = rf_setup(;
         x = (
             range(xlims..., nx_les + 1),
             range(ylims..., ny_les + 1),
@@ -107,7 +107,8 @@ for i in 1:n_replicas
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
         setup,
-        ustart,
+        start = (; u = ustart),
+        params = rf_params(to_setup_les),
         docopy = true,
         method = TOMethod(; to_setup = to_setup_les),
         tlims = (0f, tsim),

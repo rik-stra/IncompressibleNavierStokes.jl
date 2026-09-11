@@ -33,22 +33,26 @@ seeds = (;
 
 # get initial condition
 ustart = ArrayType(load(hf_file)["f"].data[1].u[1]);
+# Steady streamwise driving force for the channel. Was `Setup(; bodyforce, issteadybodyforce)`;
+# upstream removed both, along with `applybodyforce!`, so it is a force cache now.
+# ⚠️ The trailing `t` argument is gone: upstream builds the field with `velocityfield`, whose
+# `ufunc` takes `(dim, x...)` only. A steady force never used it.
+channel_bodyforce(dim, x, y, z) = 1 * (dim == 1)
 
-setup = Setup(;
-        boundary_conditions = (
+
+setup = rf_setup(;
+        boundary_conditions = (; u = (
             (PeriodicBC(), PeriodicBC()),
             (DirichletBC(), DirichletBC()),
             (PeriodicBC(), PeriodicBC()),
-        ),
+        )),
         x = (
             range(xlims..., nx + 1),
             range(ylims..., ny + 1),
             range(zlims..., nz + 1)
         ),
         Re,
-        bodyforce = (dim, x, y, z, t) -> 1 * (dim == 1),
-        issteadybodyforce = true,
-        backend,
+                backend,
         ArrayType,
     );
 
@@ -57,9 +61,15 @@ psolver = psolver_transform(setup);
 
 @info "Solving LF sim (SMAG)"
 (; u, t), outputs = solve_unsteady(; 
-        setup = (;setup..., closure_model = IncompressibleNavierStokes.smagorinsky_closure),
-        θ = T(0.071), 
-        ustart,
+        setup = setup,
+        # Closure moved from setup.closure_model + theta into the right-hand side.
+        # Upstream's kernels, not this fork's (map section 9, Q2).
+        force! = rf_eddyvisc_navierstokes!,
+        force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(0.071)), bodyforce = channel_bodyforce),
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(setup),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,
@@ -79,9 +89,15 @@ close(io)
 
 @info "Solving LF sim (WALE)"
 (; u, t), outputs = solve_unsteady(; 
-        setup = (;setup..., closure_model = IncompressibleNavierStokes.wale_closure),
-        θ = T(0.53), 
-        ustart,
+        setup = setup,
+        # Closure moved from setup.closure_model + theta into the right-hand side.
+        # Upstream's kernels, not this fork's (map section 9, Q2).
+        force! = rf_eddyvisc_navierstokes!,
+        force_cache = rf_eddyvisc_force_cache(setup; model = WALE(T(0.53)), bodyforce = channel_bodyforce),
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(setup),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,
@@ -101,9 +117,16 @@ close(io)
 
 
 @info "Solving LF sim (no_model)"
-(; u, t), outputs = solve_unsteady(; 
+(; u, t), outputs = solve_unsteady(;
+        # Steady driving force, formerly Setup(; bodyforce, issteadybodyforce).
+        # Without it the channel is unforced and decays to rest, silently.
+        force! = rf_bodyforce_navierstokes!,
+        force_cache = rf_steady_force_cache(setup, channel_bodyforce), 
         setup, 
-        ustart,
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(setup),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,
@@ -142,9 +165,14 @@ to_setup_les = RikFlow.TO_Setup(;
             mirror_y = true,);
 
 @info "Solving LF sim (track ref)"
-(; u, t), outputs = solve_unsteady(; 
+(; u, t), outputs = solve_unsteady(;
+        # Steady driving force, formerly Setup(; bodyforce, issteadybodyforce).
+        # Without it the channel is unforced and decays to rest, silently.
+        force! = rf_bodyforce_navierstokes!,
+        force_cache = rf_steady_force_cache(setup, channel_bodyforce), 
         setup, 
-        ustart,
+        start = (; u = ustart),
+        params = rf_params(setup),
         method = TOMethod(; to_setup = to_setup_les),
         docopy = true,
         tlims = (T(0), tsim),
@@ -195,9 +223,14 @@ to_setup_les = RikFlow.TO_Setup(;
         mirror_y = true,);
 
 @info "Solving LF sim (TO online)"
-(; u, t), outputs = solve_unsteady(; 
+(; u, t), outputs = solve_unsteady(;
+        # Steady driving force, formerly Setup(; bodyforce, issteadybodyforce).
+        # Without it the channel is unforced and decays to rest, silently.
+        force! = rf_bodyforce_navierstokes!,
+        force_cache = rf_steady_force_cache(setup, channel_bodyforce), 
         setup, 
-        ustart,
+        start = (; u = ustart),
+        params = rf_params(setup),
         method = TOMethod(; to_setup = to_setup_les),
         docopy = true,
         tlims = (T(0), tsim),

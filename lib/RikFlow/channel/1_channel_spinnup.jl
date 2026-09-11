@@ -43,19 +43,23 @@ nz = 32
 
 @info "Grid size: $(nx) x $(ny) x $(nz)"
 
+# Steady streamwise driving force for the channel. Was `Setup(; bodyforce, issteadybodyforce)`;
+# upstream removed both, along with `applybodyforce!`, so it is a force cache now.
+# ⚠️ The trailing `t` argument is gone: upstream builds the field with `velocityfield`, whose
+# `ufunc` takes `(dim, x...)` only. A steady force never used it.
+channel_bodyforce(dim, x, y, z) = 1 * (dim == 1)
+
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re = 180f,
-    bodyforce = (dim, x, y, z, t) -> 1 * (dim == 1),
-    issteadybodyforce = true,
     backend = CUDABackend(),
 )
 
-setup = Setup(;
+setup = rf_setup(;
     x = (
         range(xlims..., nx + 1),
         range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
@@ -92,9 +96,16 @@ ArrayType = CuArray
 
 @info "Solving DNS"
 (; u, t), outputs = solve_unsteady(;
+    # Steady driving force, formerly Setup(; bodyforce, issteadybodyforce).
+    # Without it the channel is unforced and decays to rest, silently.
+    force! = rf_bodyforce_navierstokes!,
+    force_cache = rf_steady_force_cache(setup, channel_bodyforce),
     setup,
     Δt = 0.0005f,
-    ustart,
+    # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+    method = RKMethods.RK44(; T = eltype(ustart)),
+    start = (; u = ustart),
+    params = rf_params(setup),
     docopy = false,
     tlims = (0f, tsim),
     

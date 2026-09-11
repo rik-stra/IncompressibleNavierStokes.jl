@@ -28,7 +28,7 @@ backend = CUDABackend()
 
 ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou_spin )
 
-dns = Setup(;
+dns = rf_setup(;
         x = ntuple(α -> LinRange(lims[α]..., n_dns + 1), 3),
         Re,
         ou_bodyforce,
@@ -49,7 +49,10 @@ ustart = vectorfield(dns);
 (; u, t), outputs =
         solve_unsteady(;
         setup = dns, 
-        ustart, 
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(dns), 
         tlims = (T(0), tburn),
         docopy = false,
         Δt,

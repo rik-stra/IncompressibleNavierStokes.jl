@@ -29,17 +29,17 @@ nz_les = 64
 
 
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re,
     backend = CUDABackend(),
 )
 
 
-les_setup = Setup(;
+les_setup = rf_setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1),
@@ -77,7 +77,10 @@ to_setup_les =
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup = les_setup,
-    ustart,
+    # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+    method = RKMethods.RK44(; T = eltype(ustart)),
+    start = (; u = ustart),
+    params = rf_params(les_setup),
     docopy = false,
     tlims = (0f, tsim),
     Δt,

@@ -30,15 +30,15 @@ nz_les = 64
 
 
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re,
     backend = CUDABackend(),
 )
-les_setup = Setup(;
+les_setup = rf_setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1),
@@ -76,9 +76,15 @@ for c_w in c_vals
     @info "Solving LES"
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
-        setup = (; les_setup..., closure_model = IncompressibleNavierStokes.wale_closure),
-        θ = T(c_w),
-        ustart,
+        setup = les_setup,
+        # Closure moved from setup.closure_model + theta into the right-hand side.
+        # Upstream's kernels, not this fork's (map section 9, Q2).
+        force! = rf_eddyvisc_navierstokes!,
+        force_cache = rf_eddyvisc_force_cache(les_setup; model = WALE(T(c_w))),
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(les_setup),
         docopy = true,
         tlims = (0f, tsim),
         Δt,

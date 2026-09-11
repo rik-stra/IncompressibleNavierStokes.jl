@@ -26,16 +26,16 @@ nz_les = 64
 Re = 1_600f
 
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re,
     backend = CUDABackend(),
 )
 
-setup = Setup(;
+setup = rf_setup(;
     x = (
         range(xlims..., nx + 1),
         range(ylims..., ny + 1),
@@ -44,7 +44,7 @@ setup = Setup(;
     kwargs...,
 );
 
-les_setup = Setup(;
+les_setup = rf_setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1),

@@ -36,7 +36,7 @@ end
 lims = ( (T(0) , T(1)) , (T(0) , T(1)), (T(0),T(1)) )
 ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou )
 
-setup = Setup(;
+setup = rf_setup(;
         x = ntuple(α -> LinRange(lims[α]..., nles + 1), 3),
         Re=Re,
         ArrayType,
@@ -49,9 +49,15 @@ psolver = psolver_spectral(setup);
 
 @info "Solving LF sim (SMAG)"
 (; u, t), outputs = solve_unsteady(; 
-        setup = (;setup..., closure_model = IncompressibleNavierStokes.smagorinsky_closure_natural),
-        θ = T(0.071), 
-        ustart,
+        setup = setup,
+        # Closure moved from setup.closure_model + theta into the right-hand side.
+        # Upstream's kernels, not this fork's (map section 9, Q2).
+        force! = rf_eddyvisc_navierstokes!,
+        force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(0.071))),
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(setup),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,
@@ -71,9 +77,15 @@ close(io)
 
 @info "Solving LF sim (SMAG)"
 (; u, t), outputs = solve_unsteady(; 
-        setup = (;setup..., closure_model = IncompressibleNavierStokes.smagorinsky_closure),
-        θ = T(0.071), 
-        ustart,
+        setup = setup,
+        # Closure moved from setup.closure_model + theta into the right-hand side.
+        # Upstream's kernels, not this fork's (map section 9, Q2).
+        force! = rf_eddyvisc_navierstokes!,
+        force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(0.071))),
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(setup),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,
@@ -94,7 +106,10 @@ close(io)
 @info "Solving LF sim (no_model)"
 (; u, t), outputs = solve_unsteady(; 
         setup, 
-        ustart,
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(setup),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,
@@ -132,7 +147,8 @@ to_setup_les = RikFlow.TO_Setup(;
 @info "Solving LF sim (track ref)"
 (; u, t), outputs = solve_unsteady(; 
         setup, 
-        ustart,
+        start = (; u = ustart),
+        params = rf_params(setup),
         method = TOMethod(; to_setup = to_setup_les),
         docopy = true,
         tlims = (T(0), tsim),
@@ -182,7 +198,8 @@ to_setup_les = RikFlow.TO_Setup(;
 @info "Solving LF sim (TO online)"
 (; u, t), outputs = solve_unsteady(; 
         setup, 
-        ustart,
+        start = (; u = ustart),
+        params = rf_params(setup),
         method = TOMethod(; to_setup = to_setup_les),
         docopy = true,
         tlims = (T(0), tsim),

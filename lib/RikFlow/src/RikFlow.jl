@@ -108,6 +108,93 @@ function rf_smag_force_cache(setup; c_s, ou_bodyforce = nothing)
 end
 
 """
+    rf_steady_force_cache(setup, f)
+
+Force cache holding a precomputed steady body force, for use with
+[`rf_bodyforce_navierstokes!`](@ref).
+
+Replaces `Setup(; bodyforce = f, issteadybodyforce = true)`, which upstream removed along with
+`applybodyforce!`. The channel cases use this for their constant streamwise driving force.
+
+⚠️ `f` takes `(dim, x...)` and **not** a trailing `t`: upstream builds the field with
+`velocityfield`, whose `ufunc` has no time argument. A steady force does not need one, but the old
+signature did take it, so existing closures must drop the final parameter.
+
+`doproject = false` matches what `applybodyforce!` did — the force is a right-hand-side term, not
+an initial condition, so it is not made divergence free.
+"""
+rf_steady_force_cache(setup, f) =
+    (; bodyforce = IncompressibleNavierStokes.velocityfield(setup, f; doproject = false))
+
+"""
+    rf_bodyforce_navierstokes!(force, state, t; setup, cache, viscosity)
+
+Navier-Stokes plus whatever precomputed body force sits in `cache.bodyforce`.
+
+Identical in effect to [`ou_navierstokes!`](@ref) — both add `cache.bodyforce` — and kept separate
+only so call sites say which kind of forcing they mean. The difference is not in this function but
+in the cache: an OU cache also carries `ou_setup`, which is what makes `solve_unsteady` advance the
+chain once per step. A steady cache has no `ou_setup`, so nothing is advanced.
+"""
+rf_bodyforce_navierstokes!(force, state, t; setup, cache, viscosity) =
+    ou_navierstokes!(force, state, t; setup, cache, viscosity)
+
+"""
+    rf_eddyvisc_force_cache(setup; model, ou_bodyforce = nothing, bodyforce = nothing)
+
+Force cache for [`rf_eddyvisc_navierstokes!`](@ref): one of upstream's eddy-viscosity models on top
+of Navier-Stokes, optionally with an OU or steady body force as well.
+
+`model` is an `AbstractEddyViscosity` — `Smagorinsky(C)`, `WALE(C)`, `Vreman(C)` or `QR(C)`.
+Replaces `setup.closure_model = wale_closure` plus `solve_unsteady(; θ = C)`; the constant now
+lives inside the model object.
+
+🔴 Upstream's kernels, not this fork's `wale_closure`/`smagvisc2!` (Rik's Q2 decision, 2026-09-11).
+A different implementation of the same models, so the channel's `C_w = 2.20` calibration is not
+numerically the one paper 3 reports.
+"""
+function rf_eddyvisc_force_cache(setup; model, ou_bodyforce = nothing, bodyforce = nothing)
+    extra = if !isnothing(ou_bodyforce)
+        ou_force_cache(setup; ou_bodyforce...)
+    elseif !isnothing(bodyforce)
+        rf_steady_force_cache(setup, bodyforce)
+    else
+        (;)
+    end
+    (;
+        extra...,
+        model,
+        closure_force = vectorfield(setup),
+        closure_cache = IncompressibleNavierStokes.get_cache(
+            IncompressibleNavierStokes.eddy_viscosity_closure!,
+            setup,
+        ),
+    )
+end
+
+"""
+    rf_eddyvisc_navierstokes!(force, state, t; setup, cache, viscosity)
+
+Navier-Stokes plus `cache.model`'s eddy viscosity, plus `cache.bodyforce` when present.
+
+Like the other `force!` functions here this runs once per Runge-Kutta stage and never advances the
+OU chain; `solve_unsteady` does that once per step.
+"""
+function rf_eddyvisc_navierstokes!(force, state, t; setup, cache, viscosity)
+    IncompressibleNavierStokes.navierstokes!(force, state, t; setup, cache, viscosity)
+    IncompressibleNavierStokes.eddy_viscosity_closure!(
+        cache.model,
+        cache.closure_force,
+        state.u,
+        cache.closure_cache,
+        setup,
+    )
+    force.u .+= cache.closure_force
+    haskey(cache, :bodyforce) && (force.u .+= cache.bodyforce)
+    nothing
+end
+
+"""
     rf_smag_navierstokes!(force, state, t; setup, cache, viscosity)
 
 Navier-Stokes plus a Smagorinsky closure, plus the OU body force when the cache carries one.
@@ -134,6 +221,12 @@ include("filter.jl")
 export FaceAverage, VolumeAverage
 export rf_setup, rf_params
 export rf_smag_force_cache, rf_smag_navierstokes!
+export rf_steady_force_cache, rf_bodyforce_navierstokes!
+export rf_eddyvisc_force_cache, rf_eddyvisc_navierstokes!
+# Upstream's eddy-viscosity model objects, re-exported so channel/taylor-green scripts can
+# write `WALE(c)` without reaching into IncompressibleNavierStokes by hand.
+using IncompressibleNavierStokes: Smagorinsky, WALE, Vreman, QR
+export Smagorinsky, WALE, Vreman, QR
 
 include("HIT_setups/create_ref_data.jl")
 export create_ref_data

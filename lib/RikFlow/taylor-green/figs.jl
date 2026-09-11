@@ -45,7 +45,7 @@ ref_fields = load(filename, "fields");
 n = 512
 Δx = 2*pi/n
 axis_x = range(0.0, 2*pi, n + 1)
-setup = Setup(;
+setup = rf_setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = 1.6e3,);
 state10 = (;u = ref_fields[1].u, t=10, temp=0);
@@ -58,8 +58,8 @@ text!(fig[1,1], v_labels[1], position = (v[1]*0.96,1e-15*1.2), align = (:left, :
 display(fig)
 save(fig_folder*"/energy_spectrum_TG.pdf", fig)
 
-save_vtk(state10; setup, filename = @__DIR__()*"/output/vtks/HF_T10_re800", fieldnames = (:velocity, :Qfield))
-save_vtk(state20; setup, filename = @__DIR__()*"/output/vtks/HF_T20_re800", fieldnames = (:velocity, :Qfield))
+save_vtk(state10; setup, filename = @__DIR__()*"/output/vtks/HF_T10_re800", fieldnames = (:velocity, :qcrit))
+save_vtk(state20; setup, filename = @__DIR__()*"/output/vtks/HF_T20_re800", fieldnames = (:velocity, :qcrit))
 
 
 
@@ -269,21 +269,21 @@ end
 n = 512
 Δx = 1/n
 axis_x = range(0.0, 2*pi, n + 1)
-setup = Setup(;
+setup = rf_setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = 1e3,);
 state = (;u = hf_fields[2].u, t=hf_fields[2].t, temp=0);
     # save to vtk
-save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/HF512", fieldnames = (:velocity, :Qfield))
+save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/HF512", fieldnames = (:velocity, :qcrit))
 
 n = 64
 Δx = 1/n
 axis_x = range(0.0, 1., n + 1)
-setup = Setup(;
+setup = rf_setup(;
                 x = (axis_x, axis_x, axis_x),
                 Re = Float64(1e3),);
 for i in 1:4:80
     state = (;u = ref_data.data[1].u[i], t=0, temp=0);
         # save to vtk
-    save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/LF$(i)", fieldnames = (:velocity, :Qfield))
+    save_vtk(state; setup, filename = @__DIR__()*"/output/vtks/LF$(i)", fieldnames = (:velocity, :qcrit))
 end

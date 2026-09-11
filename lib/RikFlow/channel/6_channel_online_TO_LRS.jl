@@ -41,20 +41,24 @@ nz_les = 32
 inputs = load(TO_folder*inputs_file_name, "inputs")
 (; name, hist_len, n_replicas, hist_var,tracking_noise) = inputs[model_index]
 
+# Steady streamwise driving force for the channel. Was `Setup(; bodyforce, issteadybodyforce)`;
+# upstream removed both, along with `applybodyforce!`, so it is a force cache now.
+# ⚠️ The trailing `t` argument is gone: upstream builds the field with `velocityfield`, whose
+# `ufunc` takes `(dim, x...)` only. A steady force never used it.
+channel_bodyforce(dim, x, y, z) = 1 * (dim == 1)
+
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re = 180f,
-    bodyforce = (dim, x, y, z, t) -> 1 * (dim == 1),
-    issteadybodyforce = true,
     backend = CUDABackend(),
     ArrayType = ArrayType,
 )
 
-setup = Setup(;
+setup = rf_setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1),
@@ -98,8 +102,13 @@ for i in 1:n_replicas
     @info "Solving LES"
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
+        # Steady driving force, formerly Setup(; bodyforce, issteadybodyforce).
+        # Without it the channel is unforced and decays to rest, silently.
+        force! = rf_bodyforce_navierstokes!,
+        force_cache = rf_steady_force_cache(to_setup_les, channel_bodyforce),
         setup,
-        ustart,
+        start = (; u = ustart),
+        params = rf_params(to_setup_les),
         docopy = true,
         method = TOMethod(; to_setup = to_setup_les),
         tlims = (0f, tsim),

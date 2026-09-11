@@ -17,23 +17,23 @@ let # HF initial turbulence field
     nx = 512 
     ny = 512 
     nz = 256 
-    setup = Setup(;
+    setup = rf_setup(;
         x = (
             range(xlims..., nx + 1),
             range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
             range(zlims..., nz + 1)
         ),
-        boundary_conditions = (
+        boundary_conditions = (; u = (
             (PeriodicBC(), PeriodicBC()),
             (DirichletBC(), DirichletBC()),
             (PeriodicBC(), PeriodicBC()),
-        ),
+        )),
         Re = 180.0,
     );
 
     u_start = load(@__DIR__()*"/output/paper_data_channel/HF/u_start_T15_512_512_256.jld2", "u_start");
-    y_ax = setup.grid.xu[1][2]
-    x_ax = setup.grid.xu[1][1]
+    y_ax = setup.xu[1][2]
+    x_ax = setup.xu[1][1]
 
     f = Figure(size = (900, 200));
     ax1 = Axis(f[1, 1], aspect = DataAspect(), xlabel = "x", ylabel = "y")
@@ -53,23 +53,23 @@ let #plot coarse initial turbulence field
     nx = 64 
     ny = 64 
     nz = 32 
-    setup = Setup(;
+    setup = rf_setup(;
         x = (
             range(xlims..., nx + 1),
             range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
             range(zlims..., nz + 1)
         ),
-        boundary_conditions = (
+        boundary_conditions = (; u = (
             (PeriodicBC(), PeriodicBC()),
             (DirichletBC(), DirichletBC()),
             (PeriodicBC(), PeriodicBC()),
-        ),
+        )),
         Re = 180.0,
     );
 
     ustart = Array(load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[1]);
-    y_ax = setup.grid.xu[1][2]
-    x_ax = setup.grid.xu[1][1]
+    y_ax = setup.xu[1][2]
+    x_ax = setup.xu[1][1]
 
     f = Figure(size = (900, 200));
     ax1 = Axis(f[1, 1], aspect = DataAspect(), xlabel = "x", ylabel = "y")
@@ -163,17 +163,17 @@ zlims = 0, 4 / 3 * pi
 nx = 64 
 ny = 64 
 nz = 32 
-setup = Setup(;
+setup = rf_setup(;
     x = (
         range(xlims..., nx + 1),
         range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
         range(zlims..., nz + 1)
     ),
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (DirichletBC(), DirichletBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re = 180,
 );
 
@@ -213,7 +213,7 @@ u_fields = data[2:101];
 u_ave_smag = get_u_ave(u_fields);
 u_ave_smag_short = get_u_ave(data[2:11]);
 
-yp = setup.grid.xu[1][2][2:Int(end//2)]*180
+yp = setup.xu[1][2][2:Int(end//2)]*180
 
 using DelimitedFiles
 if !ispath(@__DIR__()*"/ref_data_vreman/Chan180_FD2_basic_u.txt")
@@ -302,23 +302,23 @@ end
     nx = 64 
     ny = 64 
     nz = 32 
-    setup = Setup(;
+    setup = rf_setup(;
         x = (
             range(xlims..., nx + 1),
             range(ylims..., ny + 1), # tanh_grid(ylims..., ny + 1),
             range(zlims..., nz + 1)
         ),
-        boundary_conditions = (
+        boundary_conditions = (; u = (
             (PeriodicBC(), PeriodicBC()),
             (DirichletBC(), DirichletBC()),
             (PeriodicBC(), PeriodicBC()),
-        ),
+        )),
         Re = 180.0,
     );
 
     ustart = Array(load(@__DIR__()*"/output/paper_data_channel/HF/HF_channel_512_512_256_to_64_64_32_tsim15.0.jld2")["f"].data[1].u[1]);
-    y_ax = setup.grid.xu[1][2]
-    x_ax = setup.grid.xu[1][1]
+    y_ax = setup.xu[1][2]
+    x_ax = setup.xu[1][1]
 
 
 qois = [["Z",0,3],["E", 0, 3],["Z",4,10],["E", 4, 10],

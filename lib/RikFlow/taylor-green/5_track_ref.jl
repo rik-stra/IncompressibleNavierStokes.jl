@@ -36,16 +36,16 @@ qoi_ref = qoi_ref[:,1:sample_rate:end]
 ref_reader = Reference_reader(qoi_ref);
 ArrayType = CuArray
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re,
     backend = CUDABackend(),
     ArrayType,
 )
-les_setup = Setup(;
+les_setup = rf_setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1),
@@ -76,7 +76,8 @@ to_setup_les =
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup = les_setup,
-    ustart,
+    start = (; u = ustart),
+    params = rf_params(les_setup),
     docopy = true,
     method = TOMethod(; to_setup = to_setup_les),
     tlims = (0f, tsim),

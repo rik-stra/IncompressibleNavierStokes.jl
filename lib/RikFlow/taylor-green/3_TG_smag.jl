@@ -30,15 +30,15 @@ nz_les = 64
 
 
 kwargs = (;
-    boundary_conditions = (
+    boundary_conditions = (; u = (
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
         (PeriodicBC(), PeriodicBC()),
-    ),
+    )),
     Re,
     backend = CUDABackend(),
 )
-les_setup = Setup(;
+les_setup = rf_setup(;
     x = (
         range(xlims..., nx_les + 1),
         range(ylims..., ny_les + 1),
@@ -64,8 +64,6 @@ ustart = ArrayType(load(u_start_file_name, "u_start"));
 c_vals = 0.01:0.01:0.15
 
 for c_s in c_vals
-    closure_model = IncompressibleNavierStokes.smagorinsky_closure_natural;
-    les_setup = (; les_setup..., closure_model);
 
     to_setup_les = 
         RikFlow.TO_Setup(; qois, 
@@ -79,8 +77,14 @@ for c_s in c_vals
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
         setup = les_setup,
-        θ = T(c_s),
-        ustart,
+        # Closure moved from setup.closure_model + theta into the right-hand side.
+        # Upstream's kernels, not this fork's smagorinsky_closure_natural (map section 9, Q2).
+        force! = rf_eddyvisc_navierstokes!,
+        force_cache = rf_eddyvisc_force_cache(les_setup; model = Smagorinsky(T(c_s))),
+        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
+        method = RKMethods.RK44(; T = eltype(ustart)),
+        start = (; u = ustart),
+        params = rf_params(les_setup),
         docopy = true,
         tlims = (0f, tsim),
         Δt,
