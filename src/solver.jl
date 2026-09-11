@@ -122,8 +122,22 @@ function solve_unsteady(;
     # after this merge regardless (checklist item 27).
     isou = force_cache isa NamedTuple && haskey(force_cache, :ou_setup)
     if isou
+        # 🔴 In adaptive mode `Δt` is `nothing` here — the first step size is not known until the
+        # loop proposes it — so the priming advance has to ask for that proposal itself. Without
+        # this, OU forcing plus adaptive stepping throws `MethodError: *(::Nothing, ::Int64)`
+        # before the first step.
+        #
+        # ⚠️ Pre-existing, not introduced by the upstream merge: the same `Δt * freeze` sat in the
+        # same place before it. The combination had simply never been run — every production case
+        # uses a fixed Δt.
+        #
+        # The non-adaptive path is untouched: `Δt_prime === Δt` there, so the advance count and the
+        # step size that `claude_memory.md` gotcha #33 measured are bit-for-bit what they were.
+        Δt_prime = isadaptive ?
+            cfl * propose_timestep(force!, stepper.state, setup, params) : Δt
+
         # Print one random forcing field, to check the same random seed is being used etc.
-        OU_forcing_step!(; force_cache.ou_setup, Δt = Δt * force_cache.freeze)
+        OU_forcing_step!(; force_cache.ou_setup, Δt = Δt_prime * force_cache.freeze)
         OU_get_force!(force_cache.ou_setup, force_cache.bodyforce, setup)
     end
     # ------------------------------------------------------------------------------------------
