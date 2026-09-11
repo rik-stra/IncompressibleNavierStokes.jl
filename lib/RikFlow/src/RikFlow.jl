@@ -643,13 +643,21 @@ end
 using IncompressibleNavierStokes: timestep!, create_stepper, get_state, default_psolver,
     get_cache, AbstractODEMethod, AbstractRungeKuttaMethod, RKMethods, processor, apply_bc_u!
 
+"The element type of any `AbstractODEMethod`, taken from its supertype parameter."
+_method_eltype(::AbstractODEMethod{T}) where {T} = T
+
 """
-AbstractODEMethod for the Tau-orthogonal method, which extends the RK44 method.
+AbstractODEMethod for the Tau-orthogonal method, wrapping an inner Runge-Kutta scheme.
 """
 struct TOMethod{T,R,TOS} <: AbstractODEMethod{T}
     rk_method::R
     to_setup::TOS
-    TOMethod(; rk_method = RKMethods.RK44(), to_setup) = new{eltype(rk_method.A),typeof(rk_method),typeof(to_setup)}(rk_method, to_setup)
+    # ⚠️ `_method_eltype`, not `eltype(rk_method.A)`. Only `ExplicitRungeKuttaMethod` has a Butcher
+    # tableau; `LMWray3` is `LMWray3{T}` with no fields at all, so the old expression made TOMethod
+    # unusable with any low-storage scheme. Both are `AbstractODEMethod{T}`, so the supertype
+    # parameter is the general answer and gives the identical result for RK44.
+    TOMethod(; rk_method = RKMethods.RK44(), to_setup) =
+        new{_method_eltype(rk_method),typeof(rk_method),typeof(to_setup)}(rk_method, to_setup)
 end
 
 export TOMethod

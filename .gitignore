@@ -16,6 +16,11 @@
 *.DS_Store
 *.out
 *.jld2
+# ...except the small case's golden data, which is committed on purpose: it is the only artifact
+# on the far side of the upstream merge and the differential test rests on it. The `*.jld2` rule
+# above arrived with that merge (upstream's .gitignore), after `small_case_golden.jld2` was already
+# tracked - so the original file kept working while every new one was silently excluded.
+!lib/RikFlow/test/data/*.jld2
 examples/Chan180_FD2_all/
 /docs/src/examples/index.md
 /docs/src/.vitepress/examples_sidebar.json

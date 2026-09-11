@@ -17,6 +17,7 @@ function track_ref(;
     ou_bodyforce = none,
     tracking_noise = 0.0,
     tracking_noise_seed = 56,
+    rk_method = nothing,
     kwargs...,
     )
     T = typeof(Re)
@@ -62,7 +63,11 @@ function track_ref(;
             force!,
             force_cache,
             params = rf_params(setup),
-            method = TOMethod(; to_setup = to_setup_les), 
+            method = TOMethod(;
+                # RK44 unless told otherwise: TOMethod wraps whatever inner scheme it is
+                # given, and every archived run used RK44.
+                rk_method = isnothing(rk_method) ? RKMethods.RK44(; T = eltype(ustart)) : rk_method,
+                to_setup = to_setup_les), 
             tlims = (T(0), tsim),
             Δt,
             processors = (;
@@ -103,6 +108,7 @@ function online_sgs(;
     backend,
     ou_bodyforce = none,
     ou_advance::Int = 0,
+    rk_method = nothing,
     kwargs...,
 )
 T = typeof(Re)
@@ -185,7 +191,11 @@ psolver = create_psolver(setup)
         force!,
         force_cache,
         params = rf_params(setup),
-        method = TOMethod(; to_setup = to_setup_les), 
+        method = TOMethod(;
+                # RK44 unless told otherwise: TOMethod wraps whatever inner scheme it is
+                # given, and every archived run used RK44.
+                rk_method = isnothing(rk_method) ? RKMethods.RK44(; T = eltype(ustart)) : rk_method,
+                to_setup = to_setup_les), 
         tlims = (T(0), tsim),
         Δt,
         processors = (;

@@ -21,6 +21,7 @@ function create_ref_data(;
     backend,
     ustart = nothing,
     ou_bodyforce = nothing,
+    method = nothing,
     n_checkpoints = nothing,
     checkpoint_name = nothing,
     kwargs...,
@@ -89,12 +90,12 @@ function create_ref_data(;
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
         setup = _dns,
-        # 🔴 Pin the time stepper. Upstream changed `solve_unsteady`'s default from
-        # `RKMethods.RK44` to `LMWray3` at the merge, so every call that relied on the default
-        # silently changed time integrator - including this one, which produces the HF reference.
-        # Left implicit, the 19.3 GPU-hour DNS re-run would have used a different scheme from the
-        # archive it has to reproduce. Pinned rather than trusted.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # 🔴 Never inherit the default. Upstream changed `solve_unsteady`'s default from
+        # `RKMethods.RK44` to `LMWray3` at the merge, so every call that relied on it silently
+        # changed integrator - including this one, which produces the HF reference. Left implicit,
+        # the 19.3 GPU-hour re-run would have used a different scheme from the archive it has to
+        # reproduce. The caller chooses, and the fallback is the archive's RK44.
+        method = isnothing(method) ? RKMethods.RK44(; T = eltype(ustart)) : method,
         start = (; u = ustart),
         force!,
         force_cache,
@@ -133,6 +134,7 @@ function spinnup(;
     create_psolver = psolver_spectral,
     savefreq = 100,
     ou_bodyforce = nothing,
+    method = nothing,
     checkpoint_file_name = "./u",
     Δt = nothing,
     ArrayType = Array,
@@ -171,9 +173,9 @@ function spinnup(;
     (; u, t), outputs =
         solve_unsteady(;
         #method = RKMethods.Wray3(),
-        # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
-        # merge; pinned so this keeps the pre-merge integrator.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # Upstream changed solve_unsteady's default from RKMethods.RK44 to LMWray3 at the merge;
+        # the caller chooses, and the fallback is the archive's RK44.
+        method = isnothing(method) ? RKMethods.RK44(; T = eltype(ustart)) : method,
         setup = _dns, start = (; u = ustart), tlims = (T(0), tburn),
         force!,
         force_cache,

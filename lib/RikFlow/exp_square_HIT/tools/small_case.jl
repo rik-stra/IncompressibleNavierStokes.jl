@@ -50,11 +50,27 @@ using RikFlow
 # ---------------------------------------------------------------------------------------------
 
 envint(key, default) = parse(Int, get(ENV, key, string(default)))
-envf32(key, default) = parse(Float32, get(ENV, key, string(default)))
+envflt(T, key, default) = parse(T, get(ENV, key, string(default)))
 
-"Parameters of the small case. Mirrors `2_HF_ref.jl` / `3_track_ref.jl`, shrunk."
-function small_case_params()
-    T = Float32
+"""
+    small_case_params(; T = Float32, stepper = :rk44)
+
+Parameters of the small case. Mirrors `2_HF_ref.jl` / `3_track_ref.jl`, shrunk.
+
+🔴 **Two configurations, two golden files, and they are not the same kind of test.**
+
+`(Float32, :rk44)` is the **merge** test. Its golden data was generated on the *pre-merge* solver
+and committed (`843f963a`), so the comparison spans the merge and is the differential check the
+whole sequencing exists for. Do not regenerate it.
+
+`(Float64, :lmwray3)` is the **production baseline** for the regeneration Rik chose on 2026-09-11.
+Its golden data can only be generated on the *current* solver — there is no pre-merge Float64
+run to compare against — so it proves nothing about the merge. What it does is freeze the new
+configuration, so that any later change to it is caught. Different purpose, same machinery.
+"""
+function small_case_params(; T = Float32, stepper = :rk44)
+    stepper in (:rk44, :lmwray3) || error("unknown stepper $stepper; use :rk44 or :lmwray3")
+    envf32(key, default) = envflt(T, key, default)
 
     n_dns = envint("SMALL_CASE_N_DNS", 64)      # production: 512
     n_les = envint("SMALL_CASE_N_LES", 32)      # production: 64
@@ -96,6 +112,7 @@ function small_case_params()
         forcing,
         savefreq,
         plotfreq,
+        stepper,
         lims = ((T(0), T(1)), (T(0), T(1)), (T(0), T(1))),
         D = 3,
         ArrayType = Array,
@@ -104,7 +121,22 @@ function small_case_params()
 end
 
 golden_dir() = normpath(joinpath(@__DIR__, "..", "..", "test", "data"))
-golden_path() = joinpath(golden_dir(), "small_case_golden.jld2")
+
+"""
+    golden_path(p)
+
+Where a configuration's golden data lives. Float32/RK44 keeps the original unsuffixed name, so the
+pre-merge file committed in `843f963a` stays exactly where it is; any other configuration gets its
+own file and cannot overwrite it.
+"""
+function golden_path(p = small_case_params())
+    p.T === Float32 && p.stepper === :rk44 &&
+        return joinpath(golden_dir(), "small_case_golden.jld2")
+    joinpath(golden_dir(), "small_case_golden_$(lowercase(string(nameof(p.T))))_$(p.stepper).jld2")
+end
+
+"The ODE method for a configuration, as `solve_unsteady` wants it."
+rf_method(p) = p.stepper === :lmwray3 ? LMWray3(; T = p.T) : RKMethods.RK44(; T = p.T)
 
 # ---------------------------------------------------------------------------------------------
 # The Nyquist assertion (checklist item 8)
@@ -218,7 +250,7 @@ function burn_in(p)
     (; u, t), _ = solve_unsteady(;
         # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
         # merge; pinned so this keeps the pre-merge integrator.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        method = rf_method(p),
         setup = dns,
         start = (; u = ustart),
         force! = ou_navierstokes!,
@@ -264,6 +296,7 @@ function stage1(p, ustart)
         p.ArrayType,
         p.backend,
         ou_bodyforce = (; p.forcing..., freeze = 10),
+        method = rf_method(p),
         savefreq = p.savefreq,
         plotfreq = p.plotfreq,
         ustart,
@@ -327,6 +360,7 @@ function stage2(p, s1)
         # freeze = 1: HIT's tracking convention, and the one gotcha #33's advance count is
         # measured at.
         ou_bodyforce = (; p.forcing..., freeze = 1),
+        rk_method = rf_method(p),
         savefreq = 100,
     )
 
@@ -356,8 +390,13 @@ function run_small_case(p = small_case_params())
 end
 
 """
-Gate for the quantities that have resolution: a Float32 round-off bound, in units of
-`eps(Float32)` relative to the array's own scale.
+Gate for the quantities that have resolution: a round-off bound in units of `eps(T)` for the
+configuration's own precision `T`, relative to the array's own scale.
+
+🔴 `eps(T)`, not `eps(Float32)`. The bound was hardcoded to single precision, which is right for
+the Float32/RK44 merge test and ~10^9 times too loose for a Float64 run — it would have passed a
+real Float64 regression without complaint. The Float64 baseline is a same-solver reproducibility
+check and should be bit-identical; at 16 eps(Float64) it has to be.
 
 🔴 **This replaced a bit-identity gate on 2026-09-11, by Rik's decision, and the reason is a
 measurement rather than a convenience.** The first version of this file asserted bit-identity on
@@ -382,7 +421,10 @@ misphased forcing chain — moves these by O(1e-2) or more, four orders above th
 defect found while porting (and there were four) showed up as an outright error or as an O(1)
 difference, never as single-digit eps.
 """
-const GATE_EPS32 = 16
+const GATE_NEPS = 16
+
+"The absolute relative bound for a configuration: `GATE_NEPS` units of its own `eps`."
+gate_bound(p) = GATE_NEPS * eps(p.T)
 
 """
     compare_against_golden(cur, gold)
@@ -402,8 +444,10 @@ gotcha #31 (a statistic whose sensitivity is structural must be restated, not ti
 
 Returns `true` if every gated array is inside the bound.
 """
-function compare_against_golden(cur, gold)
+function compare_against_golden(cur, gold, p)
     ok = Ref(true)
+    epsT = eps(p.T)
+    tname = string(nameof(p.T))
 
     function cmp_array(name, a, b; gate::Bool)
         tag = gate ? "GATE  " : "report"
@@ -420,20 +464,22 @@ function compare_against_golden(cur, gold)
         d = abs.(Float64.(a) .- Float64.(b))
         scale = maximum(abs, Float64.(b))
         rel = scale == 0 ? 0.0 : maximum(d) / scale
-        neps = rel / eps(Float32)
+        neps = rel / epsT
         i = argmax(d)
         if !gate
             @printf("  %-10s %s       max abs %.4e at %s; max rel %.4e\n",
                 name, tag, maximum(d), string(Tuple(i)), rel)
             return
         end
-        pass = neps <= GATE_EPS32
+        pass = neps <= GATE_NEPS
         pass || (ok[] = false)
-        @printf("  %-10s %s %s  max rel %.4e = %.1f eps32 (bound %d)\n",
-            name, tag, pass ? "ok  " : "FAIL", rel, neps, GATE_EPS32)
+        @printf("  %-10s %s %s  max rel %.4e = %.1f eps(%s) (bound %d)\n",
+            name, tag, pass ? "ok  " : "FAIL", rel, neps, tname, GATE_NEPS)
     end
 
-    println("comparing against golden data (gate = $(GATE_EPS32) eps(Float32) relative):")
+    @printf("comparing against golden data (gate = %d eps(%s) = %.3e relative):
+",
+        GATE_NEPS, tname, gate_bound(p))
     cmp_array("qoi_hist", cur.qoi_hist, gold.qoi_hist; gate = true)
     cmp_array("q", cur.q, gold.q; gate = true)
     cmp_array("dQ", cur.dQ, gold.dQ; gate = false)
@@ -461,7 +507,7 @@ end
 function generate(p = small_case_params())
     res = run_small_case(p)
     mkpath(golden_dir())
-    path = golden_path()
+    path = golden_path(p)
     jldsave(path; res..., params = strip_params(p))
     @printf("golden data written: %s (%.2f MB)\n", path, filesize(path) / 1024^2)
     path
@@ -471,10 +517,16 @@ end
 strip_params(p) = (;
     p.n_dns, p.n_les, p.Re, p.dt_dns, p.dt_les, p.tsim, p.tburn,
     p.qois, p.forcing, p.savefreq, p.plotfreq, p.D,
+    # 🔑 Precision and stepper belong in the record. Without them a Float64/LMWray3 run could be
+    # compared against Float32/RK44 golden data and the mismatch would read as a port defect.
+    precision = string(nameof(p.T)), p.stepper,
 )
 
+"The precision's name, for messages."
+tname_of(p) = string(nameof(p.T))
+
 function check(p = small_case_params())
-    path = golden_path()
+    path = golden_path(p)
     isfile(path) || error(
         "no golden data at $path. It must be generated on the PRE-merge solver and committed; " *
         "generating it now would compare the current solver against itself.",
@@ -482,12 +534,27 @@ function check(p = small_case_params())
     gold = load(path)
     gp = gold["params"]
     cp = strip_params(p)
-    for k in keys(cp)
+
+    # ⚠️ Compare over the keys the *stored* record actually has, not over the current ones.
+    #
+    # `small_case_golden.jld2` was written pre-merge (`843f963a`), before `precision` and `stepper`
+    # were added to `strip_params`, and it must never be regenerated — it is the only artifact on
+    # the far side of the merge and the entire differential test rests on it. So a golden file is
+    # allowed to predate a field, and the stored record is the authority on what was recorded.
+    #
+    # This cannot let the wrong configuration through: `golden_path` gives every configuration its
+    # own file, so the unsuffixed one is reachable only as Float32/RK44 in the first place.
+    for k in keys(gp)
+        hasproperty(cp, k) || continue
         getproperty(cp, k) == gp[k] || error(
             "parameter $k is $(getproperty(cp, k)) but the golden data was made with $(gp[k]); " *
             "the comparison would be meaningless",
         )
     end
+    missing_keys = filter(k -> !haskey(gp, k), collect(keys(cp)))
+    isempty(missing_keys) || @printf(
+        "note: golden file predates %s; not compared (it is older than those fields)\n",
+        join(string.(missing_keys), ", "))
 
     cur = run_small_case(p)
     goldres = (;
@@ -498,9 +565,10 @@ function check(p = small_case_params())
         tau = gold["tau"],
         nnyq = gold["nnyq"],
     )
-    ok = compare_against_golden(cur, goldres)
+    ok = compare_against_golden(cur, goldres, p)
     if ok
-        println("\nSMALL CASE PASSED — every gated array inside the Float32 round-off bound.")
+        @printf("\nSMALL CASE PASSED — every gated array inside the %s round-off bound.\n",
+            string(nameof(p.T)))
         println("  dQ and tau are reported, not gated: dQ is a difference of near-equal QoIs and")
         println("  tau is a ratio whose denominator can pass near zero. See compare_against_golden.")
     else
@@ -510,15 +578,44 @@ function check(p = small_case_params())
     ok
 end
 
+"""
+    config_from(args)
+
+Read a configuration off the command line: `f32` / `f64` and `rk44` / `lmwray3`, in any order.
+
+Defaults to `(Float32, :rk44)` — the merge test — so every existing invocation keeps its meaning.
+`f64` alone implies `lmwray3`, since that is the pair Rik chose for the regeneration on 2026-09-11
+and running Float64 with RK44 is almost certainly a typo rather than an intent.
+"""
+function config_from(args)
+    T = Float32
+    stepper = nothing
+    for a in args
+        la = lowercase(a)
+        if la in ("f32", "float32")
+            T = Float32
+        elseif la in ("f64", "float64")
+            T = Float64
+        elseif la in ("rk44", "lmwray3")
+            stepper = Symbol(la)
+        end
+    end
+    isnothing(stepper) && (stepper = T === Float64 ? :lmwray3 : :rk44)
+    small_case_params(; T, stepper)
+end
+
 function main(args)
     mode = isempty(args) ? "check" : args[1]
+    p = config_from(args)
+    @printf("configuration: %s / %s   golden: %s\n",
+        nameof(p.T), p.stepper, basename(golden_path(p)))
     if mode == "generate"
-        generate()
+        generate(p)
         true
     elseif mode == "check"
-        check()
+        check(p)
     else
-        error("unknown mode $mode; use \"generate\" or \"check\"")
+        error("unknown mode $mode; use \"generate\" or \"check\", optionally with f32|f64 and rk44|lmwray3")
     end
 end
 
