@@ -67,17 +67,25 @@ else
     error("Number of dimensions must be 2 or 3. Got $num_dims")
 end
 
-state = ArrayType{ComplexF32, 2}(undef, N_d, num_dims) # contains the state of the OU process
+# 🔴 Complex{T}, not ComplexF32. These four arrays were hardcoded to single precision, which is
+# invisible in a Float32 run — `Complex{Float32} === ComplexF32`, so nothing about the archived
+# runs changes — and wrong in a Float64 one: the chain, the partial inverse transform and the
+# forcing field would all have been computed and stored at Float32 while the flow ran at Float64,
+# silently injecting a single-precision force into a double-precision simulation.
+#
+# `T` comes from `typeof(setup.Re)`, so the forcing follows the precision of the setup it is built
+# for. `z` already did this, which is why the mismatch was easy to miss.
+state = ArrayType{Complex{T}, 2}(undef, N_d, num_dims) # contains the state of the OU process
 state[:,:] .= 0
-f_hat = [ArrayType{ComplexF32, num_dims}(undef, forced_range...) for a = 1:num_dims] # contains the Fourier coefficients of the forcing
+f_hat = [ArrayType{Complex{T}, num_dims}(undef, forced_range...) for a = 1:num_dims] # contains the Fourier coefficients of the forcing
 for d in 1:num_dims
     f_hat[d][:] .= 0
 end
 
-f = [ArrayType{ComplexF32, num_dims}(undef, setup.Nu[a]...) for a = 1:num_dims] # contains the forcing in physical space
+f = [ArrayType{Complex{T}, num_dims}(undef, setup.Nu[a]...) for a = 1:num_dims] # contains the forcing in physical space
 
 # create partial IFFT matrix
-E = Array{ComplexF32,2}(undef, 2*k_f_int+1, N)
+E = Array{Complex{T},2}(undef, 2*k_f_int+1, N)
 for j = 1:N, i = -k_f_int:k_f_int
     E[i+k_f_int+1, j] = exp(pi*2im*(i)*(j)/N)
 end

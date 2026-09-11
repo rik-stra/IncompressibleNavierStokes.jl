@@ -177,3 +177,36 @@ end
     @test m(early) > 0
     @test 0.2 < m(later) / m(late) < 5.0        # loose: one draw of a stochastic state, not a mean
 end
+
+@testitem "V33 the OU forcer is type-generic, so Float64 runs are not silently Float32" default_imports = false setup = [OU] begin
+    using Test
+    # 🔴 `state`, `f_hat`, `f` and `E` were hardcoded to ComplexF32. That is invisible at Float32 --
+    # `Complex{Float32} === ComplexF32` -- and wrong at Float64: the chain, the partial inverse
+    # transform and the forcing field would all be computed and stored in single precision while
+    # the flow ran in double, injecting a Float32 force into a Float64 simulation with no error and
+    # no warning. Only `z` followed the setup's precision, which is why it was easy to miss.
+    #
+    # Fixed 2026-09-11 during the upstream merge, after the DNS/LES freeze analysis. This asserts
+    # the property directly rather than the fix, so a future rewrite cannot quietly undo it.
+    for T in (Float32, Float64)
+        ou = OU.OU_setup(; OU.HIT_OU..., setup = OU.fake_setup(; T))
+        @test eltype(ou.state) === Complex{T}
+        @test eltype(ou.E) === Complex{T}
+        @test all(d -> eltype(ou.f[d]) === Complex{T}, 1:ou.num_dims)
+        @test all(d -> eltype(ou.f_hat[d]) === Complex{T}, 1:ou.num_dims)
+        @test eltype(ou.z) === T
+    end
+
+    # And the forcing step must preserve those types rather than promoting on first use.
+    for T in (Float32, Float64)
+        ou = OU.OU_setup(; OU.HIT_OU..., setup = OU.fake_setup(; T))
+        OU.OU_forcing_step!(; ou_setup = ou, Δt = T(2.5e-3))
+        @test eltype(ou.state) === Complex{T}
+        @test all(isfinite, ou.state)
+    end
+
+    # 🔑 The Float32 path must be bit-unchanged by the genericity fix, since every archived run and
+    # every golden comparison depends on it. Complex{Float32} is ComplexF32, so this is an identity
+    # -- asserted because that identity is the entire safety argument for the change.
+    @test Complex{Float32} === ComplexF32
+end
