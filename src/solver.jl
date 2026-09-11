@@ -194,7 +194,11 @@ function solve_unsteady(;
 
             # NaN guard (ours). `RikFlow`'s `qoisaver` sets this flag; `setup` carries it because
             # RikFlow extends upstream's setup NamedTuple with its own fields.
-            if haskey(setup, :nans_detected) && setup.nans_detected[]
+            # The flag lives in `force_cache`, which is never passed to a kernel, rather than in
+            # `setup`, which is — a host `Array{Bool,0}` there makes the setup non-isbits and the
+            # GPU kernels uncompilable.
+            if force_cache isa NamedTuple && haskey(force_cache, :nans_detected) &&
+               force_cache.nans_detected[]
                 @warn "NaNs detected in the solution. Stopping the simulation."
                 break
             end

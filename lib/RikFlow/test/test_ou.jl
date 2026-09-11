@@ -31,9 +31,9 @@
     """
         fake_setup(; N = 8, T = Float32)
 
-    The four things `OU_setup` reads out of a `setup`: `Re` (for the element type), `ArrayType`,
-    `dimension`, and `Nu[1][1]` (the number of points per direction, used to build the partial
-    inverse-transform matrix `E`).
+    What `OU_setup` reads out of a `setup`: `Re` (for the element type), `x` (for the array type,
+    via `rf_arraytype`), `dimension`, and `Nu[1][1]` (the number of points per direction, used to
+    build the partial inverse-transform matrix `E`).
 
     Nothing else in `OU_setup` or `OU_forcing_step!` touches the flow, which is the point: the OU
     chain is a function of `(rng_seed, nsteps, Δt)` and of the forced wavenumbers only.
@@ -43,7 +43,13 @@
     follows. `Re` and `ArrayType` are RikFlow's own additions (`rf_setup`) and are unchanged.
     """
     fake_setup(; N::Int = 8, T = Float32) =
-        (; Re = T(2000), ArrayType = Array,
+        (; Re = T(2000),
+         # `x` is what `OU_setup` derives the array type from now. It used to read an `ArrayType`
+         # field, but that field cannot live in a real setup: upstream's operators pass the setup
+         # into GPU kernels, where a `UnionAll` is not isbits. `ArrayType` stays here only so the
+         # stub still resembles what callers pass; `OU_setup` ignores it.
+         x = ntuple(_ -> collect(range(T(0), T(1), N + 1)), 3),
+         ArrayType = Array,
          dimension = () -> 3, Nu = [ntuple(_ -> N, 3) for _ in 1:3])
 
     "HIT's forcing parameters, from `params_track.ou_bodyforce` on the 100 TU tracked record."
@@ -209,4 +215,64 @@ end
     # every golden comparison depends on it. Complex{Float32} is ComplexF32, so this is an identity
     # -- asserted because that identity is the entire safety argument for the change.
     @test Complex{Float32} === ComplexF32
+end
+
+@testitem "V34 the setup stays kernel-safe: no field that cannot reach a GPU" default_imports = false begin
+    using Test
+
+    # 🔴 Why this exists. Upstream's rewritten operators pass the whole `setup` into GPU kernels
+    # (`apply!` -> `gpu_contract_tensor_add!`), so every field must be isbits *after adaptation*.
+    # CUDA adapts `CuArray` to `CuDeviceArray`, but a `UnionAll` or a host `Array` adapts to
+    # nothing and the kernel refuses to compile:
+    #
+    #     KernelError: passing non-bitstype argument
+    #       .ArrayType is of type UnionAll which is not isbits.
+    #       .nans_detected is of type Array{Bool, 0} which is not isbits.
+    #
+    # Both were fields `rf_setup` added during the upstream merge. Base's operators took extracted
+    # grid arrays rather than the setup, so the fork got away with them until the merge. The fix
+    # was `rf_arraytype` (derive it) and moving the NaN flag into the force cache, which is never
+    # passed to a kernel.
+    #
+    # ⚠️ This is a **source** check, not a runtime one, and deliberately so. The failure is
+    # invisible on CPU — no kernel is compiled, so every CPU test passes — and this environment
+    # excludes IncompressibleNavierStokes and CUDA by design, so it can neither build a setup nor
+    # compile a kernel. Scanning the source is what is available here, and it catches the thing
+    # that actually regressed: a field reintroduced and then read back off the setup.
+
+    root = normpath(joinpath(@__DIR__, "..", "..", ".."))
+    files = String[]
+    for d in (joinpath(root, "src"), joinpath(root, "lib", "RikFlow", "src"))
+        for (dir, _, fs) in walkdir(d), f in fs
+            endswith(f, ".jl") && push!(files, joinpath(dir, f))
+        end
+    end
+    @test !isempty(files)
+
+    # The two names that broke the GPU build, read back off a setup.
+    banned = ("setup.ArrayType", "setup.nans_detected")
+    offenders = Tuple{String,String}[]
+    for f in files, b in banned
+        src = read(f, String)
+        # Ignore comment lines: the fix is documented in several of them.
+        for line in split(src, '
+')
+            stripped = lstrip(line)
+            startswith(stripped, "#") && continue
+            occursin(b, line) && push!(offenders, (basename(f), b))
+        end
+    end
+    @test isempty(offenders)
+    isempty(offenders) || @info "setup fields that cannot reach a GPU" offenders
+
+    # And `rf_setup` must still return only `base...` plus an allowlist.
+    rf = read(joinpath(root, "lib", "RikFlow", "src", "RikFlow.jl"), String)
+    m = match(r"\(;\s*base\.\.\.\s*,([^)]*)\)", rf)
+    @test m !== nothing
+    if m !== nothing
+        extras = [strip(x) for x in split(m.captures[1], ',') if !isempty(strip(x))]
+        # Only isbits scalars may be added here. `Re` is Float64; anything else needs the same
+        # scrutiny, which is why the list is explicit rather than a pattern.
+        @test all(e -> e in ("Re",), extras)
+    end
 end

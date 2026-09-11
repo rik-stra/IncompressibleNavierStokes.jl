@@ -23,7 +23,9 @@ function OU_setup(; T_L,
 
 T = typeof(setup.Re)
 rng = Xoshiro(rng_seed)
-ArrayType = setup.ArrayType
+# Derived, not read off the setup: `ArrayType` cannot live there, since upstream's operators
+# pass the setup into GPU kernels where every field must be isbits.
+ArrayType = Base.typename(typeof(setup.x[1])).wrapper
 num_dims = setup.dimension()
 Var = e_star/T_L
 
@@ -225,6 +227,9 @@ ou_force_cache(setup; T_L, e_star, k_f, rng_seed = 42, freeze = 1) = (;
     ou_setup = OU_setup(; T_L, e_star, k_f, setup, rng_seed, freeze),
     bodyforce = vectorfield(setup),
     freeze,
+    # The NaN flag lives here rather than in the setup: the force cache is never passed to a GPU
+    # kernel, and a host `Array{Bool,0}` in the setup makes the kernels uncompilable.
+    nans_detected = zeros(Bool),
 )
 
 """

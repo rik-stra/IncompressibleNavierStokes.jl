@@ -73,7 +73,10 @@ function track_ref(;
             processors = (;
                 log = timelogger(; nupdate = 100),
                 fields = fieldsaver(; setup, nupdate = savefreq), # by calling this BEFORE qoisaver, we also save the field at t=0!
-                qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
+                qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1,
+                # The NaN flag is in the force cache now, not the setup.
+                nans_detected = force_cache isa NamedTuple &&
+                    haskey(force_cache, :nans_detected) ? force_cache.nans_detected : nothing),
                 #vort = realtimeplotter(;
                 #    setup,
                 #    plot = vortplot,
@@ -201,7 +204,10 @@ psolver = create_psolver(setup)
         processors = (;
             log = timelogger(; nupdate = 100),
             fields = fieldsaver(; setup, nupdate = savefreq),  # by calling this BEFORE qoisaver, we also save the field at t=0!
-            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1),
+            qoihist = RikFlow.qoisaver(; setup, to_setup=to_setup_les, nupdate = 1,
+                # The NaN flag is in the force cache now, not the setup.
+                nans_detected = force_cache isa NamedTuple &&
+                    haskey(force_cache, :nans_detected) ? force_cache.nans_detected : nothing),
             # vort = realtimeplotter(;
             #     setup,
             #     plot = vortplot,

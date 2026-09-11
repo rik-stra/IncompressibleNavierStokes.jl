@@ -36,10 +36,10 @@ using CUDA
 #   `Re`             — RikFlow reads it for the element type (`typeof(setup.Re)`) in a dozen places
 #                      and as the physical parameter in `rf_params`. Kept as the single source of
 #                      truth; `viscosity` is derived from it, never stored beside it.
-#   `ArrayType`      — `TO_Setup` and `OU_setup` allocate with it. Upstream carries `backend`
-#                      instead, but the two are not interchangeable for the raw
-#                      `ArrayType{ComplexF32,3}(undef, …)` constructions in `ouforcer.jl`.
-#   `nans_detected`  — the channel by which `qoisaver` tells `solve_unsteady` to stop.
+#
+# ⚠️ Only `Re`. Anything added here is passed into GPU kernels by upstream's operators and must be
+# isbits after adaptation — `rf_arraytype` and the NaN flag in the force cache exist because
+# `ArrayType` and `nans_detected` are not.
 # ---------------------------------------------------------------------------------------------
 
 """
@@ -54,6 +54,10 @@ it with `ou_force_cache(setup; T_L, e_star, k_f, rng_seed, freeze)` and pass the
 
 ⚠️ `boundary_conditions` is keyed by field upstream — `(; u = ((PeriodicBC(), PeriodicBC()), …))`.
 The default here is periodic in every direction, which is what every HIT case uses.
+
+⚠️ `ArrayType` is **accepted and not stored**. Call sites pass it and RikFlow's own structures
+(`TO_Setup`, `OU_setup`) still need it, but it cannot live in the setup — see below. Use
+[`rf_arraytype`](@ref) to recover it from a setup.
 """
 function rf_setup(;
     x,
@@ -64,7 +68,20 @@ function rf_setup(;
     workgroupsize = 64,
 )
     base = IncompressibleNavierStokes.Setup(; x, boundary_conditions, backend, workgroupsize)
-    (; base..., Re, ArrayType, nans_detected = zeros(Bool))
+    # 🔴 `Re` only. `ArrayType` and `nans_detected` used to live here and could not: upstream's
+    # rewritten operators pass the whole `setup` into GPU kernels, where every field must be
+    # isbits after adaptation. CUDA adapts `CuArray` to `CuDeviceArray`, but a `UnionAll` and a
+    # host `Array{Bool,0}` adapt to nothing, so the kernel refused to compile with
+    #
+    #     KernelError: passing non-bitstype argument ... .ArrayType is of type UnionAll
+    #                  ... .nans_detected is of type Array{Bool, 0}
+    #
+    # Base's operators took extracted grid arrays rather than the setup, which is why the fork
+    # could get away with it before. `Re::Float64` is isbits and stays.
+    #
+    # ⚠️ Invisible on CPU: no kernel is compiled there, so every CPU test passes regardless. Do
+    # not add a non-isbits field here on the strength of a green CPU run.
+    (; base..., Re)
 end
 
 """
@@ -77,6 +94,17 @@ The `params` named tuple `solve_unsteady` now requires. Upstream has no default 
 place keeps a single source of truth; holding both in the setup would let them drift silently.
 """
 rf_params(setup) = (; viscosity = 1 / setup.Re)
+
+"""
+    rf_arraytype(setup)
+
+The array constructor for a setup's backend — `Array` or `CuArray` — derived from the grid rather
+than stored.
+
+Replaces the `ArrayType` field `rf_setup` used to carry. That field made the setup non-isbits and
+so uncompilable as a GPU kernel argument; deriving it costs nothing and cannot leak into a kernel.
+"""
+rf_arraytype(setup) = Base.typename(typeof(setup.x[1])).wrapper
 
 """
     rf_smag_force_cache(setup; c_s, ou_bodyforce = nothing)
@@ -124,7 +152,8 @@ signature did take it, so existing closures must drop the final parameter.
 an initial condition, so it is not made divergence free.
 """
 rf_steady_force_cache(setup, f) =
-    (; bodyforce = IncompressibleNavierStokes.velocityfield(setup, f; doproject = false))
+    (; bodyforce = IncompressibleNavierStokes.velocityfield(setup, f; doproject = false),
+       nans_detected = zeros(Bool))
 
 """
     rf_bodyforce_navierstokes!(force, state, t; setup, cache, viscosity)
@@ -417,7 +446,7 @@ end
 """
 function compute_QoI(u_hat, w_hat, to_setup, setup)
     (; dimension, xlims) = setup
-    ArrayType = setup.ArrayType
+    ArrayType = rf_arraytype(setup)
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
     if to_setup.mirror_y
@@ -446,7 +475,7 @@ end
 """
 function compute_filtered_qoi_fields(u_hat, w_hat, to_setup, setup)
     (; dimension, xlims) = setup
-    ArrayType = setup.ArrayType
+    ArrayType = rf_arraytype(setup)
     D = dimension()
     L = [xlims[a][2] - xlims[a][1] for a in 1:D]
     if to_setup.mirror_y
@@ -523,7 +552,7 @@ end
 """
 Create processor that stores the QoI values every `nupdate` time step.
 """
-qoisaver(; setup, to_setup, nupdate = 1, nan_limit = 1f5) =
+qoisaver(; setup, to_setup, nupdate = 1, nan_limit = 1f5, nans_detected = nothing) =
     processor() do state
         T = typeof(setup.Re)
         qoi_hist = fill(zeros(T,0), 0)
@@ -534,7 +563,8 @@ qoisaver(; setup, to_setup, nupdate = 1, nan_limit = 1f5) =
             q = compute_QoI(u_hat, w_hat, to_setup,setup)
             if any(q .> nan_limit)
                 @warn "Unreasonable large QoI at n = $(state.n)"
-                setup.nans_detected[] = true
+                # The flag lives in the force cache, not the setup: see `rf_setup`.
+                isnothing(nans_detected) || (nans_detected[] = true)
             end
             push!(qoi_hist, q)
         end
@@ -560,7 +590,7 @@ function to_sgs_term(u, setup, to_setup, stepper)
         if typeof(to_setup.time_series_method) in [MVG_sampler, Resampler]
             dQ = get_next_item_timeseries(to_setup.time_series_method)
         elseif typeof(to_setup.time_series_method) in [ANN, LinReg]
-            q_star = setup.ArrayType(compute_QoI(u_hat, w_hat, to_setup,setup))
+            q_star = rf_arraytype(setup)(compute_QoI(u_hat, w_hat, to_setup,setup))
             dQ = get_next_item_timeseries(to_setup.time_series_method, q_star)
         end
         
@@ -589,8 +619,8 @@ function to_sgs_term(u, setup, to_setup, stepper)
     tau = dQ./src_Q
     to_setup.outputs.tau[:,stepper.n] = real(tau)
     # move to GPU
-    cij = setup.ArrayType(cij)
-    tau = setup.ArrayType(tau)
+    cij = rf_arraytype(setup)(cij)
+    tau = rf_arraytype(setup)(tau)
 
     # construct SGS term
     #@tensor P_hat2[c,d,e,f,b] := cij[a,b]* ti[c,d,e,f,a]
