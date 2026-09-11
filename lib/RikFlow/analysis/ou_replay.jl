@@ -93,8 +93,10 @@ function solver_state(nsteps::Integer; n::Int = 8, ou = HIT_OU, Δt = HIT_DT)
     ustart = IncompressibleNavierStokes.vectorfield(setup)
     psolver = psolver_spectral(setup)
     solve_unsteady(;
-        # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
-        # merge; pinned so this keeps the pre-merge integrator.
+        # 🔑 RK44 on purpose, and the one place that does not follow the 2026-09-11 switch to
+        # LMWray3. This file measures the OU advance count of the *archived* runs (gotcha #33), so
+        # it has to keep the integrator those runs used; the count is a property of the solver loop
+        # and not of the tableau, but the measurement is worthless if the configuration drifts.
         method = RKMethods.RK44(; T = eltype(ustart)),
         setup,
         start = (; u = ustart),

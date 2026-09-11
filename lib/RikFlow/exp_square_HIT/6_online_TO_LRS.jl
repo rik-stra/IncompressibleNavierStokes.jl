@@ -19,9 +19,10 @@ TO_folder = @__DIR__()*"/output/TO_LRS"
 track_file = @__DIR__()*"/output/data_track_tsim10.0.jld2"
 
 # simulation parameters
-Re = Float32(2_000);
-Δt = Float32(2.5e-3);
-tsim = Float32(100);
+T = Float64
+Re = T(2_000);
+Δt = T(2.5e-3);
+tsim = T(100);
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -29,7 +30,6 @@ k_f = sqrt(2) # forcing wavenumber
 freeze = 1 # number of time steps to freeze the forcing
 
 # For running on a CUDA compatible GPU
-T = Float32
 ArrayType = CuArray
 backend = CUDABackend()
 
@@ -54,15 +54,20 @@ data_track = load(track_file, "data_track");
 
 # get initial condition
 if data_track.fields[1].u isa Tuple
-    ustart = stack(ArrayType.(data_track.fields[1].u));
+    ustart = stack(ArrayType{T}.(data_track.fields[1].u));
 elseif data_track.fields[1].u isa Array{<:Number,4}
-    ustart = ArrayType(data_track.fields[1].u);
+    ustart = ArrayType{T}(data_track.fields[1].u);
 end
 # get ref trajectories to initialize history for the model
 dQ_data = data_track.dQ[:,1:100]; # first 100 time steps are not predicted but taken from training data.
 
 params = (;
     params_track...,
+    # 🔴 Override the archived Re. The splat above carries the archive's Float32 parameters, and a
+    # later key wins — without this the setup is built at Float32 while the script declares
+    # Float64, and `typeof(setup.Re)` silently drives every QoI buffer back to single precision.
+    # `rf_setup` now refuses that mismatch outright, so this is what keeps the script runnable.
+    Re = T(2_000),
     tsim,
     Δt,
     ArrayType,

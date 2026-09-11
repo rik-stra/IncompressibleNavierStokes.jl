@@ -4,9 +4,10 @@ using IncompressibleNavierStokes
 using CUDA
 using Random
 
-Re = Float32(2_000);
-Δt = Float32(2.5e-3);
-tsim = Float32(1);
+T = Float64
+Re = T(2_000);
+Δt = T(2.5e-3);
+tsim = T(1);
 nles = 64
 
 T_L = 0.01  # correlation time of the forcing
@@ -17,7 +18,6 @@ freeze = 1 # number of time steps to freeze the forcing
 
 track_file = @__DIR__()*"/../exp_square_HIT/output/data_track_tsim10.0.jld2"
 
-T = Float32
 ArrayType = CuArray
 backend = CUDABackend()
 seeds = (;
@@ -29,9 +29,9 @@ seeds = (;
 # get initial condition
 data_track = load(track_file, "data_track");
 if data_track.fields[1].u isa Tuple
-    ustart = stack(ArrayType.(data_track.fields[1].u));
+    ustart = stack(ArrayType{T}.(data_track.fields[1].u));
 elseif data_track.fields[1].u isa Array{<:Number,4}
-    ustart = ArrayType(data_track.fields[1].u);
+    ustart = ArrayType{T}(data_track.fields[1].u);
 end
 lims = ( (T(0) , T(1)) , (T(0) , T(1)), (T(0),T(1)) )
 ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou )
@@ -41,7 +41,6 @@ setup = rf_setup(;
         Re=Re,
         ArrayType,
         backend,
-        ou_bodyforce,
     );
 
 psolver = psolver_spectral(setup);
@@ -53,9 +52,12 @@ psolver = psolver_spectral(setup);
         # Closure moved from setup.closure_model + theta into the right-hand side.
         # Upstream's kernels, not this fork's (map section 9, Q2).
         force! = rf_eddyvisc_navierstokes!,
-        force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(0.071))),
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # 🔴 `ou_bodyforce` used to ride along in the setup, so these timings were for a forced
+        # solve. Upstream's setup has no forcing slot; dropping it here would have quietly turned
+        # every run in this file into an unforced one and made the numbers incomparable.
+        force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(0.071)), ou_bodyforce),
+        # LMWray3 + Float64 is the production configuration (Rik, 2026-09-11).
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(setup),
         docopy = true,
@@ -81,9 +83,12 @@ close(io)
         # Closure moved from setup.closure_model + theta into the right-hand side.
         # Upstream's kernels, not this fork's (map section 9, Q2).
         force! = rf_eddyvisc_navierstokes!,
-        force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(0.071))),
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # 🔴 `ou_bodyforce` used to ride along in the setup, so these timings were for a forced
+        # solve. Upstream's setup has no forcing slot; dropping it here would have quietly turned
+        # every run in this file into an unforced one and made the numbers incomparable.
+        force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(0.071)), ou_bodyforce),
+        # LMWray3 + Float64 is the production configuration (Rik, 2026-09-11).
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(setup),
         docopy = true,
@@ -106,8 +111,10 @@ close(io)
 @info "Solving LF sim (no_model)"
 (; u, t), outputs = solve_unsteady(; 
         setup, 
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        force! = ou_navierstokes!,
+        force_cache = ou_force_cache(setup; ou_bodyforce...),
+        # LMWray3 + Float64 is the production configuration (Rik, 2026-09-11).
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(setup),
         docopy = true,
@@ -149,7 +156,12 @@ to_setup_les = RikFlow.TO_Setup(;
         setup, 
         start = (; u = ustart),
         params = rf_params(setup),
-        method = TOMethod(; to_setup = to_setup_les),
+        force! = ou_navierstokes!,
+        force_cache = ou_force_cache(setup; ou_bodyforce...),
+        # TOMethod wraps an inner scheme; LMWray3 is the production one (Rik, 2026-09-11).
+        method = TOMethod(;
+            rk_method = LMWray3(; T = eltype(ustart)),
+            to_setup = to_setup_les),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,
@@ -200,7 +212,12 @@ to_setup_les = RikFlow.TO_Setup(;
         setup, 
         start = (; u = ustart),
         params = rf_params(setup),
-        method = TOMethod(; to_setup = to_setup_les),
+        force! = ou_navierstokes!,
+        force_cache = ou_force_cache(setup; ou_bodyforce...),
+        # TOMethod wraps an inner scheme; LMWray3 is the production one (Rik, 2026-09-11).
+        method = TOMethod(;
+            rk_method = LMWray3(; T = eltype(ustart)),
+            to_setup = to_setup_les),
         docopy = true,
         tlims = (T(0), tsim),
         Δt,

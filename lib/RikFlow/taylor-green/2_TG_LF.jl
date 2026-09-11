@@ -77,8 +77,8 @@ to_setup_les =
 # Solve DNS and store filtered quantities
 (; u, t), outputs = solve_unsteady(;
     setup = les_setup,
-    # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-    method = RKMethods.RK44(; T = eltype(ustart)),
+    # LMWray3 by Rik's decision of 2026-09-11: stated, never inherited from the library default.
+    method = LMWray3(; T = eltype(ustart)),
     start = (; u = ustart),
     params = rf_params(les_setup),
     docopy = false,

@@ -4,12 +4,10 @@ using IncompressibleNavierStokes
 using CUDA
 
 n_dns = Int(512)
-Re = Float32(2_000)
-Δt = Float32(0.00025)
+T = Float64
+Re = T(2_000)
+Δt = T(0.00025)
 tburn = 150*Δt
-
-T = Float32
-
 
 lims = ( (T(0) , T(1)) , (T(0) , T(1)), (T(0),T(1)) )
 # forcing
@@ -31,7 +29,6 @@ ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou_spin )
 dns = rf_setup(;
         x = ntuple(α -> LinRange(lims[α]..., n_dns + 1), 3),
         Re,
-        ou_bodyforce,
         backend,
         ArrayType = CuArray,
     );
@@ -49,8 +46,15 @@ ustart = vectorfield(dns);
 (; u, t), outputs =
         solve_unsteady(;
         setup = dns, 
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # 🔴 The OU forcing used to ride along in the setup (`Setup(; ou_bodyforce)`), so this
+        # benchmark was forced without saying so. Upstream's setup has no forcing slot; without
+        # these two lines the timing would silently be for an unforced solve, which is not the
+        # per-step cost this file exists to measure.
+        force! = ou_navierstokes!,
+        force_cache = ou_force_cache(dns; ou_bodyforce...),
+        # LMWray3 + Float64 is the production configuration (Rik, 2026-09-11), so that is what the
+        # timing has to be for.
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(dns), 
         tlims = (T(0), tburn),

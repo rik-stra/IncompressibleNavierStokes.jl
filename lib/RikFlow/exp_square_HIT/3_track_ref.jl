@@ -9,7 +9,7 @@ using IncompressibleNavierStokes
 using CUDA
 
 # For running on a CUDA compatible GPU
-T = Float32
+T = Float64
 ArrayType = CuArray
 backend = CUDABackend()
 
@@ -17,9 +17,9 @@ backend = CUDABackend()
 # parameters
 n_dns = Int(512)
 n_les = Int(64)
-Re = Float32(2_000)
-Δt = Float32(2.5e-3)
-tsim = Float32(10)
+Re = T(2_000)
+Δt = T(2.5e-3)
+tsim = T(10)
 
 ref_file = @__DIR__()*"/output/paper_data_HIT/data_train_dns$(n_dns)_les$(n_les)_Re$(Re)_freeze_10_tsim100.0.jld2"
 outdir = @__DIR__()*"/output"
@@ -43,9 +43,9 @@ data_train = load(ref_file, "data_train");
 params_train = load(ref_file, "params_train");
 # get initial condition
 if data_train.data[1].u[1] isa Tuple
-    ustart = stack(ArrayType.(data_train.data[1].u[1]));
+    ustart = stack(ArrayType{T}.(data_train.data[1].u[1]));
 elseif data_train.data[1].u[1] isa Array{<:Number,4}
-    ustart = ArrayType(data_train.data[1].u[1]);
+    ustart = ArrayType{T}(data_train.data[1].u[1]);
 end
 
 # get ref trajectories
@@ -54,6 +54,11 @@ ref_reader = Reference_reader(qoi_ref);
 
 params_track = (;
     params_train...,
+    # 🔴 Override the archived Re. The splat above carries the archive's Float32 parameters, and a
+    # later key wins — without this the setup is built at Float32 while the script declares
+    # Float64, and `typeof(setup.Re)` silently drives every QoI buffer back to single precision.
+    # `rf_setup` now refuses that mismatch outright, so this is what keeps the script runnable.
+    Re = T(2_000),
     tsim,
     Δt,
     ArrayType,

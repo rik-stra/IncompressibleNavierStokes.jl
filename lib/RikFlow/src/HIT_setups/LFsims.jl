@@ -64,9 +64,10 @@ function track_ref(;
             force_cache,
             params = rf_params(setup),
             method = TOMethod(;
-                # RK44 unless told otherwise: TOMethod wraps whatever inner scheme it is
-                # given, and every archived run used RK44.
-                rk_method = isnothing(rk_method) ? RKMethods.RK44(; T = eltype(ustart)) : rk_method,
+                # LMWray3 unless told otherwise (Rik, 2026-09-11). TOMethod wraps whatever inner
+                # scheme it is given; the archived runs used RK44, so reproducing one means
+                # passing `rk_method = RKMethods.RK44(; T)` explicitly.
+                rk_method = isnothing(rk_method) ? LMWray3(; T = eltype(ustart)) : rk_method,
                 to_setup = to_setup_les), 
             tlims = (T(0), tsim),
             Δt,
@@ -195,9 +196,10 @@ psolver = create_psolver(setup)
         force_cache,
         params = rf_params(setup),
         method = TOMethod(;
-                # RK44 unless told otherwise: TOMethod wraps whatever inner scheme it is
-                # given, and every archived run used RK44.
-                rk_method = isnothing(rk_method) ? RKMethods.RK44(; T = eltype(ustart)) : rk_method,
+                # LMWray3 unless told otherwise (Rik, 2026-09-11). TOMethod wraps whatever inner
+                # scheme it is given; the archived runs used RK44, so reproducing one means
+                # passing `rk_method = RKMethods.RK44(; T)` explicitly.
+                rk_method = isnothing(rk_method) ? LMWray3(; T = eltype(ustart)) : rk_method,
                 to_setup = to_setup_les), 
         tlims = (T(0), tsim),
         Δt,

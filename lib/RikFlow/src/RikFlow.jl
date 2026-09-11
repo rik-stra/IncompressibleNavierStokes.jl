@@ -67,6 +67,15 @@ function rf_setup(;
     backend = IncompressibleNavierStokes.CPU(),
     workgroupsize = 64,
 )
+    # 🔴 The grid and `Re` must agree on precision. Several drivers splat an archived
+    # `params_train`/`params_track` into their own parameters, and those archives carry a Float32
+    # `Re`; splatted after a Float64 grid it wins silently and the run is mixed-precision, with
+    # `typeof(setup.Re)` — which drives `TO_Setup`, `OU_setup` and every QoI buffer — quietly back
+    # at Float32. Caught here rather than discovered in the output.
+    eltype(x[1]) === typeof(Re) || error(
+        "precision mismatch: grid is $(eltype(x[1])) but Re is $(typeof(Re)). " *
+        "If Re came from an archived params tuple, override it after the splat.",
+    )
     base = IncompressibleNavierStokes.Setup(; x, boundary_conditions, backend, workgroupsize)
     # 🔴 `Re` only. `ArrayType` and `nans_detected` used to live here and could not: upstream's
     # rewritten operators pass the whole `setup` into GPU kernels, where every field must be
@@ -686,7 +695,9 @@ struct TOMethod{T,R,TOS} <: AbstractODEMethod{T}
     # tableau; `LMWray3` is `LMWray3{T}` with no fields at all, so the old expression made TOMethod
     # unusable with any low-storage scheme. Both are `AbstractODEMethod{T}`, so the supertype
     # parameter is the general answer and gives the identical result for RK44.
-    TOMethod(; rk_method = RKMethods.RK44(), to_setup) =
+    # LMWray3 by Rik's decision of 2026-09-11, matching `solve_unsteady`'s own default. The
+    # archived TO runs used RK44; reproducing one means passing `rk_method` explicitly.
+    TOMethod(; rk_method = LMWray3(), to_setup) =
         new{_method_eltype(rk_method),typeof(rk_method),typeof(to_setup)}(rk_method, to_setup)
 end
 

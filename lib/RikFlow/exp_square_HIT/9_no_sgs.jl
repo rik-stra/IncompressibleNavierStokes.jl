@@ -14,9 +14,10 @@ track_file = @__DIR__()*"/output/data_track_tsim10.0.jld2" #we will take some pa
 ispath(no_model_folder) || mkpath(no_model_folder)
 
 # simulation parameters
-Re = Float32(2_000);
-Δt = Float32(2.5e-3);
-tsim = Float32(100);
+T = Float64
+Re = T(2_000);
+Δt = T(2.5e-3);
+tsim = T(100);
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
@@ -24,7 +25,6 @@ k_f = sqrt(2) # forcing wavenumber
 freeze = 1 # number of time steps to freeze the forcing
 
 # For running on a CUDA compatible GPU
-T = Float32
 ArrayType = CuArray
 backend = CUDABackend()
 
@@ -42,13 +42,18 @@ params_track = load(track_file, "params_track");
 
 # get initial condition
 if data_track.fields[1].u isa Tuple
-    ustart = stack(ArrayType.(data_track.fields[1].u));
+    ustart = stack(ArrayType{T}.(data_track.fields[1].u));
 elseif data_track.fields[1].u isa Array{<:Number,4}
-    ustart = ArrayType(data_track.fields[1].u);
+    ustart = ArrayType{T}(data_track.fields[1].u);
 end
 
 params = (;
     params_track...,
+    # 🔴 Override the archived Re. The splat above carries the archive's Float32 parameters, and a
+    # later key wins — without this the setup is built at Float32 while the script declares
+    # Float64, and `typeof(setup.Re)` silently drives every QoI buffer back to single precision.
+    # `rf_setup` now refuses that mismatch outright, so this is what keeps the script runnable.
+    Re = T(2_000),
     tsim,
     Δt,
     ArrayType, 
@@ -82,9 +87,9 @@ psolver = psolver_spectral(setup);
 @info "Solving LF sim (no SGS)"
 (; u, t), outputs = solve_unsteady(;
     # method = LMWray3(; T),
-    # Upstream changed solve_unsteady's default method from RKMethods.RK44 to LMWray3 at the
-    # merge; pinned so this keeps the pre-merge integrator.
-    method = RKMethods.RK44(; T = eltype(ustart)),
+    # LMWray3 by Rik's decision of 2026-09-11: stated, never inherited from the library
+    # default. Reproducing an archived run means passing RKMethods.RK44 explicitly.
+    method = LMWray3(; T = eltype(ustart)),
     setup, 
     start = (; u = ustart),
     force! = ou_navierstokes!,

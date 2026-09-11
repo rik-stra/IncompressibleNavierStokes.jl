@@ -90,12 +90,11 @@ function create_ref_data(;
     # Solve DNS and store filtered quantities
     (; u, t), outputs = solve_unsteady(;
         setup = _dns,
-        # 🔴 Never inherit the default. Upstream changed `solve_unsteady`'s default from
-        # `RKMethods.RK44` to `LMWray3` at the merge, so every call that relied on it silently
-        # changed integrator - including this one, which produces the HF reference. Left implicit,
-        # the 19.3 GPU-hour re-run would have used a different scheme from the archive it has to
-        # reproduce. The caller chooses, and the fallback is the archive's RK44.
-        method = isnothing(method) ? RKMethods.RK44(; T = eltype(ustart)) : method,
+        # 🔴 Stated, never inherited. Upstream changed `solve_unsteady`'s default at the merge, so
+        # a call that relies on the library default silently follows whatever upstream picks.
+        # The default here is LMWray3 by Rik's decision of 2026-09-11, measured stable at the
+        # production step (see `cfl_probe.jl`); pass `method` to override.
+        method = isnothing(method) ? LMWray3(; T = eltype(ustart)) : method,
         start = (; u = ustart),
         force!,
         force_cache,
@@ -173,9 +172,9 @@ function spinnup(;
     (; u, t), outputs =
         solve_unsteady(;
         #method = RKMethods.Wray3(),
-        # Upstream changed solve_unsteady's default from RKMethods.RK44 to LMWray3 at the merge;
-        # the caller chooses, and the fallback is the archive's RK44.
-        method = isnothing(method) ? RKMethods.RK44(; T = eltype(ustart)) : method,
+        # Stated, never inherited from the library default. LMWray3 by Rik's decision of
+        # 2026-09-11; pass `method` to override.
+        method = isnothing(method) ? LMWray3(; T = eltype(ustart)) : method,
         setup = _dns, start = (; u = ustart), tlims = (T(0), tburn),
         force!,
         force_cache,

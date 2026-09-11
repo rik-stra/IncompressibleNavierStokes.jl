@@ -81,8 +81,8 @@ for c_s in c_vals
         # Upstream's kernels, not this fork's smagorinsky_closure_natural (map section 9, Q2).
         force! = rf_eddyvisc_navierstokes!,
         force_cache = rf_eddyvisc_force_cache(les_setup; model = Smagorinsky(T(c_s))),
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # LMWray3 by Rik's decision of 2026-09-11: stated, never inherited from the library default.
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(les_setup),
         docopy = true,

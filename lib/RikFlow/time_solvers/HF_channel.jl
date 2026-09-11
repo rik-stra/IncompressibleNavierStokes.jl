@@ -84,8 +84,8 @@ ustart = velocityfield(dns, ustartfunc; psolver);
         force! = rf_bodyforce_navierstokes!,
         force_cache = rf_steady_force_cache(dns, channel_bodyforce),
         setup = dns, 
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # LMWray3 by Rik's decision of 2026-09-11: stated, never inherited from the library default.
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(dns), 
         tlims = (T(0), tburn),

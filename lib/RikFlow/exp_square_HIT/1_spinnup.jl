@@ -25,18 +25,19 @@ println("Modules loaded. Time: $(t1-t0) s")
 
 # full size simulation
 n_dns = Int(900)
-Re = Float32(2_000)
-tburn = Float32(4)
-Δt = Float32(0.00025)
+T = Float64
+Re = T(2_000)
+tburn = T(4)
+Δt = T(0.00025)
 
 
 
 # small test parameters
 # n_dns = Int(128)
 # n_les = Int(64)
-# Re = Float32(2_000)
-# tburn = Float32(0.2)
-# Δt = Float32(0.00025)
+# Re = T(2_000)
+# tburn = T(0.2)
+# Δt = T(0.00025)
 
 # forcing
 T_L = 0.01  # correlation time of the forcing
@@ -54,7 +55,6 @@ seeds = (;
 
 # For running on a CUDA compatible GPU
 
-T = Float32
 backend = CUDABackend()
 ArrayType = CuArray
 

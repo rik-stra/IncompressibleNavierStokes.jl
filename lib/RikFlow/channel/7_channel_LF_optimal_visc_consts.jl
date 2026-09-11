@@ -75,8 +75,8 @@ for c in c_s
         # Upstream's kernels, not this fork's (map section 9, Q2).
         force! = rf_eddyvisc_navierstokes!,
         force_cache = rf_eddyvisc_force_cache(setup; model = Smagorinsky(T(c)), bodyforce = channel_bodyforce),
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # LMWray3 by Rik's decision of 2026-09-11: stated, never inherited from the library default.
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(setup),
         tlims = (0f, tsim),
@@ -117,8 +117,8 @@ for c in c_w
         # Upstream's kernels, not this fork's (map section 9, Q2).
         force! = rf_eddyvisc_navierstokes!,
         force_cache = rf_eddyvisc_force_cache(setup; model = WALE(T(c)), bodyforce = channel_bodyforce),
-        # Upstream changed the default from RKMethods.RK44 to LMWray3; pinned.
-        method = RKMethods.RK44(; T = eltype(ustart)),
+        # LMWray3 by Rik's decision of 2026-09-11: stated, never inherited from the library default.
+        method = LMWray3(; T = eltype(ustart)),
         start = (; u = ustart),
         params = rf_params(setup),
         tlims = (0f, tsim),
