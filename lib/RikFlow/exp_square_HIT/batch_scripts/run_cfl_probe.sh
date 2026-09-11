@@ -6,11 +6,12 @@
 
 # Adaptive-timestep probe of the Float64 / LMWray3 configuration at 512^3.
 #
-# Submit from the RikFlow folder:
+# Submit from either exp_square_HIT or lib/RikFlow:
+#     sbatch batch_scripts/run_cfl_probe.sh
 #     sbatch exp_square_HIT/batch_scripts/run_cfl_probe.sh
-# SLURM runs the job in the directory sbatch was called from, so the script path below is relative
-# to lib/RikFlow. The probe's own output path comes from @__DIR__, not the working directory, so it
-# lands in exp_square_HIT/output/ either way.
+# SLURM runs the job in the directory sbatch was called from, and the lookup below handles both
+# rather than assuming one. The probe's own input and output paths come from @__DIR__, not the
+# working directory, so the initial condition must be in exp_square_HIT/output/ regardless.
 #
 # Needs exp_square_HIT/output/u_start_spinnup_512_Re2000.0_freeze_10_tsim4.0.jld2. If it is
 # missing the script stops and prints the path rather than inventing a field. Note 1_spinnup.jl
@@ -26,4 +27,15 @@
 export JULIA_DEPOT_PATH=$HOME/julia/julia_a1003:
 export JULIA_CPU_TARGET="generic;znver2,clone_all;znver4,clone_all;icelake-server,clone_all"
 
-julia --project exp_square_HIT/cfl_probe.jl
+# Find the probe from whichever directory the job started in, and say so if it is neither.
+if [ -f cfl_probe.jl ]; then
+    SCRIPT=cfl_probe.jl
+elif [ -f exp_square_HIT/cfl_probe.jl ]; then
+    SCRIPT=exp_square_HIT/cfl_probe.jl
+else
+    echo "run_cfl_probe.sh: cannot find cfl_probe.jl from $(pwd)" >&2
+    echo "  submit from exp_square_HIT or from lib/RikFlow" >&2
+    exit 1
+fi
+
+julia --project "$SCRIPT"
