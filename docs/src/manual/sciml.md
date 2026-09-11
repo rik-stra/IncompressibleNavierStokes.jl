@@ -8,16 +8,13 @@ The [SciML organization](https://sciml.ai/) is a collection of tools for solving
 
 In particular, [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/) contains tools to solve differential equations defined as $\dfrac{du}{dt} = f(u, t)$ that include a large collection of solvers, sensitivity analysis, and more.
 
-Using IncompressibleNavierStokes it is possible to write the momentum equations without the pressure by explicitly solving the discrete Poisson equation and obtaining:
+Using IncompressibleNavierStokes it is possible to write the momentum equations without the pressure by explicitly solving the discrete Poisson equation and obtaining a plain ODE:
 
 ```math
-\begin{align*}
-\frac{\mathrm{d} u_h}{\mathrm{d} t} &= (I - G L^{-1} W M)
-(F(u_h) - y_G) - G L^{-1} W \frac{\mathrm{d} y_M}{\mathrm{d} t}\\ &=f(u_h).
-\end{align*}
+\frac{\mathrm{d} u}{\mathrm{d} t} = (I - G L^{-1} W M) F(u) = f(u),
 ```
 
-The derivation and the drawbacks of this approach are discussed in the documentation.
+where the operator ``(I - G L^{-1} W M)`` projects the force onto the space of discretely divergence-free velocities (see [Spatial and temporal discretization](discretization.md)).
 
 This projected right-hand side can be used in the SciML solvers to solve the Navier-Stokes equations. The following example shows how to use the SciML solvers to solve the ODEs obtained from the Navier-Stokes equations.
 
@@ -30,19 +27,28 @@ This projected right-hand side can be used in the SciML solvers to solve the Nav
 using OrdinaryDiffEqTsit5
 using IncompressibleNavierStokes
 ax = range(0, 1, 101)
-setup = Setup(; x = (ax, ax), Re = 500.0)
+setup = Setup(;
+    x = (ax, ax),
+    boundary_conditions = (;
+        u = (
+            (PeriodicBC(), PeriodicBC()),
+            (PeriodicBC(), PeriodicBC()),
+        ),
+    ),
+)
 psolver = default_psolver(setup)
 f = create_right_hand_side(setup, psolver)
 u0 = random_field(setup)
 tspan = (0.0, 1.0)     # time span where to solve.
-problem = ODEProblem(f, u0, tspan) #SciMLBase.ODEProblem
+problem = ODEProblem(f, u0, tspan, (; viscosity = 2e-3)) #SciMLBase.ODEProblem
 sol = solve(problem, Tsit5(), reltol = 1e-8, abstol = 1e-8) # sol: SciMLBase.ODESolution
 ```
 
 Alternatively, it is also possible to use an [in-place formulation](https://docs.sciml.ai/DiffEqDocs/stable/basics/problem/#In-place-vs-Out-of-Place-Function-Definition-Forms)
 
 ```@example SciML
-f!(du,u,p,t) = right_hand_side!(du, u, Ref([setup, psolver]), t)
+viscosity = 2e-3
+f!(du,u,p,t) = right_hand_side!(du, u, Ref((setup, psolver, viscosity)), t)
 u = similar(u0)
 du = similar(u0)
 p = nothing

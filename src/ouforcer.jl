@@ -24,13 +24,13 @@ function OU_setup(; T_L,
 T = typeof(setup.Re)
 rng = Xoshiro(rng_seed)
 ArrayType = setup.ArrayType
-num_dims = setup.grid.dimension()
+num_dims = setup.dimension()
 Var = e_star/T_L
 
 # check if grid is equidistant
-#@assert all([all(Δ ≈ Δ[1]) for Δ in setup.grid.Δ])
-#@assert all([ (Δ[1] ≈ setup.grid.Δ[1][1]) for Δ in setup.grid.Δ])
-N = setup.grid.Nu[1][1]
+#@assert all([all(Δ ≈ Δ[1]) for Δ in setup.Δ])
+#@assert all([ (Δ[1] ≈ setup.Δ[1][1]) for Δ in setup.Δ])
+N = setup.Nu[1][1]
 
 # Count the forced wavenumbers
 k_f_int = floor(Int, k_f)
@@ -74,7 +74,7 @@ for d in 1:num_dims
     f_hat[d][:] .= 0
 end
 
-f = [ArrayType{ComplexF32, num_dims}(undef, setup.grid.Nu[a]...) for a = 1:num_dims] # contains the forcing in physical space
+f = [ArrayType{ComplexF32, num_dims}(undef, setup.Nu[a]...) for a = 1:num_dims] # contains the forcing in physical space
 
 # create partial IFFT matrix
 E = Array{ComplexF32,2}(undef, 2*k_f_int+1, N)
@@ -182,15 +182,57 @@ function OU_forcing_step!(; ou_setup, Δt)
     end
 end
 
-function OU_get_force!(ou_setup, setup)
-    (;Iu, dimension) = setup.grid
+"""
+    OU_get_force!(ou_setup, bodyforce, setup)
+
+Write the current OU forcing field into `bodyforce`.
+
+⚠️ `bodyforce` used to be `setup.bodyforce`. Upstream's `setup` is a pure grid description with no
+body-force slot — forcing is a property of the right-hand side now, not of the setup — so the
+buffer is passed explicitly and lives in the force cache (see [`ou_force_cache`](@ref)).
+"""
+function OU_get_force!(ou_setup, bodyforce, setup)
+    (;Iu, dimension) = setup
     D = dimension()
     for d in 1:D
-        setup.bodyforce[Iu[d],d] = real(ou_setup.f[d])
+        bodyforce[Iu[d],d] = real(ou_setup.f[d])
     end
-    #apply_bc_u!(setup.bodyforce, t, setup)
+    #apply_bc_u!(bodyforce, t, setup)
 end
 
+"""
+    ou_force_cache(setup; T_L, e_star, k_f, rng_seed, freeze)
 
+Build the `force_cache` for [`ou_navierstokes!`](@ref): the OU chain, the body-force buffer it
+writes into, and the `freeze` interval `solve_unsteady` gates the advance on.
+
+Pass the result to `solve_unsteady(; force! = ou_navierstokes!, force_cache = ..., ...)`. Under
+the old API this was `Setup(; ou_bodyforce = (; T_L, e_star, k_f, freeze, rng_seed))`; the
+parameters and the seeding are unchanged, only where the state is kept.
+
+`setup` must be a RikFlow-extended setup — upstream's `Setup` output with `Re` and `ArrayType`
+added — because `OU_setup` takes its element type from `Re` and its array type from `ArrayType`.
+"""
+ou_force_cache(setup; T_L, e_star, k_f, rng_seed = 42, freeze = 1) = (;
+    ou_setup = OU_setup(; T_L, e_star, k_f, setup, rng_seed, freeze),
+    bodyforce = vectorfield(setup),
+    freeze,
+)
+
+"""
+    ou_navierstokes!(force, state, t; setup, cache, viscosity)
+
+Navier-Stokes momentum forcing plus the OU body force. The `force!` argument of `solve_unsteady`
+for every OU-forced case.
+
+🔴 This adds the *current* forcing field; it does **not** advance the chain. `force!` runs once per
+Runge-Kutta stage, so advancing here would advance four times per step under RK44. The advance is
+in `solve_unsteady`, once per step — see the long comment there and gotcha #33.
+"""
+function ou_navierstokes!(force, state, t; setup, cache, viscosity)
+    navierstokes!(force, state, t; setup, cache, viscosity)
+    force.u .+= cache.bodyforce
+end
 
 export OU_setup, OU_state_step!, OU_advance!, OU_forcing_step!, OU_get_force!
+export ou_force_cache, ou_navierstokes!

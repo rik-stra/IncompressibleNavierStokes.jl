@@ -1,12 +1,14 @@
+"Wrap a function to return `nothing`, because Enzyme can not handle vector return values."
+function enzyme_wrap end
+
 function assert_uniform_periodic(setup, string)
-    (; grid, boundary_conditions) = setup
-    (; Δ, N) = grid
+    (; Δ, N, boundary_conditions) = setup
     @assert(
-        all(==((PeriodicBC(), PeriodicBC())), boundary_conditions),
+        all(==((PeriodicBC(), PeriodicBC())), boundary_conditions.u),
         string * " requires periodic boundary conditions.",
     )
     @assert(
-        all(Δ -> all(≈(Δ[1]), Δ), Array.(Δ)),
+        all(Δ -> all(≈(Δ[1]; atol = 10 * eps(eltype(Δ))), Δ), Array.(Δ)),
         string * " requires uniform grid spacing.",
     )
     @assert(all(iseven, N), string * " requires even number of volumes.",)
@@ -45,103 +47,8 @@ Plot nonuniform Cartesian grid.
 """
 function plotgrid end
 
-"Get utilities to compute energy spectrum."
-function spectral_stuff(setup; npoint = 100, a = typeof(setup.Re)(1 + sqrt(5)) / 2)
-    (; dimension, xp, Ip, xlims) = setup.grid
-    T = eltype(xp[1])
-    D = dimension()
-    domain_length = [(xlims[d][2] - xlims[d][1]) for d in 1:D]
-    K = size(Ip) .÷ 2
-    k = zeros(T, K)
-    if D == 2
-        kx = reshape(0:K[1]-1, :)./domain_length[1]
-        ky = reshape(0:K[2]-1, 1, :)./domain_length[2]
-        @. k = sqrt(kx^2 + ky^2)
-    elseif D == 3
-        kx = reshape(0:K[1]-1, :) #./domain_length[1]
-        ky = reshape(0:K[2]-1, 1, :) #./domain_length[2]
-        kz = reshape(0:K[3]-1, 1, 1, :) #./domain_length[3]
-        @. k = sqrt(kx^2 + ky^2 + kz^2)
-    end
-    k = reshape(k, :)
-
-    # Sum or average wavenumbers between k and k+1
-    kmax = minimum([(K[d]) for d in 1:D]) 
-    isort = sortperm(k)
-    ksort = k[isort]
-
-    IntArray = typeof(similar(xp[1], Int, 0))
-    inds = IntArray[]
-
-    # Output query points (evenly log-spaced, but only integer wavenumbers)
-    # logκ = LinRange(T(0), log(T(kmax) - 1), npoint)
-    logκ = LinRange(T(0), log(T(kmax)), npoint)
-    # logκ = LinRange(log(a), log(T(kmax) / a), npoint)
-    # logκ = LinRange(T(0), log(T(kmax)), npoint)
-    κ = exp.(logκ)
-    κ = sort(unique(round.(Int, κ)))
-    npoint = length(κ)
-
-    for i = 1:npoint
-        if D == 2
-            # Dyadic binning - this gives the k^-3 slope in 2D
-            jstart = findfirst(≥(κ[i] / a), ksort)
-            jstop = findfirst(≥(κ[i] * a), ksort)
-        elseif D == 3
-            # Linear binning - this gives the k^-5/3 slope in 3D
-            jstart = findfirst(≥(κ[i] - T(0.5)), ksort)
-            jstop = findfirst(≥(κ[i] + T(0.5)), ksort)
-            # jstart = findfirst(≥(κ[i] - T(1.01)), ksort)
-            # jstop = findfirst(≥(κ[i] + T(1.01)), ksort)
-        end
-
-        # jstart = findfirst(≥(κ[i] - T(1.01)), ksort)
-        # jstop = findfirst(≥(κ[i] + T(1.01)), ksort)
-        isnothing(jstop) && (jstop = length(ksort) + 1)
-        jstop -= 1
-        push!(inds, adapt(IntArray, isort[jstart:jstop]))
-    end
-
-    (; inds, κ, K)
-end
-
-"Get energy spectrum of velocity field."
-function get_spectrum(setup; npoint = 100, a = typeof(e.setup.Re)(1 + sqrt(5)) / 2)
-    (; dimension, xp, Ip) = setup.grid
-    T = eltype(xp[1])
-    D = dimension()
-
-    @assert all(==(size(Ip, 1)), size(Ip))
-
-    K = size(Ip, 1) .÷ 2
-    kmax = K - 1
-    k = ntuple(
-        i -> reshape(0:kmax, ntuple(Returns(1), i - 1)..., :, ntuple(Returns(1), D - i)...),
-        D,
-    )
-
-    # Output query points (evenly log-spaced, but only integer wavenumbers)
-    κ = logrange(T(1), T(sqrt(D) * kmax), npoint)
-    κ = sort(unique(round.(Int, κ)))
-    npoint = length(κ)
-
-    masks = map(κ) do κ
-        if D == 2
-            @. (κ / a)^2 ≤ k[1]^2 + k[2]^2 < (κ * a)^2
-        elseif D == 3
-            @. (κ / a)^2 ≤ k[1]^2 + k[2]^2 + k[3]^2 < (κ * a)^2
-        else
-            error("Not implemented")
-        end
-    end
-
-    BoolArray = typeof(similar(xp[1], Bool, ntuple(Returns(0), D)...))
-    masks = adapt.(BoolArray, masks)
-    (; κ, masks, K)
-end
-
 "Get permutation indices for DCT."
-function get_perminds(N, i)
+function get_perminds(N)
     n = div(N, 2)
     @assert 2 * n == N "Only even grids supported"
     x = zeros(Int, N)
@@ -174,13 +81,15 @@ function manual_dct_stuff(u)
         ww[1] = ww[1] * sqrt(T(2)) / 2
         ww
     end
-    perm = ntuple(i -> get_perminds(size(u, i), i)[1], ndims(u))
-    perminv = ntuple(i -> get_perminds(size(u, i), i)[2], ndims(u))
+    perm = map(n -> get_perminds(n)[1], size(u))
+    perminv = map(n -> get_perminds(n)[2], size(u))
     adapt(get_backend(u), (; uhat, w, winv, perm, perminv))
 end
 
 function manual_dct!(u, i, stuff)
     (; uhat, w, perm, perminv) = stuff
+
+    @assert isreal(u) "Manual DCT only implemented for real inputs"
 
     # Permute u
     if ndims(u) == 1
@@ -208,17 +117,14 @@ function manual_dct!(u, i, stuff)
     # Convert to DCT
     w = reshape(w[i], ntuple(Returns(1), i - 1)..., :)
     @. u = 2 * real(w * uhat)
+
+    u
 end
 
 function manual_idct!(u, i, stuff)
     (; uhat, w, winv, perm, perminv) = stuff
-    # # IFFT in direction i
-    # copyto!(uhat, u)
-    # ifft!(uhat, i)
-    #
-    # # Convert to DCT
-    # winv = reshape(winv[i], ntuple(Returns(1), i - 1)..., :)
-    # @. u = real(winv * uhat)
+
+    @assert isreal(u) "Manual IDCT only implemented for real inputs"
 
     copyto!(uhat, u)
     winv = reshape(winv[i], ntuple(Returns(1), i - 1)..., :)

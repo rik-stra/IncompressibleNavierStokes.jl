@@ -26,18 +26,19 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - 'pre'
+          - '1.12'
+          - '1.10'
         os:
           - ubuntu-latest
         arch:
           - x64
     steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       # - uses: julia-actions/julia-buildpkg@v1
       - name: Test IncompressibleNavierStokes
         shell: julia --color=yes {0}
@@ -46,30 +47,13 @@ jobs:
             Pkg.activate(".")
             # Pkg.instantiate()
             Pkg.test(; coverage=true)
-      - name: Test NeuralClosure
-        shell: julia --color=yes {0}
-        run: |
-            using Pkg
-            Pkg.activate("lib/NeuralClosure")
-            # Pkg.instantiate()
-            Pkg.test(; coverage=true)
-      # RikFlow's time-series layer. Run directly rather than through `Pkg.test`: the suite
-      # deliberately has no RikFlow dependency, so that it does not pull in CUDA, Makie or Lux for
-      # tests of stdlib-only code. See lib/RikFlow/test/Project.toml.
-      - name: Test RikFlow time-series layer
-        shell: julia --color=yes {0}
-        run: |
-            using Pkg
-            Pkg.activate("lib/RikFlow/test")
-            Pkg.instantiate()
-            include("lib/RikFlow/test/runtests.jl")
       # - uses: julia-actions/julia-runtest@v1
       #   with:
       #     annotate: true
       - uses: julia-actions/julia-processcoverage@v1
         with:
-          directories: src,ext,lib/NeuralClosure/src,lib/RikFlow/src
-      - uses: codecov/codecov-action@v5
+          directories: src,ext
+      - uses: codecov/codecov-action@v7
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -19,16 +19,11 @@ jobs:
         run: |
           using CompatHelper
           CompatHelper.main(;
-              entry_type = DropEntry(),
+              entry_type = KeepEntry(),
               subdirs = [
                   "",
                   "docs",
                   "test",
                   "examples",
-                  "lib/NeuralClosure",
-                  "lib/NeuralClosure/test",
-                  "lib/SciMLCompat",
-                  "lib/PaperDC",
-                  "lib/SymmetryClosure",
               ],
           )

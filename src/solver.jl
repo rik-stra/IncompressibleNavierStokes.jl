@@ -1,5 +1,64 @@
+"Navier-Stokes momentum forcing (convection + diffusion)."
+function navierstokes!(force, state, t; setup, cache, viscosity)
+    (; u) = state
+    fill!(force.u, 0)
+    convectiondiffusion!(force.u, state.u, setup, viscosity)
+end
+
+"Navier-Stokes momentum forcing (convection + diffusion)."
+function navierstokes(state, t; setup, viscosity)
+    c = convection(state.u, setup)
+    d = diffusion(state.u, setup, viscosity)
+    (; u = c + d)
+end
+
+"Boussinesq forcing (Navier-Stokes + gravity for `u`, convection-diffusion for `temp`)."
+function boussinesq!(
+    force,
+    state,
+    t;
+    setup,
+    cache,
+    viscosity,
+    conductivity,
+    gdir,
+    gravity,
+    dodissipation,
+)
+    (; u, temp) = state
+    fill!(force.u, 0)
+    fill!(force.temp, 0)
+    convectiondiffusion!(force.u, u, setup, viscosity)
+    applygravity!(force.u, temp, setup, gdir, gravity)
+    convection_diffusion_temp!(force.temp, u, temp, setup, conductivity)
+    dodissipation && dissipation!(force.temp, u, setup, viscosity)
+end
+
+"Boussinesq forcing (Navier-Stokes + gravity for `u`, convection-diffusion for `temp`)."
+function boussinesq(state, t; setup, viscosity, conductivity, gdir, gravity, dodissipation)
+    (; u, temp) = state
+    d = diffusion(u, setup, viscosity)
+    c = convection(u, setup)
+    g = applygravity(temp, setup, gdir, gravity)
+    fu = @. c + d + g
+    ftemp = convection_diffusion_temp(u, temp, setup, conductivity)
+    dodissipation && (ftemp += dissipation(u, setup, viscosity))
+    (; u = fu, temp = ftemp)
+end
+
+get_cache(::typeof(navierstokes!), setup) = nothing
+get_cache(::typeof(boussinesq!), setup) = nothing
+
 """
 Solve unsteady problem using `method`.
+
+The initial `start` state is a named tuple of fields, e.g. `(; u)` or
+`(; u, temp)`. The right-hand side `force!` is called as
+`force!(force, state, t; setup, cache, params...)`, where `params` is a named
+tuple of parameters passed as keyword arguments (e.g.
+`params = (; viscosity)` for the default `navierstokes!`, or
+`(; viscosity, conductivity, gdir, gravity, dodissipation)` for
+`boussinesq!`).
 
 If `Δt` is a real number, it is rounded such that `(t_end - t_start) / Δt` is
 an integer.
@@ -9,87 +68,94 @@ CFL-number `cfl`. If `Δt_min` is given, the adaptive time step never goes below
 The `processors` are called after every time step.
 
 Note that the `state` observable passed to the `processor.initialize` function
-contains vector living on the device, and you may have to move them back to
-the host using `Array(u)` in the processor.
+contains fields living on the device, and you may have to move them back to
+the host using `Array` in the processor.
 
-Return `(; u, t), outputs`, where `outputs` is a  named tuple with the
+Return `(; state..., t), outputs`, where `outputs` is a named tuple with the
 outputs of `processors` with the same field names.
 """
 function solve_unsteady(;
     setup,
     tlims,
-    ustart,
-    tempstart = nothing,
-    method = RKMethods.RK44(; T = eltype(ustart)),
+    start,
+    force! = navierstokes!,
+    docopy = true,
+    method = LMWray3(; T = eltype(start.u)),
     psolver = default_psolver(setup),
     Δt = nothing,
     Δt_min = nothing,
-    cfl = eltype(ustart)(0.9),
+    cfl = eltype(start.u)(0.9),
     n_adapt_Δt = 1,
-    docopy = true,
     processors = (;),
-    θ = nothing,
+    params,
     # Cache arrays for intermediate computations
-    cache = ode_method_cache(method, setup),
+    ode_cache = get_cache(method, start, setup),
+    force_cache = get_cache(force!, setup),
 )
-    docopy && (ustart = copy(ustart))
-    docopy && !isnothing(tempstart) && (tempstart = copy(tempstart))
-
     tstart, tend = tlims
     isadaptive = isnothing(Δt)
-    if isadaptive
-        cflbuf = scalarfield(setup)
-    end
 
-    # Get cache for closure model
-    if isnothing(setup.closure_model)
-        closure_stuff = nothing
-    else
-        closure_stuff = get_closure_stuff(setup.closure_model, setup)
-    end
-    cache = (; cache..., closure_stuff)
+    state = docopy ? deepcopy(start) : start
 
     # Time stepper
-    stepper =
-        create_stepper(method; setup, psolver, u = ustart, temp = tempstart, t = tstart)
+    stepper = create_stepper(method; setup, psolver, state, t = tstart)
 
     # Initialize processors for iteration results
     state = Observable(get_state(stepper))
     initialized = (; (k => v.initialize(state) for (k, v) in pairs(processors))...)
 
-    # print one random forcing field to check if the same random seed is used ect.
-    if !isnothing(setup.ou_bodyforce)
-        OU_forcing_step!(; setup.ou_setup, Δt=Δt*setup.ou_bodyforce.freeze)
-        OU_get_force!(setup.ou_setup, setup)
-        # @info "ou random state 1: $(setup.ou_setup.state[1:2])", typeof(setup.ou_setup.state)
-        # @info "ou force corner $(Array(setup.bodyforce[:,:,:,1])[end-1,end-1,end-1])"
-        # @info "ou force 1 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-2,end-2])"
-        # @info "ou force 2 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-3,end-3])"
-        # @info "ou force 4 cel from corner  $(Array(setup.bodyforce[:, :, :,1])[end-1,end-5,end-5])"
-        # @info "ou force 8 cel from corner  $(Array(setup.bodyforce[:, :, :, 1])[end-1,end-9,end-9])"
+    # ------------------------------------------------------------------------------------------
+    # OU forcing — ours, not upstream's. Do not fold this into `force!`.
+    #
+    # 🔴 `force!` is called once per RK *stage*, not once per step: `timestep!` for an
+    # `ExplicitRungeKuttaMethod` calls it inside `for i = 1:nstage`, which is 4 times per step
+    # under RK44. Advancing the OU chain there would advance it 4× per step and silently destroy
+    # `claude_memory.md` gotcha #33's measured advance count, producing a trajectory that looks
+    # entirely plausible. The advance therefore stays here, once per step, exactly where it was
+    # before the upstream merge.
+    #
+    # What did move is the storage: the chain and its force buffer now live in `force_cache`
+    # (built by `ou_force_cache`), because upstream's `setup` is a pure grid description with no
+    # room for `ou_setup` or `bodyforce`. The *structure* gotcha #33 measured — one priming call
+    # before the loop, one advance per iteration gated on `freeze` — is unchanged, so
+    # `lib/RikFlow/analysis/ou_replay.jl` still measures the count the same way. It must be re-run
+    # after this merge regardless (checklist item 27).
+    isou = force_cache isa NamedTuple && haskey(force_cache, :ou_setup)
+    if isou
+        # Print one random forcing field, to check the same random seed is being used etc.
+        OU_forcing_step!(; force_cache.ou_setup, Δt = Δt * force_cache.freeze)
+        OU_get_force!(force_cache.ou_setup, force_cache.bodyforce, setup)
     end
+    # ------------------------------------------------------------------------------------------
 
     if isadaptive
-        if !isnothing(setup.ou_bodyforce)
-            @assert setup.ou_bodyforce.freeze ==1  "Can't freeze the bodyforce over multiple adaptive time steps"
+        if isou
+            @assert force_cache.freeze == 1 "Can't freeze the bodyforce over multiple adaptive time steps"
         end
         while stepper.t < tend
             if stepper.n % n_adapt_Δt == 0
                 # Change timestep based on operators
-                # Δt = get_timestep(stepper, cfl)
-                Δt = cfl * get_cfl_timestep!(cflbuf, stepper.u, setup)
+                Δt = cfl * propose_timestep(force!, stepper.state, setup, params)
                 Δt = isnothing(Δt_min) ? Δt : max(Δt, Δt_min)
+                if Δt < 1e-10 || Δt > 100 || isnan(Δt)
+                    @warn "Proposed time step $Δt is out of bounds. Stopping simulation."
+                    break
+                end
             end
 
             # Make sure not to step past `t_end`
-            Δt = min(Δt, tend - stepper.t)
-            # update forcing
-            if !isnothing(setup.ou_bodyforce)
-                OU_forcing_step!(; setup.ou_setup, Δt=Δt)
-                OU_get_force!(setup.ou_setup, setup)
+            # (keep `Δt` itself unclipped, it is reused until the next adaptation)
+            Δt_step = min(Δt, tend - stepper.t)
+
+            # Update forcing (ours)
+            if isou
+                OU_forcing_step!(; force_cache.ou_setup, Δt = Δt_step)
+                OU_get_force!(force_cache.ou_setup, force_cache.bodyforce, setup)
             end
+
             # Perform a single time step with the time integration method
-            stepper = timestep!(method, stepper, Δt; θ, cache)
+            stepper =
+                timestep!(method, force!, stepper, Δt_step; params, ode_cache, force_cache)
 
             # Process iteration results with each processor
             state[] = get_state(stepper)
@@ -98,26 +164,28 @@ function solve_unsteady(;
         nstep = round(Int, (tend - tstart) / Δt)
         Δt = (tend - tstart) / nstep
         for it = 1:nstep
-            # update forcing
-            if !isnothing(setup.ou_bodyforce) && mod(stepper.n, setup.ou_bodyforce.freeze) == 0
-                OU_forcing_step!(; setup.ou_setup, Δt=Δt*setup.ou_bodyforce.freeze)
-                OU_get_force!(setup.ou_setup, setup)
+            # Update forcing (ours). Gated on `freeze`, and stepped by `Δt * freeze`: the chain
+            # advances only on iterations where `mod(stepper.n, freeze) == 0`. Gotcha #33's rider
+            # — the count is `nstep + 1` only at `freeze == 1` — is a property of these two lines.
+            if isou && mod(stepper.n, force_cache.freeze) == 0
+                OU_forcing_step!(; force_cache.ou_setup, Δt = Δt * force_cache.freeze)
+                OU_get_force!(force_cache.ou_setup, force_cache.bodyforce, setup)
             end
+
             # Perform a single time step with the time integration method
-            stepper = timestep!(method, stepper, Δt; θ, cache)
+            stepper = timestep!(method, force!, stepper, Δt; params, ode_cache, force_cache)
 
             # Process iteration results with each processor
             state[] = get_state(stepper)
-            
-            if setup.nans_detected[]
+
+            # NaN guard (ours). `RikFlow`'s `qoisaver` sets this flag; `setup` carries it because
+            # RikFlow extends upstream's setup NamedTuple with its own fields.
+            if haskey(setup, :nans_detected) && setup.nans_detected[]
                 @warn "NaNs detected in the solution. Stopping the simulation."
                 break
             end
         end
     end
-
-    # Final state
-    (; u, temp, t) = stepper
 
     # Processor outputs
     outputs = (;
@@ -125,38 +193,70 @@ function solve_unsteady(;
     )
 
     # Return state and outputs
-    (; u, temp, t), outputs
+    (; stepper.state..., stepper.t), outputs
 end
 
 "Get state `(; u, temp, t, n)` from stepper."
 function get_state(stepper)
-    (; u, temp, t, n) = stepper
-    (; u, temp, t, n)
+    (; state, t, n) = stepper
+    (; state..., t, n)
 end
 
-"Get proposed maximum time step for convection and diffusion terms."
-function get_cfl_timestep!(buf, u, setup)
-    (; Re, grid) = setup
-    (; dimension, Δ, Δu, Iu) = grid
+function propose_timestep(::typeof(diffusion!), state, setup, params)
+    (; dimension, Δu, Iu) = setup
     D = dimension()
 
-    # Initial maximum step size
-    Δt = eltype(u)(Inf)
+    # Check maximum step size in each dimension
+    minimum(1:D) do α
+        Δαmin = minimum(view(Δu[α], Iu[α].indices[α]))
+        Δαmin^2 / params.viscosity / 2D
+    end
+end
+
+broadcastreduce(f, op, args...; kwargs...) =
+    reduce(op, Broadcast.instantiate(Broadcast.broadcasted(f, args...); kwargs...))
+
+function propose_timestep(::typeof(convection!), state, setup, params)
+    (; dimension, Δu, Iu) = setup
+    D = dimension()
+    (; u) = state
 
     # Check maximum step size in each dimension
-    for (α, uα) in enumerate(eachslice(u; dims = D + 1))
-        # Diffusion
-        Δαmin = minimum(view(Δu[α], Iu[α].indices[α]))
-        Δt_diff = Re * Δαmin^2 / 2
-
-        # Convection
-        Δα = reshape(Δu[α], ntuple(Returns(1), α - 1)..., :)
-        @. buf = Δα / abs(uα)
-        Δt_conv = minimum(view(buf, Iu[α]))
-
-        # Update time step
-        Δt = min(Δt, Δt_diff, Δt_conv)
+    minimum(1:D) do α
+        uα = selectdim(u, D + 1, α)
+        Δα = view(Δu[α], Iu[α].indices[α])
+        Δα = reshape(Δα, ntuple(Returns(1), α - 1)..., :)
+        uα = view(uα, Iu[α])
+        broadcastreduce(min, Δα, uα) do Δα, uα
+            Δα / abs(uα)
+        end
     end
-
-    Δt
 end
+
+function propose_timestep(::typeof(convection_diffusion_temp!), state, setup, params)
+    (; dimension, Δ, Ip) = setup
+    D = dimension()
+
+    # Check maximum step size in each dimension
+    minimum(1:D) do α
+        Δαmin = minimum(view(Δ[α], Ip.indices[α]))
+        Δαmin^2 / params.conductivity / 2D
+    end
+end
+
+# Fallback
+propose_timestep(_, state, setup, params) =
+    propose_timestep(navierstokes!, state, setup, params)
+
+propose_timestep(::typeof(navierstokes), state, setup, params) =
+    propose_timestep(navierstokes!, state, setup, params)
+propose_timestep(::typeof(navierstokes!), state, setup, params) = min(
+    propose_timestep(convection!, state, setup, params),
+    propose_timestep(diffusion!, state, setup, params),
+)
+propose_timestep(::typeof(boussinesq), state, setup, params) =
+    propose_timestep(boussinesq!, state, setup, params)
+propose_timestep(::typeof(boussinesq!), state, setup, params) = min(
+    propose_timestep(navierstokes!, state, setup, params),
+    propose_timestep(convection_diffusion_temp!, state, setup, params),
+)

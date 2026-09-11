@@ -1,9 +1,41 @@
 "Create empty scalar field."
-scalarfield(setup) = fill!(similar(setup.grid.x[1], setup.grid.N), 0)
+scalarfield(setup) = fill!(similar(setup.x[1], setup.N), 0)
 
 "Create empty vector field."
-vectorfield(setup) =
-    fill!(similar(setup.grid.x[1], setup.grid.N..., setup.grid.dimension()), 0)
+vectorfield(setup) = fill!(similar(setup.x[1], setup.N..., setup.dimension()), 0)
+
+"Non-symmetric tensor field, stored as a named tuple `σ.ij`."
+tensorfield(setup) = tensorfield(setup.dimension, setup)
+tensorfield(::Dimension{2}, setup) = (;
+    xx = scalarfield(setup),
+    yx = scalarfield(setup),
+    xy = scalarfield(setup),
+    yy = scalarfield(setup),
+)
+tensorfield(::Dimension{3}, setup) = (;
+    xx = scalarfield(setup),
+    yx = scalarfield(setup),
+    zx = scalarfield(setup),
+    xy = scalarfield(setup),
+    yy = scalarfield(setup),
+    zy = scalarfield(setup),
+    xz = scalarfield(setup),
+    yz = scalarfield(setup),
+    zz = scalarfield(setup),
+)
+
+"Symmetric tensor field, stored as a named tuple `σ.ij`."
+symmetric_tensorfield(setup) = symmetric_tensorfield(setup.dimension, setup)
+symmetric_tensorfield(::Dimension{2}, setup) =
+    (; xx = scalarfield(setup), xy = scalarfield(setup), yy = scalarfield(setup))
+symmetric_tensorfield(::Dimension{3}, setup) = (;
+    xx = scalarfield(setup),
+    xy = scalarfield(setup),
+    xz = scalarfield(setup),
+    yy = scalarfield(setup),
+    yz = scalarfield(setup),
+    zz = scalarfield(setup),
+)
 
 """
 Create divergence free velocity field `u` with boundary conditions at time `t`.
@@ -13,12 +45,11 @@ The initial conditions of `u[α]` are specified by the function
 function velocityfield(
     setup,
     ufunc,
-    t = convert(eltype(setup.grid.x[1]), 0);
+    t = convert(eltype(setup.x[1]), 0);
     psolver = default_psolver(setup),
     doproject = true,
 )
-    (; grid) = setup
-    (; dimension, Iu, xu) = grid
+    (; dimension, Iu, xu) = setup
 
     D = dimension()
 
@@ -46,9 +77,8 @@ function velocityfield(
 end
 
 "Create temperature field from function with boundary conditions at time `t`."
-function temperaturefield(setup, tempfunc, t = zero(eltype(setup.grid.x[1])))
-    (; grid) = setup
-    (; dimension, N, Ip, xp) = grid
+function temperaturefield(setup, tempfunc, t = zero(eltype(setup.x[1])))
+    (; dimension, N, Ip, xp) = setup
     D = dimension()
     xin = ntuple(β -> reshape(xp[β][Ip.indices[β]], ntuple(Returns(1), β - 1)..., :), D)
     temperature = scalarfield(setup)
@@ -56,169 +86,98 @@ function temperaturefield(setup, tempfunc, t = zero(eltype(setup.grid.x[1])))
     apply_bc_temp!(temperature, t, setup)
 end
 
-# function create_spectrum(; setup, A, σ, s, rng = Random.default_rng())
-#     (; dimension, x, N) = setup.grid
-#     T = eltype(x[1])
-#     D = dimension()
-#     K = N .÷ 2
-#     k = ntuple(
-#         α -> reshape(1:K[α], ntuple(Returns(1), α - 1)..., :, ntuple(Returns(1), D - α)...),
-#         D,
-#     )
-#     a = fill!(similar(x[1], Complex{T}, K), 1)
-#     τ = T(2π)
-#     a .*= prod(N) * A / sqrt(τ^2 * 2σ^2)
-#     for α = 1:D
-#         kα = k[α]
-#         @. a *= exp(-max(abs(kα) - s, 0)^2 / 2σ^2)
-#     end
-#     @. a *= randn(rng, T) * exp(im * τ * rand(rng, T))
-#     for α = 1:D
-#         a = cat(a, reverse(a; dims = α); dims = α)
-#     end
-#     a
-# end
-
-function create_spectrum(; setup, kp, rng = Random.default_rng())
-    (; dimension, x, N) = setup.grid
-    T = eltype(x[1])
-    D = dimension()
-    τ = T(2π)
-    @assert all(iseven, N) "Spectrum only implemented for even number of volumes."
-
-    # Maximum wavenumber (remove ghost volumes)
-    K = @. (N - 2) ÷ 2
-
-    # Wavenumber vectors
-    kk = ntuple(
-        α -> reshape(
-            0:K[α]-1,
-            ntuple(Returns(1), α - 1)...,
-            :,
-            ntuple(Returns(1), D - α)...,
-        ),
-        D,
-    )
-
-    # Wavevector magnitude
-    k = fill!(similar(x[1], K), 0)
-    for α = 1:D
-        @. k += kk[α]^2
-    end
-    k .= sqrt.(k)
-
-    # Shared magnitude
-    A = T(8τ / 3) / kp^5
-
-    # Velocity magnitude
-    # a = @. complex(1) * sqrt(A * k^4 * exp(-(k / kp)^2))
-    a = @. complex(1) * sqrt(A * k^4 * exp(-τ * (k / kp)^2))
-    a .*= prod(N)
-
-    # Apply random phase shift
-    ξ = ntuple(α -> rand!(rng, similar(x[1], K)), D)
-    for α = 1:D
-        a = cat(a, reverse(a; dims = α); dims = α)
-        ξ = ntuple(D) do β
-            s = α == β ? -1 : 1
-            ξβ = ξ[β]
-            cat(ξβ, reverse(s .* ξβ; dims = α); dims = α)
-        end
-    end
-    ξ = sum(ξ)
-    a = @. exp(im * τ * ξ) * a
-
-    KK = 2 .* K
-    kkkk = ntuple(
-        α -> reshape(
-            0:KK[α]-1,
-            ntuple(Returns(1), α - 1)...,
-            :,
-            ntuple(Returns(1), D - α)...,
-        ),
-        D,
-    )
-    knorm = fill!(similar(x[1], KK), 0)
-    for α = 1:D
-        @. knorm += kkkk[α]^2
-    end
-    knorm .= sqrt.(knorm)
-
-    # Create random unit vector for each wavenumber
-    if D == 2
-        θ = rand!(rng, similar(x[1], KK))
-        e = (cospi.(2 .* θ), sinpi.(2 .* θ))
-    elseif D == 3
-        θ = rand!(rng, similar(x[1], KK))
-        ϕ = rand!(rng, similar(x[1], KK))
-        e = (sinpi.(θ) .* cospi.(2 .* ϕ), sinpi.(θ) .* sinpi.(2 .* ϕ), cospi.(θ))
-    end
-
-    # Remove non-divergence free part: (I - k k^T / k^2) e
-    ke = sum(α -> e[α] .* kkkk[α], 1:D)
-    for α = 1:D
-        e0 = e[α][1:1] # CUDA doesn't like e[α][1]
-        @. e[α] -= kkkk[α] * ke / knorm^2
-        # Restore k=0 component, which is divergence free anyways
-        e[α][1:1] .= e0
-    end
-
-    # Normalize
-    enorm = sqrt.(sum(α -> e[α] .^ 2, 1:D))
-    for α = 1:D
-        e[α] ./= enorm
-    end
-
-    # Split velocity magnitude a into velocity components a*eα
-    uhat = ntuple(D) do α
-        eα = e[α]
-        # for β = 1:D
-        #     eα = cat(eα, reverse(eα; dims = β); dims = β)
-        # end
-        a .* eα
-    end
-    stack(uhat)
-end
+"""
+Initial energy spectrum profile ``E(k) \\propto k^4 e^{-2 (k / k_p)^2}``
+with peak wavenumber `kpeak`, as in Orlandi [Orlandi2000](@cite).
+"""
+orlandi_profile(k; kpeak = 10) = k^4 * exp(-2 * (k / kpeak)^2)
 
 """
-Create random field, as in [Orlandi2000](@cite).
+Create a random divergence-free velocity field with a prescribed energy
+spectrum profile. The energy in the wavenumber shell `κ ≤ |k| < κ + 1` is
+`totalenergy * profile(κ; kwargs...) / p`, where `p` normalizes the profile
+such that the mean kinetic energy density `⟨u_i u_i⟩ / 2` is exactly
+`totalenergy`. By default, the Orlandi form [`orlandi_profile`](@ref) is used
+(pass e.g. `kpeak = 5` to move the peak).
 
-- `A`: Eddy amplitude scaling
-- `kp`: Peak energy wavenumber
+The field is constructed in spectral space from white noise, projected onto
+the divergence-free space of the *staggered* grid (using the modified
+wavenumbers of the staggered divergence operator), and rescaled shell-wise.
+The resulting field is thus exactly divergence-free on the staggered grid and
+has exactly the prescribed spectrum.
 """
 function random_field(
     setup,
-    t = zero(eltype(setup.grid.x[1]));
-    A = 1,
-    kp = 10,
-    psolver = default_psolver(setup),
+    t = zero(eltype(setup.x[1]));
+    profile = orlandi_profile,
+    totalenergy = one(eltype(setup.x[1])),
     rng = Random.default_rng(),
+    kwargs...,
 )
-    (; grid, boundary_conditions) = setup
-    (; dimension, N, Δ) = grid
+    (; dimension, Np, Ip, x, xlims, backend) = setup
     D = dimension()
+    T = eltype(x[1])
 
-    @assert(
-        all(==((PeriodicBC(), PeriodicBC())), boundary_conditions),
-        "Random field requires periodic boundary conditions."
-    )
-    @assert all(Δ -> all(≈(Δ[1]), Δ), Array.(Δ)) "Random field requires uniform grid spacing."
-    @assert all(iseven, N) "Random field requires even number of volumes."
+    assert_uniform_periodic(setup, "Random field")
 
-    # Create random velocity field
-    uhat = create_spectrum(; setup, kp, rng)
-    u = ifft(uhat, 1:D)
-    u = @. A * real(u)
+    # Gaussian white noise per component. Taking the RFFT of a real field
+    # automatically gives Hermitian-symmetric spectral coefficients with
+    # random phases.
+    v = similar(x[1], Np)
+    plan = plan_rfft(v)
+    uhat = ntuple(α -> (randn!(rng, v); plan * v), D)
 
-    # Add ghost volumes (one on each side for periodic)
-    u = pad_circular(u, 1; dims = 1:D)
+    # Spectral symbol of the staggered divergence operator
+    # (backward difference): m[α] = (1 - exp(-i θ[α])) / h[α],
+    # with θ[α] = 2π k[α] / Np[α] the phase shift per grid point.
+    m = ntuple(D) do α
+        L = xlims[α][2] - xlims[α][1]
+        h = L / Np[α]
+        kint = α == 1 ? collect(0:(Np[1]÷2)) : map(i -> fftfreq_int(Np[α], i), 1:Np[α])
+        mα = map(k -> (1 - exp(-im * T(2π) * k / Np[α])) / h, kint)
+        reshape(adapt(backend, mα), ntuple(Returns(1), α - 1)..., :)
+    end
 
-    # # Interpolate to staggered grid
-    # interpolate_p_u!(u, setup)
+    # Project onto the divergence-free space: û ← û - conj(m) (m ⋅ û) / |m|².
+    # This makes the staggered-grid divergence of the final field exactly
+    # zero. The `k = 0` mode (where `m = 0`) is left intact.
+    mdotu = m[1] .* uhat[1]
+    for α = 2:D
+        @. mdotu += m[α] * uhat[α]
+    end
+    m2 = .+(map(mα -> abs2.(mα), m)...)
+    for α = 1:D
+        @. uhat[α] -= ifelse(m2 > 0, conj(m[α]) * mdotu / m2, zero(mdotu))
+    end
 
-    # Make velocity field divergence free on staggered grid
-    # (it is already diergence free on the "spectral grid")
+    # Current spectral energy distribution (unnormalized)
+    efield = abs2.(uhat[1])
+    for α = 2:D
+        @. efield += abs2(uhat[α])
+    end
+
+    # Rescale all wavenumber shells to match the target profile.
+    # The last shell contains the largest wavenumber on the grid.
+    kdiag = isqrt(sum(α -> (Np[α] ÷ 2)^2, 1:D))
+    stuff = spectral_stuff(setup; kmax = kdiag)
+    totalprofile = sum(κ -> T(profile(T(κ); kwargs...)), 0:kdiag)
+    Ntot = T(prod(Np))
+    for (j, κ) in enumerate(stuff.κ)
+        eshell = sum(view(efield, stuff.energyinds[j])) / (2 * Ntot^2)
+        e0 = totalenergy * T(profile(T(κ); kwargs...)) / totalprofile
+        factor = eshell > 0 ? sqrt(e0 / eshell) : zero(T)
+        for α = 1:D
+            shell = view(uhat[α], stuff.inds[j])
+            shell .*= factor
+        end
+    end
+
+    # Transform to physical space and fill the staggered velocity components
+    u = vectorfield(setup)
+    for α = 1:D
+        ldiv!(v, plan, uhat[α])
+        copyto!(view(u, Ip, α), v)
+    end
     apply_bc_u!(u, t, setup)
-    u = project(u, setup; psolver)
-    apply_bc_u!(u, t, setup)
+    u
 end
