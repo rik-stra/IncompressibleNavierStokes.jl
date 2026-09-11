@@ -50,10 +50,15 @@ wavenumbers, which depend on `k_f` alone, so an 8^3 grid and a 64^3 grid carry t
 That is what makes a mini-solve decisive rather than merely suggestive.
 """
 function mini_setup(; n::Int = 8, ou = HIT_OU, T = Float32)
-    setup = rf_setup(;
+    # Built inline rather than through `RikFlow.rf_setup`, because this file deliberately runs in
+    # the *solver* environment (`--project=.`) and must not pull RikFlow in. The two fields
+    # appended here are the ones `OU_setup` reads: `Re` for the element type, `ArrayType` for its
+    # allocations. Upstream's `Setup` is a plain NamedTuple, so appending is all it takes.
+    base = Setup(;
         x = ntuple(α -> LinRange(T(0), T(1), n + 1), 3),
-        Re = T(2000),
+        boundary_conditions = (; u = ntuple(_ -> (PeriodicBC(), PeriodicBC()), 3)),
     )
+    setup = (; base..., Re = T(2000), ArrayType = Array)
     # Since the upstream merge the chain lives in the force cache, not in the setup, so this
     # returns both. Everything below reads `force_cache.ou_setup` where it used to read
     # `setup.ou_setup`.
@@ -95,7 +100,7 @@ function solver_state(nsteps::Integer; n::Int = 8, ou = HIT_OU, Δt = HIT_DT)
         start = (; u = ustart),
         force! = ou_navierstokes!,
         force_cache,
-        params = rf_params(setup),
+        params = (; viscosity = 1 / setup.Re),
         tlims = (T(0), tsim),
         Δt = T(Δt),
         psolver,
