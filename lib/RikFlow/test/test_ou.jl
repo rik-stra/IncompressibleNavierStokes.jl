@@ -31,16 +31,20 @@
     """
         fake_setup(; N = 8, T = Float32)
 
-    The four things `OU_setup` reads out of a `setup`: `Re` (for the element type), `ArrayType`, the
-    grid's dimension, and `grid.Nu[1][1]` (the number of points per direction, used to build the
-    partial inverse-transform matrix `E`).
+    The four things `OU_setup` reads out of a `setup`: `Re` (for the element type), `ArrayType`,
+    `dimension`, and `Nu[1][1]` (the number of points per direction, used to build the partial
+    inverse-transform matrix `E`).
 
     Nothing else in `OU_setup` or `OU_forcing_step!` touches the flow, which is the point: the OU
     chain is a function of `(rng_seed, nsteps, Δt)` and of the forced wavenumbers only.
+
+    ⚠️ Flat since the upstream merge. `dimension` and `Nu` used to live under `setup.grid`;
+    upstream hoisted every grid field to the top level of the setup NamedTuple, so this stub
+    follows. `Re` and `ArrayType` are RikFlow's own additions (`rf_setup`) and are unchanged.
     """
     fake_setup(; N::Int = 8, T = Float32) =
         (; Re = T(2000), ArrayType = Array,
-         grid = (; dimension = () -> 3, Nu = [ntuple(_ -> N, 3) for _ in 1:3]))
+         dimension = () -> 3, Nu = [ntuple(_ -> N, 3) for _ in 1:3])
 
     "HIT's forcing parameters, from `params_track.ou_bodyforce` on the 100 TU tracked record."
     const HIT_OU = (T_L = 0.01, e_star = 0.1, k_f = sqrt(2), freeze = 1, rng_seed = 333)
