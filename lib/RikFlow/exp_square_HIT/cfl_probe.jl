@@ -115,20 +115,41 @@ ispath(outdir) || mkpath(outdir)
 # so no forcing state carries over. Float32 -> Float64 promotion is exact.
 # ---------------------------------------------------------------------------------------------
 
+# `freeze_10_tsim4.0` is hardcoded on purpose: it names the *archived spin-up*, which was run at
+# freeze = 10 for 4 TU. This probe's own `freeze` is 1, which is a property of this run and not of
+# the file it starts from.
 icfile = indir * "/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_10_tsim4.0.jld2"
+
+# 🔴 A synthetic initial condition is opt-in, never a fallback.
+#
+# An earlier version substituted one silently when the spin-up was missing. On a workstation that
+# is a convenience; on Snellius it is a trap — the run completes, prints a confident stability
+# verdict, and the only sign it measured nothing is a warning buried in the SLURM log. max|u| sets
+# the CFL limit, so a synthetic field gives a synthetic Δt and a synthetic answer.
+const SYNTHETIC = get(ENV, "CFL_SYNTHETIC", "0") == "1"
+
 if isfile(icfile)
     println("Loading initial condition: $icfile")
     ustart = load(icfile, "u_start")
     ustart isa Tuple && (ustart = stack(ustart))
     println("  stored as $(eltype(ustart)) $(size(ustart)); promoting to $T")
     ustart = ArrayType{T}(ustart)
-else
-    # ⚠️ Smoke path only. A synthetic divergence-carrying field, so the probe can be exercised
-    # without the 1.5 GB archive. It says nothing about the production flow: max|u| sets the CFL
-    # limit, so a synthetic field gives a synthetic Δt. Never read a stability verdict from a run
-    # that printed this warning.
-    @warn "no spin-up at $icfile — using a SYNTHETIC initial condition (smoke only, not a measurement)"
+elseif SYNTHETIC
+    @warn "SYNTHETIC initial condition (CFL_SYNTHETIC=1): this exercises the machinery and " *
+          "measures NOTHING about production stability. max|u| sets the CFL limit, so a " *
+          "synthetic field gives a synthetic Δt. Do not read a stability verdict from this run."
     ustart = nothing   # built below, once `dns` exists
+else
+    error(
+        "No initial condition at:\n    $icfile\n\n" *
+        "Copy the archived spin-up there, for example:\n" *
+        "    scp <archive>/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_10_tsim4.0.jld2 \\\n" *
+        "        <host>:<repo>/lib/RikFlow/exp_square_HIT/output/\n\n" *
+        "⚠️ `1_spinnup.jl` writes to output_spinnup/, not output/, so a spin-up produced on this " *
+        "machine also has to be moved.\n\n" *
+        "To exercise the script without it, set CFL_SYNTHETIC=1 — but that run measures nothing " *
+        "about stability.",
+    )
 end
 
 # ---------------------------------------------------------------------------------------------
