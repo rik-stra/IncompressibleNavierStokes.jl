@@ -8,7 +8,9 @@ regression asset, and the reason is worth stating precisely:
 🔑 **The archived DNS *trajectory* is correct and is unaffected by `09954be1`.** `∂` enters only
 the QoI evaluation and the TO direction vectors, and a *reference* run has no TO feedback — it is
 a plain forced DNS with a filter hanging off it. So a re-run of the reference on the merged solver
-must reproduce those 401 fields **bit for bit**, whatever happened to the Nyquist convention.
+must reproduce those 401 fields **to Float32 round-off**, whatever happened to the Nyquist
+convention. (It was *bit for bit* until the upstream merge rewrote the operator contractions; see
+`GATE_EPS32` for the measurement and the decision.)
 
 🔴 **The `qoi_hist` in the same file is a different matter, and that is the point.** The QoIs are
 computed through `∂` (`Z` goes via `curl`, `E` does not), so gotchas #45/#46 predict a specific,
@@ -20,8 +22,8 @@ falsifiable pattern:
 | `Z[0,6]`, `Z[7,15]` | match | their masks exclude `|k| ≥ 15.5`, so they never meet Nyquist |
 | `Z[16,32]` | **differs, ~1.06e-3 relative** | its mask retains the Nyquist shell while `∂` is zeroed there |
 
-So this script gates on the fields and *reports* the QoIs against that prediction. A `Z[16,32]`
-mismatch is expected and is not a failure. A mismatch anywhere else is.
+So this script gates on the fields, at the round-off bound, and *reports* the QoIs against that
+prediction. A `Z[16,32]` mismatch is expected and is not a failure. A mismatch anywhere else is.
 
 ⚠️ Do not "fix" a `Z[16,32]` mismatch by touching the masks. Gotcha #46 settled that: the
 pre-`09954be1` convention was wrong, not merely different, and the masks stay as they are.
@@ -78,21 +80,40 @@ function load_reference(path)
 end
 
 """
+Float32 round-off bound for the field comparison, in units of `eps(Float32)`.
+
+🔴 **Was bit-identity until 2026-09-11; changed by Rik's decision for the same measured reason as
+`small_case.jl`.** A reference run is deterministic, and the Nyquist change of `09954be1` genuinely
+does not reach the DNS trajectory — both halves of the original argument still hold. What broke the
+bit-level bar is the upstream merge: `operators.jl` was rewritten into a mathematically equivalent
+but differently-ordered contraction form, so the arithmetic order changed and the last bits move.
+Measured on the 64³ small case, filtered fields drift from 2.2 to 7.3 eps(Float32) over 1000 DNS
+steps; 16 leaves headroom without admitting anything a real defect could hide in, since a port
+defect moves these by O(1e-2) or worse.
+
+⚠️ 401 fields at 0.25 TU apart span 100 TU, far longer than the small case's 0.25 TU, so the drift
+here may well exceed 7.3 eps32. If it exceeds the bound, that is a **finding to report with the
+measured growth curve**, not a reason to raise the number — the question then is whether round-off
+has amplified chaotically over 100 TU, which is a physical statement about the reference, not a
+tolerance question.
+"""
+const GATE_EPS32 = 16
+
+"""
     compare_fields(new, old)
 
-Bit-level comparison of the 401 filtered fields. Returns `(ok, nmismatch, firstbad)`.
-
-Bit-identity is the bar. Same seed, same initial condition, same arithmetic — a reference run is
-deterministic, and the Nyquist change does not reach it.
+Compare the 401 filtered fields at the Float32 round-off bound. Returns `(ok, nmismatch, worst)`.
 """
 function compare_fields(new, old)
     if length(new) != length(old)
         @printf("FIELDS FAIL: %d fields against the archive's %d\n", length(new), length(old))
-        return (false, -1, 0)
+        return (false, -1, 0.0)
     end
     nbad = 0
     firstbad = 0
     worst = 0.0
+    worst_i = 0
+    nident = 0
     for i in eachindex(old)
         a, b = new[i], old[i]
         if size(a) != size(b)
@@ -101,22 +122,34 @@ function compare_fields(new, old)
             firstbad == 0 && (firstbad = i)
             continue
         end
-        a == b && continue
-        nbad += 1
-        firstbad == 0 && (firstbad = i)
+        if a == b
+            nident += 1
+            continue
+        end
         d = maximum(abs, Float64.(a) .- Float64.(b))
         s = maximum(abs, Float64.(b))
         rel = s == 0 ? 0.0 : d / s
-        worst = max(worst, rel)
-        nbad <= 5 && @printf("  field %d differs: max abs %.6e, max rel %.6e\n", i, d, rel)
+        if rel > worst
+            worst = rel
+            worst_i = i
+        end
+        if rel / eps(Float32) > GATE_EPS32
+            nbad += 1
+            firstbad == 0 && (firstbad = i)
+            nbad <= 5 && @printf("  field %d over bound: max rel %.4e = %.1f eps32\n",
+                i, rel, rel / eps(Float32))
+        end
     end
+    @printf("  %d of %d fields bit-identical; worst relative %.4e = %.1f eps32 at field %d\n",
+        nident, length(old), worst, worst / eps(Float32), worst_i)
     if nbad == 0
-        @printf("FIELDS PASS: all %d filtered fields bit-identical to the archive\n", length(old))
+        @printf("FIELDS PASS: all %d filtered fields within %d eps(Float32) of the archive\n",
+            length(old), GATE_EPS32)
     else
-        @printf("FIELDS FAIL: %d of %d differ, first at %d, worst relative %.6e\n",
-            nbad, length(old), firstbad, worst)
+        @printf("FIELDS FAIL: %d of %d exceed %d eps32, first at %d\n",
+            nbad, length(old), GATE_EPS32, firstbad)
     end
-    (nbad == 0, nbad, firstbad)
+    (nbad == 0, nbad, worst)
 end
 
 """
@@ -194,11 +227,11 @@ function main()
 
     if fields_ok && qois_ok
         println("401-FIELD CHECK PASSED.")
-        println("  The re-run reproduces the archived DNS trajectory bit for bit, and the QoI")
-        println("  deviations are confined to Z[16,32] exactly as the Nyquist analysis predicts.")
+        println("  The re-run reproduces the archived DNS trajectory to Float32 round-off, and")
+        println("  the QoI deviations are confined to Z[16,32] as the Nyquist analysis predicts.")
         true
     else
-        println("401-FIELD CHECK FAILED. Do not widen a tolerance.")
+        println("401-FIELD CHECK FAILED. Report the growth curve; do not raise the bound.")
         false
     end
 end

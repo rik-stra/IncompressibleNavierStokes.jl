@@ -356,58 +356,101 @@ function run_small_case(p = small_case_params())
 end
 
 """
+Gate for the quantities that have resolution: a Float32 round-off bound, in units of
+`eps(Float32)` relative to the array's own scale.
+
+🔴 **This replaced a bit-identity gate on 2026-09-11, by Rik's decision, and the reason is a
+measurement rather than a convenience.** The first version of this file asserted bit-identity on
+the grounds that the comparison is same-seed, same-IC, same-machine. That was true of the
+*pre*-merge solver — the case was verified green against its own golden data that way — and is not
+true across the upstream merge: upstream rewrote `operators.jl` into a mathematically equivalent
+but differently-ordered contraction form, so the arithmetic order changed and the last bits move.
+
+Measured post-merge, against golden data generated pre-merge:
+
+| array | deviation | |
+|---|---|---|
+| `qoi_hist` | 1.0 eps32 | gated |
+| `q` | 2.0 eps32 | gated |
+| filtered fields | 2.2 → 7.3 eps32 over 1000 DNS steps | gated |
+| `dQ` | 4.5e-4 relative | reported |
+| `tau` | 2.0e-1 relative | reported |
+
+The bound of 16 eps32 leaves roughly a factor 2 of headroom over the worst gated quantity. It is
+still a real gate: a genuine port defect — wrong boundary-condition keying, wrong viscosity, a
+misphased forcing chain — moves these by O(1e-2) or more, four orders above this bound. Every such
+defect found while porting (and there were four) showed up as an outright error or as an O(1)
+difference, never as single-digit eps.
+"""
+const GATE_EPS32 = 16
+
+"""
     compare_against_golden(cur, gold)
 
-Bit-level comparison, per array, naming what differs.
+Per-array comparison. Gates the quantities that have resolution and reports the two that do not.
 
-⚠️ Bit-identity is the right bar and it is achievable: same seed, same initial condition, same
-arithmetic, same machine. Any deviation at all is a port defect until proven otherwise. If
-upstream legitimately changed a numerical scheme, that is a finding to escalate — **not** a
-tolerance to widen.
+⚠️ **`dQ` and `tau` are reported, never gated, and this is structural rather than a concession.**
+`dQ = q_ref - q_star` is a difference of two nearly-equal QoIs, so cancellation turns a 2e-7
+agreement on `q` into ~1e-3 on `dQ`. `tau = dQ ./ src_Q` (`RikFlow.jl:496`) is then a *ratio* whose
+denominator is built from the `cij` linear solve and can pass near zero — and `tau` is not an
+observable in its own right: the SGS term is `-tau .* Σ cij .* ti`, so only the product is
+determined. Measured `rel(tau) ≈ rel(dQ) + rel(src_Q)` puts ~20% of the movement in `src_Q`, i.e.
+in the solve, not in the physics.
 
-Returns `true` if everything matches.
+Same shape of finding as `claude_memory.md` gotcha #48 (a criterion that saturates cannot gate) and
+gotcha #31 (a statistic whose sensitivity is structural must be restated, not tightened).
+
+Returns `true` if every gated array is inside the bound.
 """
 function compare_against_golden(cur, gold)
     ok = Ref(true)
 
-    function cmp_array(name, a, b)
+    function cmp_array(name, a, b; gate::Bool)
+        tag = gate ? "GATE  " : "report"
         if size(a) != size(b)
-            @printf("  %-10s FAIL  size %s vs golden %s\n", name, string(size(a)), string(size(b)))
-            ok[] = false
+            @printf("  %-10s %s FAIL  size %s vs golden %s\n",
+                name, tag, string(size(a)), string(size(b)))
+            gate && (ok[] = false)
             return
         end
         if a == b
-            @printf("  %-10s ok    %s bit-identical\n", name, string(size(a)))
+            @printf("  %-10s %s ok    %s bit-identical\n", name, tag, string(size(a)))
             return
         end
-        ok[] = false
         d = abs.(Float64.(a) .- Float64.(b))
         scale = maximum(abs, Float64.(b))
+        rel = scale == 0 ? 0.0 : maximum(d) / scale
+        neps = rel / eps(Float32)
         i = argmax(d)
-        nbad = count(!iszero, d)
-        @printf("  %-10s FAIL  %d of %d entries differ; max abs %.6e at %s; max rel %.6e\n",
-            name, nbad, length(a), maximum(d), string(Tuple(i)),
-            scale == 0 ? 0.0 : maximum(d) / scale)
+        if !gate
+            @printf("  %-10s %s       max abs %.4e at %s; max rel %.4e\n",
+                name, tag, maximum(d), string(Tuple(i)), rel)
+            return
+        end
+        pass = neps <= GATE_EPS32
+        pass || (ok[] = false)
+        @printf("  %-10s %s %s  max rel %.4e = %.1f eps32 (bound %d)\n",
+            name, tag, pass ? "ok  " : "FAIL", rel, neps, GATE_EPS32)
     end
 
-    println("comparing against golden data:")
-    cmp_array("qoi_hist", cur.qoi_hist, gold.qoi_hist)
-    cmp_array("q", cur.q, gold.q)
-    cmp_array("dQ", cur.dQ, gold.dQ)
-    cmp_array("tau", cur.tau, gold.tau)
+    println("comparing against golden data (gate = $(GATE_EPS32) eps(Float32) relative):")
+    cmp_array("qoi_hist", cur.qoi_hist, gold.qoi_hist; gate = true)
+    cmp_array("q", cur.q, gold.q; gate = true)
+    cmp_array("dQ", cur.dQ, gold.dQ; gate = false)
+    cmp_array("tau", cur.tau, gold.tau; gate = false)
 
     if length(cur.fields) != length(gold.fields)
-        @printf("  %-10s FAIL  %d fields vs golden %d\n",
+        @printf("  %-10s GATE   FAIL  %d fields vs golden %d\n",
             "fields", length(cur.fields), length(gold.fields))
         ok[] = false
     else
         for i in eachindex(cur.fields)
-            cmp_array("field[$i]", cur.fields[i], gold.fields[i])
+            cmp_array("field[$i]", cur.fields[i], gold.fields[i]; gate = true)
         end
     end
 
     if cur.nnyq != gold.nnyq
-        @printf("  %-10s FAIL  %d Nyquist-plane modes in top band vs golden %d\n",
+        @printf("  %-10s GATE   FAIL  %d Nyquist-plane modes in top band vs golden %d\n",
             "nnyq", cur.nnyq, gold.nnyq)
         ok[] = false
     end
@@ -457,10 +500,12 @@ function check(p = small_case_params())
     )
     ok = compare_against_golden(cur, goldres)
     if ok
-        println("\nSMALL CASE PASSED — every array bit-identical to the golden data.")
+        println("\nSMALL CASE PASSED — every gated array inside the Float32 round-off bound.")
+        println("  dQ and tau are reported, not gated: dQ is a difference of near-equal QoIs and")
+        println("  tau is a ratio whose denominator can pass near zero. See compare_against_golden.")
     else
-        println("\nSMALL CASE FAILED. Do not widen a tolerance; this is a port defect or a")
-        println("deliberate upstream numerics change, and both are escalations.")
+        println("\nSMALL CASE FAILED. A gated array left the round-off bound, which is four orders")
+        println("  above where a real port defect shows up. Do not widen the bound; find the defect.")
     end
     ok
 end
