@@ -347,8 +347,8 @@ function run_ic(ordinal::Integer; M::Integer = n_members(), force::Bool = false,
                 julia = string(VERSION), device = gpu ? "cuda" : "cpu", written = string(now()))
 
         push!(walls, wall)
-        @printf("  member %2d/%d: %.1f s (%.2f s/TU), q0 agrees to %.1e, %.0f kB\n",
-                member, M, wall, wall / tsim, rel, filesize(out) / 1024)
+        @printf("  member %2d/%d: %.1f s, q0 median rel %.1e, %.0f kB\n",
+                member, M, wall, chk.median_rel, filesize(out) / 1024)
         flush(stdout)
     end
 
