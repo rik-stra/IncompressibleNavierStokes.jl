@@ -38,4 +38,20 @@ else
     exit 1
 fi
 
+# Bring the depot's caches in line with this invocation before running.
+#
+# 🔴 Needed because of JULIA_CPU_TARGET above. Multiversioning changes the *content* of the
+# precompiled images, so a depot populated without it — or with a different target, or by a julia
+# invoked with different flags — holds caches that this run will not accept. Julia reports that as
+#
+#     Precompiled image ... "Adapt" not available with flags CacheFlags(...)
+#
+# and errors rather than silently rebuilding the whole tree. Doing it explicitly here rebuilds
+# once, in the same environment the run uses, instead of failing mid-load.
+#
+# If this turns into a long rebuild every job, the alternative is to drop JULIA_CPU_TARGET and go
+# back to a per-partition depot (the run_spinnup.sh pattern) — that trades one depot per
+# architecture for no recompilation.
+julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
 julia --project "$SCRIPT"
