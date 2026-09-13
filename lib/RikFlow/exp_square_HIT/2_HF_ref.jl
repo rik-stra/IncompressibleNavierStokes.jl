@@ -64,8 +64,22 @@ tburn = T(4)
 # forcing
 T_L = 0.01  # correlation time of the forcing
 e_star = 0.1 # energy injection rate
-k_f = sqrt(2) # forcing wavenumber  
+k_f = sqrt(2) # forcing wavenumber
 freeze = 10 # number of time steps to freeze the forcing
+
+# What gets written, and how often.
+#
+# ⚠️ `plotfreq` is only ever tested on steps where `n % savefreq == 0` (`filtersaver` gates its
+# inner observable on `savefreq` first), so a `plotfreq` that is not a multiple of `savefreq`
+# stores fields at `lcm(savefreq, plotfreq)` instead — quietly, and far fewer of them.
+# `ref_data_storage` reports the interval it really gets; read that, not this line.
+savefreq = 10      # DNS steps between QoI samples
+plotfreq = 1000    # DNS steps between stored (filtered) LES fields -> 401 fields at tsim = 100
+# 🔴 Checkpoints are write-only. Nothing in RikFlow reads one back: `create_ref_data` has no resume
+# path, so a checkpoint buys a post-mortem restart that somebody has to write by hand, not an
+# automatic one. Raising this does not make the run recoverable on its own — it only makes a
+# hand-written restart possible at a finer granularity, at 4.3 GiB and a couple of minutes each.
+n_checkpoints = 1
 
 seeds = (;
     dns = 123, # DNS initial condition
@@ -78,6 +92,23 @@ indir = @__DIR__() *"/output"
 checkpoints_dir = @__DIR__() *"/output/checkpoints"
 ispath(outdir) || mkpath(outdir)
 ispath(checkpoints_dir) || mkpath(checkpoints_dir)
+
+# ---------------------------------------------------------------------------------------------
+# Disk preflight. Before the initial condition is loaded, let alone before 400,000 steps.
+#
+# 🔴 `create_ref_data` holds every stored field in host memory for the whole run and writes them
+# all at the end, and each checkpoint carries the full DNS field *plus* everything accumulated so
+# far. At 512^3 Float64 that is 2.58 GiB of output and a 4.33 GiB checkpoint. Running out of space
+# is discovered at the end — after the compute is spent and with nothing written — so it is checked
+# here instead. `hard = true`: refuse to start rather than fail late.
+#
+# ⚠️ Free space is not reserved. Another job can take it while this one runs; the 15% margin covers
+# the ordinary case, not a busy filesystem.
+# ---------------------------------------------------------------------------------------------
+_storage = ref_data_storage(;
+    ndns = n_dns, nles = n_les, tsim, Δt, savefreq, plotfreq, n_checkpoints, T)
+report_ref_data_storage(_storage; label = "$(n_dns)^3 -> $(n_les)^3, $T, tsim = $tsim")
+check_output_space([outdir, checkpoints_dir], _storage.peak; hard = true)
 
 # Device and precision are set in the parameter block above.
 
@@ -118,10 +149,10 @@ get_params(nlesscalar) = (;
     ou_bodyforce = (;T_L, e_star, k_f, freeze, rng_seed = seeds.ou ),
 )
 
-params_train = (; get_params([n_les])..., savefreq = 10, plotfreq = 1000);
+params_train = (; get_params([n_les])..., savefreq, plotfreq);
 t3 = time()
 data_train = create_ref_data(; params_train..., ustart, method = LMWray3(; T),
-    n_checkpoints = 1, checkpoint_name = checkpoints_dir);
+    n_checkpoints, checkpoint_name = checkpoints_dir);
 t4 = time()
 println("HF simulation done. Time: $(t4-t3) s")
 # Save filtered DNS data

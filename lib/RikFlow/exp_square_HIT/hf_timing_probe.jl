@@ -1,0 +1,467 @@
+# Wall-clock probe for the 512^3 HF reference run, at the production configuration.
+#
+# Purpose: measure the per-step cost of `2_HF_ref.jl` on a few thousand steps so the 400,000-step
+# production run can be costed before it is launched, and report what it will write to disk.
+#
+# ⚠️ This is not a short *reference* run. It produces no usable data and saves no fields; it runs
+# the production right-hand side, stepper, precision, forcing and processor mix and times them.
+#
+# Everything that sets the per-step cost is identical to production: n_dns = 512, Float64, LMWray3,
+# fixed Δt = 2.5e-4, freeze = 10, OU forcing, QoIs every 10 steps through the full 512^3 -> 64^3
+# filter, and a stored LES field every 1000 steps. Only the number of steps differs.
+#
+# How it works. Two solves:
+#
+#   1. a warm-up solve, which pays for CUDA compilation, the FFT plans and the first allocations,
+#      and whose only output is a first estimate of the per-step cost;
+#   2. a measured solve, continuing from the warmed field, sized from that estimate so it fits the
+#      time budget and is a whole number of 1000-step blocks — so its mix of plain steps, QoI steps
+#      and field-store steps is exactly production's.
+#
+# Splitting them is the point: a single solve folds a minute of compilation into the first steps,
+# and at 400,000 steps a 10% error in the per-step cost is four hours.
+#
+# How to read the output. Two independent projections are printed — one from the mean over the
+# measured block, one from the per-class medians (plain / QoI / field-store) weighted by how often
+# production hits each. They should agree to a few percent. If they do not, the timing is noisy and
+# the run was too short.
+#
+# ⚠️ What the projection does not cover: a shared GPU node, filesystem contention from other jobs,
+# and any slowdown that only appears after hours of running. Treat it as a floor and add margin.
+
+if false                                               #src
+    include("../src/RikFlow.jl")                       #src
+    include("../../../src/IncompressibleNavierStokes.jl") #src
+    using .IncompressibleNavierStokes                  #src
+end
+
+println("Loading modules...")
+t0 = time()
+using JLD2
+using Observables      # `on`, for the step timer
+using Printf
+using Random
+using Statistics
+using RikFlow
+using IncompressibleNavierStokes
+using CUDA
+t1 = time()
+println("Modules loaded. Time: $(t1-t0) s")
+
+# ---------------------------------------------------------------------------------------------
+# Parameters. One block, environment-overridable, nothing shadowed.
+# ---------------------------------------------------------------------------------------------
+
+T = Float64
+
+# `HFT_DEVICE=cpu` is for smoke-testing the script end to end before it reaches Snellius; gotcha
+# #47 records undefined names inside function bodies shipping to the cluster three times because a
+# parse check cannot see them. A CPU run measures nothing about GPU cost.
+const ONCPU = get(ENV, "HFT_DEVICE", "gpu") == "cpu"
+ArrayType = ONCPU ? Array : CuArray
+backend = ONCPU ? IncompressibleNavierStokes.CPU() : CUDABackend()
+
+n_dns = parse(Int, get(ENV, "HFT_N_DNS", "512"))
+n_les = parse(Int, get(ENV, "HFT_N_LES", "64"))
+Re = T(2_000)
+
+# Production values. These are what make the measurement transferable; none of them is a probe
+# parameter.
+Δt = T(2.5e-4)
+# ⚠️ These two must match `2_HF_ref.jl`'s `params_train`. They are overridable so the probe can
+# cost a *proposed* saving policy -- that is half of what it is for -- but a projection made with
+# one policy does not apply to a run with another: the QoI and field-store steps cost several times
+# a plain one.
+savefreq = parse(Int, get(ENV, "HFT_SAVEFREQ", "10"))    # DNS steps between QoI samples
+plotfreq = parse(Int, get(ENV, "HFT_PLOTFREQ", "1000"))  # DNS steps between stored LES fields
+freeze = 10        # DNS steps the OU body force is held fixed
+T_L = 0.01
+e_star = 0.1
+k_f = sqrt(2)
+
+# What the measurement is extrapolated to.
+target_tsim = parse(T, get(ENV, "HFT_TARGET_TSIM", "100"))
+# The SLURM wall limit the projection is compared against.
+wall_hours = parse(Float64, get(ENV, "HFT_WALL_HOURS", "120"))
+# Checkpoints the production run will write, for the storage table.
+n_checkpoints = parse(Int, get(ENV, "HFT_N_CHECKPOINTS", "1"))
+
+# Probe sizing.
+warmup_steps = parse(Int, get(ENV, "HFT_WARMUP", "200"))
+# The measured block is sized from the warm-up estimate to fill this budget, then rounded to whole
+# `plotfreq` blocks and clamped. Set HFT_MEASURE to override the sizing and fix it outright.
+budget_s = parse(Float64, get(ENV, "HFT_BUDGET_S", "900"))
+measure_override = parse(Int, get(ENV, "HFT_MEASURE", "0"))
+measure_min = parse(Int, get(ENV, "HFT_MEASURE_MIN", "1000"))
+measure_max = parse(Int, get(ENV, "HFT_MEASURE_MAX", "20000"))
+
+seeds = (; dns = 123, ou = 333, to = 234)
+
+qois = [["Z", 0, 6], ["E", 0, 6], ["Z", 7, 15], ["E", 7, 15], ["Z", 16, 32], ["E", 16, 32]]
+lims = ((T(0), T(1)), (T(0), T(1)), (T(0), T(1)))
+
+outdir = @__DIR__() * "/output"
+indir = @__DIR__() * "/output"
+checkpoints_dir = outdir * "/checkpoints"
+ispath(outdir) || mkpath(outdir)
+
+# ---------------------------------------------------------------------------------------------
+# Storage accounting for the production run this is costing.
+#
+# Printed before anything expensive happens, because it is the other half of the question and it
+# costs nothing to answer. The free-space check warns here and errors in `2_HF_ref.jl`: this probe
+# writes almost nothing itself.
+# ---------------------------------------------------------------------------------------------
+
+store = ref_data_storage(;
+    ndns = n_dns,
+    nles = n_les,
+    tsim = target_tsim,
+    Δt,
+    savefreq,
+    plotfreq,
+    n_checkpoints,
+    T,
+)
+report_ref_data_storage(store; label = "production, $(n_dns)^3, $T, n_checkpoints = $n_checkpoints")
+check_output_space([outdir, checkpoints_dir], store.peak; hard = false)
+
+# ---------------------------------------------------------------------------------------------
+# Initial condition: the archived spin-up, promoted to Float64. Same file and same reasoning as
+# `2_HF_ref.jl` and `cfl_probe.jl`.
+#
+# It matters for timing, not just for realism: the cost of a step is dominated by the grid, but a
+# zero or synthetic field is not what production runs, and `maximum(abs, u)` in the logger and the
+# QoI path both touch the real values.
+# ---------------------------------------------------------------------------------------------
+
+icfile = indir * "/u_start_spinnup_$(n_dns)_Re$(Re)_freeze_10_tsim4.0.jld2"
+const SYNTHETIC = get(ENV, "HFT_SYNTHETIC", "0") == "1"
+
+if isfile(icfile)
+    println("Loading initial condition: $icfile")
+    ustart = load(icfile, "u_start")
+    ustart isa Tuple && (ustart = stack(ustart))
+    println("  stored as $(eltype(ustart)) $(size(ustart)); promoting to $T")
+    ustart = ArrayType{T}(ustart)
+elseif SYNTHETIC
+    @warn "SYNTHETIC initial condition (HFT_SYNTHETIC=1). Acceptable for a cost measurement — the " *
+          "per-step cost is set by the grid — but this is not the production field."
+    ustart = nothing   # built below, once `dns` exists
+else
+    error(
+        "No initial condition at:\n    $icfile\n\n" *
+        "Copy the archived spin-up there, or set HFT_SYNTHETIC=1 to time the machinery on a " *
+        "synthetic field (acceptable here: the per-step cost is set by the grid, not the values).",
+    )
+end
+
+# ---------------------------------------------------------------------------------------------
+# Setups and operators
+# ---------------------------------------------------------------------------------------------
+
+gpumem() = ONCPU ? (0, 0) : (CUDA.total_memory() - CUDA.available_memory(), CUDA.total_memory())
+
+dns = rf_setup(; x = ntuple(a -> LinRange(lims[a]..., n_dns + 1), 3), Re, ArrayType, backend)
+les = rf_setup(; x = ntuple(a -> LinRange(lims[a]..., n_les + 1), 3), Re, ArrayType, backend)
+compression = n_dns ÷ n_les
+@info "Grid" n_dns n_les compression
+
+force_cache = ou_force_cache(dns; T_L, e_star, k_f, rng_seed = seeds.ou, freeze)
+psolver = psolver_spectral(dns)
+
+if isnothing(ustart)
+    ustart = velocityfield(
+        dns,
+        (dim, x, y, z) ->
+            dim == 1 ? T(1) * sinpi(2 * y) * cospi(2 * z) :
+            dim == 2 ? T(1) * sinpi(2 * z) * cospi(2 * x) :
+            T(1) * sinpi(2 * x) * cospi(2 * y);
+        psolver,
+    )
+end
+
+# `nstep = 1` where production passes `nstep = nt`, and that is not a difference: `TO_Setup` only
+# reaches `allocate_arrays_outputs` for `:TRACK_REF` and `:ONLINE`, so under `:CREATE_REF` nothing
+# is sized by `nstep` at all. Worth knowing for the production run too — the HF reference holds no
+# per-step TO array, however many steps it takes.
+to_setup_les = RikFlow.TO_Setup(; qois, to_mode = :CREATE_REF, ArrayType, setup = les, nstep = 1)
+
+# ---------------------------------------------------------------------------------------------
+# Processors
+# ---------------------------------------------------------------------------------------------
+
+"""
+Per-step wall time.
+
+🔑 The `CUDA.synchronize()` is what makes the numbers mean anything. GPU work is queued
+asynchronously, so without it a per-step time is the cost of *submitting* the step, and the real
+cost only shows up wherever something later forces a sync. The queue drains eventually either way,
+so the block total is right regardless — but the per-class breakdown would be nonsense.
+
+It does cost something: syncing every step removes what little overlap there is between steps, so
+this is a slight over-estimate, which is the safe direction for a projection. The QoI path already
+forces a sync every `savefreq` steps through `Array(q)`.
+"""
+steptimer() =
+    processor() do state
+        times = Tuple{Int,Float64}[]
+        on(state) do (; u, t, n)
+            ONCPU || CUDA.synchronize()
+            push!(times, (n, time()))
+        end
+        # 🔴 No `state[] = state[]` here, unlike every other processor in this repo.
+        # Poking the observable fires **every handler registered before this one**, so a second
+        # poking processor makes `filtersaver` record its n = 0 sample twice -- which is why
+        # `cfl_probe.jl` reported `qoi_hist (6, 17)` for a run with 16 sample points. Harmless
+        # there, wrong here: it would put two n = 0 entries in the timing record.
+        # The cost is that step 1 is never timed, which at a thousand steps is nothing.
+        times
+    end
+
+"Build the production processor set. `nplot` is `plotfreq`, or huge to store nothing."
+makeprocs(; nplot, nlog) = (;
+    f = RikFlow.filtersaver(
+        dns,
+        [les],
+        (FaceAverage(),),
+        [compression],
+        [to_setup_les];
+        nupdate = savefreq,
+        n_plot = nplot,
+        checkpoints = nothing,
+        checkpoint_name = nothing,
+    ),
+    steps = steptimer(),
+    log = timelogger(; nupdate = nlog),
+)
+
+"""
+Per-step costs from a `steptimer` record.
+
+The record starts at step 1 (see [`steptimer`](@ref)), so differencing gives the duration of steps
+2..n and step 1 is not reported -- it would carry the processor initialisation anyway.
+"""
+function steptimes(rec)
+    length(rec) < 2 && return (Int[], Float64[])
+    ns = [rec[i][1] for i = 2:length(rec)]
+    dts = [rec[i][2] - rec[i-1][2] for i = 2:length(rec)]
+    ns, dts
+end
+
+# ---------------------------------------------------------------------------------------------
+# 1. Warm-up solve. Everything expensive and one-off happens here.
+# ---------------------------------------------------------------------------------------------
+
+@info "Warm-up solve" steps = warmup_steps stepper = "LMWray3" T Δt freeze
+u = ustart
+tw0 = time()
+(; u), outw = solve_unsteady(;
+    setup = dns,
+    start = (; u),
+    force! = ou_navierstokes!,
+    force_cache,
+    params = rf_params(dns),
+    method = LMWray3(; T),
+    docopy = false,
+    tlims = (T(0), warmup_steps * Δt),
+    Δt,
+    processors = makeprocs(; nplot = plotfreq, nlog = max(50, warmup_steps ÷ 4)),
+    psolver,
+)
+tw1 = time()
+
+nsw, dtsw = steptimes(outw.steps)
+# The tail of the warm-up is already warm; the head is compilation. Use the last half.
+warm_tail = isempty(dtsw) ? NaN : median(dtsw[max(1, end ÷ 2):end])
+@printf("warm-up: %d steps in %.1f s; settled per-step %.4f s\n",
+    warmup_steps, tw1 - tw0, warm_tail)
+
+used, tot = gpumem()
+ONCPU ||
+    @printf("GPU memory in use after warm-up: %s of %s\n", humanbytes(used), humanbytes(tot))
+
+# ---------------------------------------------------------------------------------------------
+# 2. Measured solve, sized from the warm-up.
+# ---------------------------------------------------------------------------------------------
+
+measure_steps = if measure_override > 0
+    measure_override
+elseif isfinite(warm_tail) && warm_tail > 0
+    # Whole `plotfreq` blocks, so the step mix matches production exactly.
+    blocks = max(1, floor(Int, budget_s / (warm_tail * plotfreq)))
+    clamp(blocks * plotfreq, measure_min, measure_max)
+else
+    measure_min
+end
+@printf("measured block: %d steps (~%.0f s at the warm-up rate)\n",
+    measure_steps, measure_steps * warm_tail)
+
+@info "Measured solve" steps = measure_steps
+tm0 = time()
+(; u), outm = solve_unsteady(;
+    setup = dns,
+    start = (; u),
+    force! = ou_navierstokes!,
+    force_cache,
+    params = rf_params(dns),
+    method = LMWray3(; T),
+    docopy = false,
+    tlims = (T(0), measure_steps * Δt),
+    Δt,
+    processors = makeprocs(; nplot = plotfreq, nlog = max(100, measure_steps ÷ 10)),
+    psolver,
+)
+tm1 = time()
+block_wall = tm1 - tm0
+
+ns, dts = steptimes(outm.steps)
+# One short: `steptimer` does not poke the observable, so step 1 has no predecessor to difference
+# against.
+@assert length(ns) == measure_steps - 1 "step record is $(length(ns)), expected $(measure_steps - 1)"
+
+# Classify each step by what production does on it.
+isstore(n) = n % plotfreq == 0
+isqoi(n) = n % savefreq == 0 && !isstore(n)
+t_store = [d for (n, d) in zip(ns, dts) if isstore(n)]
+t_qoi = [d for (n, d) in zip(ns, dts) if isqoi(n)]
+t_plain = [d for (n, d) in zip(ns, dts) if !isstore(n) && !isqoi(n)]
+
+med(v) = isempty(v) ? NaN : median(v)
+
+# ---------------------------------------------------------------------------------------------
+# 3. Checkpoint cost. Measured, not guessed: it is a 3 GiB device-to-host copy plus a JLD2 write,
+#    and it is the only part of the production run that is not per-step.
+# ---------------------------------------------------------------------------------------------
+
+ckpt_file = "$outdir/hf_timing_probe_checkpoint_TEMP.jld2"
+ckpt_time = NaN
+ckpt_bytes = 0
+try
+    results = outm.f
+    c0 = time()
+    u_cpu = Array(u)
+    jldsave(ckpt_file; results, u_cpu)
+    global ckpt_time = time() - c0
+    global ckpt_bytes = filesize(ckpt_file)
+    @printf("checkpoint write: %.1f s for %s (DNS field + %d stored fields)\n",
+        ckpt_time, humanbytes(ckpt_bytes), length(results.data[1].u))
+catch err
+    @warn "checkpoint timing failed" err
+finally
+    # This file is this script's own scratch, named so, and several GiB. Removed here so a probe
+    # does not leave one behind on a shared filesystem.
+    isfile(ckpt_file) && rm(ckpt_file; force = true)
+end
+
+# ---------------------------------------------------------------------------------------------
+# Report
+# ---------------------------------------------------------------------------------------------
+
+nt = store.nt
+# How production distributes its steps across the three classes. `nfields - 1` because the field
+# stored at n = 0 is not a step.
+n_store = store.nfields - 1
+n_qoi = store.nqoi - 1 - n_store
+n_plain = nt - n_store - n_qoi
+
+# 🔴 Scale the checkpoint cost by size; do not reuse the measured seconds. The probe writes a
+# checkpoint holding the DNS field plus the handful of LES fields *it* accumulated; production's
+# holds hundreds, so on the 512^3 case the real file is ~4.3 GiB against the probe's ~3.1 — and at
+# a smaller `n_dns` or a shorter block the gap is larger still.
+ckpt_rate = isfinite(ckpt_time) && ckpt_time > 0 ? ckpt_bytes / ckpt_time : NaN   # bytes/s
+ckpt_total = isfinite(ckpt_rate) ? sum(store.checkpoints; init = 0.0) / ckpt_rate : 0.0
+
+proj_block = block_wall / measure_steps * nt + ckpt_total
+proj_class =
+    n_plain * med(t_plain) + n_qoi * med(t_qoi) + n_store * med(t_store) + ckpt_total
+spread = abs(proj_block - proj_class) / max(proj_block, proj_class)
+
+hrs(s) = s / 3600
+"Seconds as hours, or as seconds when that would print `0.0 h` — smoke runs project to minutes."
+dur(s) = s >= 600 ? @sprintf("%.1f h", hrs(s)) : @sprintf("%.0f s", s)
+
+println()
+println("="^88)
+@printf("measured block         %d steps in %.1f s\n", measure_steps, block_wall)
+@printf("  per step (mean)      %.4f s\n", block_wall / measure_steps)
+@printf("  plain step           %.4f s   (median of %d)\n", med(t_plain), length(t_plain))
+@printf("  + QoI step           %.4f s   (median of %d, every %d steps)\n",
+    med(t_qoi), length(t_qoi), savefreq)
+@printf("  + field-store step   %.4f s   (median of %d, every %d steps)\n",
+    med(t_store), length(t_store), plotfreq)
+if isfinite(ckpt_time)
+    @printf("  checkpoint write     %.1f s for %s measured  ->  %s/s\n",
+        ckpt_time, humanbytes(ckpt_bytes), humanbytes(ckpt_rate))
+    @printf("                       %.1f s for production's %d checkpoint(s), %s total\n",
+        ckpt_total, n_checkpoints, humanbytes(sum(store.checkpoints; init = 0)))
+end
+println()
+@printf("PROJECTION to tsim = %g  (%d steps: %d plain, %d QoI, %d store)\n",
+    target_tsim, nt, n_plain, n_qoi, n_store)
+@printf("  from the block mean   %s\n", dur(proj_block))
+@printf("  from the step classes %s\n", dur(proj_class))
+@printf("  the two differ by     %.1f%%\n", 100 * spread)
+println()
+
+worst = max(proj_block, proj_class)
+if spread > 0.05
+    println("⚠️  The two projections differ by more than 5%. The measured block is too short or the")
+    println("   node is noisy; re-run with a larger HFT_BUDGET_S before trusting either number.")
+end
+@printf("Take %s as the estimate, %s with a 20%% margin.\n", dur(worst), dur(1.2 * worst))
+if 1.2 * hrs(worst) > wall_hours
+    @printf("🔴 That does not fit a %.0f h wall limit. The run has to be split, and\n", wall_hours)
+    println("   `create_ref_data` has no resume path — its checkpoints are written but never read")
+    println("   back, so a job that hits the limit loses everything. Splitting the run means")
+    println("   writing that restart first.")
+elseif hrs(worst) > 0.7 * wall_hours
+    @printf("⚠️  %.1f h against a %.0f h wall limit leaves little room. One slow node and the job\n",
+        hrs(worst), wall_hours)
+    println("   is killed with nothing recoverable — `create_ref_data` cannot resume from its own")
+    println("   checkpoints.")
+else
+    @printf("Fits a %.0f h wall limit with room.\n", wall_hours)
+end
+println("="^88)
+
+filename = "$outdir/hf_timing_probe_$(n_dns)_f64_lmwray3.jld2"
+jldsave(
+    filename;
+    step_n = ns,
+    step_dt = dts,
+    warmup_dt = dtsw,
+    params = (;
+        n_dns,
+        n_les,
+        Re,
+        Δt,
+        savefreq,
+        plotfreq,
+        freeze,
+        target_tsim,
+        warmup_steps,
+        measure_steps,
+        n_checkpoints,
+        stepper = "LMWray3",
+        precision = string(T),
+        oncpu = ONCPU,
+        synthetic = SYNTHETIC,
+    ),
+    timing = (;
+        block_wall,
+        per_step = block_wall / measure_steps,
+        t_plain = med(t_plain),
+        t_qoi = med(t_qoi),
+        t_store = med(t_store),
+        ckpt_time,
+        ckpt_bytes,
+        ckpt_rate,
+        ckpt_total,
+        proj_block,
+        proj_class,
+        proj_hours = hrs(worst),
+    ),
+    storage = store,
+)
+println("\nWritten: $filename")

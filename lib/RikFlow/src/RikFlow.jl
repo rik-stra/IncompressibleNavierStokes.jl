@@ -270,6 +270,8 @@ include("HIT_setups/create_ref_data.jl")
 export create_ref_data
 export spinnup
 
+include("HIT_setups/storage.jl")
+
 include("HIT_setups/LFsims.jl")
 export track_ref
 export online_sgs
