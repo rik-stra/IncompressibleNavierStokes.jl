@@ -323,6 +323,23 @@ tm1 = time()
 block_wall = tm1 - tm0
 
 ns, dts = steptimes(outm.steps)
+
+# The QoIs are computed anyway — they are part of the cost being measured — so they are kept
+# rather than discarded. Two uses, neither of them physics:
+#   * a NaN or a wild magnitude here says the 512^3 -> 64^3 filter, the masks, `curl` or
+#     `compute_QoI` went wrong on the GPU, and that is worth catching in a 20-minute job rather
+#     than 30 hours into the reference run;
+#   * it is the second full-scale exercise of the TO path after `cfl_probe.jl`.
+# ⚠️ Not reference data. ~0.5 TU total, and the OU chain here is a different realisation from the
+# archive's (Float64 draws consume the stream differently — see `2_HF_ref.jl`).
+qoi_warm = stack(outw.f.data[1].qoi_hist)
+qoi_hist = stack(outm.f.data[1].qoi_hist)
+@printf("qoi_hist %s (warm-up %s), every %d steps; finite: %s\n",
+    string(size(qoi_hist)), string(size(qoi_warm)), savefreq, all(isfinite, qoi_hist))
+for (i, q) in enumerate(eachrow(qoi_hist))
+    @printf("  qoi %d  %-12s  min %.4e  max %.4e\n",
+        i, string(qois[i]), minimum(q), maximum(q))
+end
 # One short: `steptimer` does not poke the observable, so step 1 has no predecessor to difference
 # against.
 @assert length(ns) == measure_steps - 1 "step record is $(length(ns)), expected $(measure_steps - 1)"
@@ -438,6 +455,9 @@ jldsave(
     step_n = ns,
     step_dt = dts,
     warmup_dt = dtsw,
+    qoi_hist,
+    qoi_warm,
+    qois,
     params = (;
         n_dns,
         n_les,
