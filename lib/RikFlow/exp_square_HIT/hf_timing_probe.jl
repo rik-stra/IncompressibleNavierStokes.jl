@@ -28,6 +28,13 @@
 #
 # ⚠️ What the projection does not cover: a shared GPU node, filesystem contention from other jobs,
 # and any slowdown that only appears after hours of running. Treat it as a floor and add margin.
+#
+# 🔑 There is a prior to check the answer against. The archived Float32/RK44 reference recorded
+# `comptime = 69_329 s` — 19.3 h — for these same 400,000 steps. Float64 roughly doubles the memory
+# traffic that this solver is bound by, and LMWray3 drops one of RK44's four stages, so on
+# comparable hardware the expectation is very roughly 25–35 h, less on an H100 if the archive was
+# made on an A100. A projection far outside that range is a reason to distrust the probe or the
+# configuration before believing the number.
 
 if false                                               #src
     include("../src/RikFlow.jl")                       #src
