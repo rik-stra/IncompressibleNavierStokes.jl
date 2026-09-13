@@ -3,8 +3,15 @@
 # Purpose: measure the per-step cost of `2_HF_ref.jl` on a few thousand steps so the 400,000-step
 # production run can be costed before it is launched, and report what it will write to disk.
 #
-# ⚠️ This is not a short *reference* run. It produces no usable data and saves no fields; it runs
-# the production right-hand side, stepper, precision, forcing and processor mix and times them.
+# ⚠️ This is not a short *reference* run: ~0.5 TU, and the OU chain is a different realisation from
+# the archive's. It runs the production right-hand side, stepper, precision, forcing and processor
+# mix and times them.
+#
+# It does keep everything it computes — QoI trajectories, the filtered LES fields, and one real
+# checkpoint written by `filtersaver`'s own branch and then loaded back — so that every piece of
+# machinery the 30-hour run depends on has executed at full scale before that run starts. The
+# checkpoint is deleted afterwards (`HFT_KEEP_CHECKPOINT=1` keeps it); the rest goes in the output
+# file.
 #
 # Everything that sets the per-step cost is identical to production: n_dns = 512, Float64, LMWray3,
 # fixed Δt = 2.5e-4, freeze = 10, OU forcing, QoIs every 10 steps through the full 512^3 -> 64^3
@@ -227,7 +234,7 @@ steptimer() =
     end
 
 "Build the production processor set. `nplot` is `plotfreq`, or huge to store nothing."
-makeprocs(; nplot, nlog) = (;
+makeprocs(; nplot, nlog, checkpoints = nothing, checkpoint_name = nothing) = (;
     f = RikFlow.filtersaver(
         dns,
         [les],
@@ -236,8 +243,8 @@ makeprocs(; nplot, nlog) = (;
         [to_setup_les];
         nupdate = savefreq,
         n_plot = nplot,
-        checkpoints = nothing,
-        checkpoint_name = nothing,
+        checkpoints,
+        checkpoint_name,
     ),
     steps = steptimer(),
     log = timelogger(; nupdate = nlog),
@@ -304,7 +311,21 @@ end
 @printf("measured block: %d steps (~%.0f s at the warm-up rate)\n",
     measure_steps, measure_steps * warm_tail)
 
-@info "Measured solve" steps = measure_steps
+# 🔑 A real checkpoint, written by `filtersaver`'s own `n in checkpoints` branch, not imitated
+# here with a `jldsave`. That branch is the one the production run uses and it had never executed
+# at 512^3 post-merge — it does `Array(u)` on a 3 GiB device field and serialises it together with
+# `results`, which is exactly the kind of thing that works on a workstation and fails on a cluster.
+#
+# It lands on `measure_steps ÷ 2 + 1`, deliberately neither a QoI step nor a field-store step, so
+# the write shows up alone in one step's time and that step is excluded from the medians.
+# It goes in its own directory so it can never be mistaken for a production checkpoint.
+ckpt_dir = outdir * "/checkpoints_probe"
+ispath(ckpt_dir) || mkpath(ckpt_dir)
+ckpt_n = measure_steps ÷ 2 + 1
+ckpt_file = "$ckpt_dir/checkpoint_n$(ckpt_n).jld2"
+isfile(ckpt_file) && rm(ckpt_file; force = true)   # never time an overwrite of a stale file
+
+@info "Measured solve" steps = measure_steps checkpoint_at = ckpt_n
 tm0 = time()
 (; u), outm = solve_unsteady(;
     setup = dns,
@@ -316,7 +337,12 @@ tm0 = time()
     docopy = false,
     tlims = (T(0), measure_steps * Δt),
     Δt,
-    processors = makeprocs(; nplot = plotfreq, nlog = max(100, measure_steps ÷ 10)),
+    processors = makeprocs(;
+        nplot = plotfreq,
+        nlog = max(100, measure_steps ÷ 10),
+        checkpoints = [ckpt_n],
+        checkpoint_name = ckpt_dir,
+    ),
     psolver,
 )
 tm1 = time()
@@ -340,16 +366,33 @@ for (i, q) in enumerate(eachrow(qoi_hist))
     @printf("  qoi %d  %-12s  min %.4e  max %.4e\n",
         i, string(qois[i]), minimum(q), maximum(q))
 end
+
+# The filtered LES fields, kept for the same reason as the QoIs: `filtersaver` has already built
+# them and they are the only full-scale filtered output this configuration produces outside the
+# reference run itself. Left as a `Vector` of host arrays — the same shape as production's
+# `data_train.data[1].u` — so anything that reads a reference file reads these too.
+#
+# ⚠️ Unlike the QoIs these are not free to store: one is 6.58 MiB at 64^3. A default-sized block
+# holds a handful; `HFT_MEASURE_MAX=20000` would hold 21. `HFT_SAVE_FIELDS=0` drops them.
+const SAVE_FIELDS = get(ENV, "HFT_SAVE_FIELDS", "1") == "1"
+fields = SAVE_FIELDS ? outm.f.data[1].u : typeof(outm.f.data[1].u)()
+fields_warm = SAVE_FIELDS ? outw.f.data[1].u : typeof(outw.f.data[1].u)()
+fieldbytes = sum(sizeof, fields; init = 0) + sum(sizeof, fields_warm; init = 0)
+@printf("stored fields: %d measured + %d warm-up, %s%s\n",
+    length(fields), length(fields_warm), humanbytes(fieldbytes),
+    SAVE_FIELDS ? "" : "   (HFT_SAVE_FIELDS=0: dropped)")
 # One short: `steptimer` does not poke the observable, so step 1 has no predecessor to difference
 # against.
 @assert length(ns) == measure_steps - 1 "step record is $(length(ns)), expected $(measure_steps - 1)"
 
-# Classify each step by what production does on it.
+# Classify each step by what production does on it. The checkpoint step is in none of the classes:
+# its time is a plain step plus the write, and it is separated out below.
 isstore(n) = n % plotfreq == 0
 isqoi(n) = n % savefreq == 0 && !isstore(n)
-t_store = [d for (n, d) in zip(ns, dts) if isstore(n)]
-t_qoi = [d for (n, d) in zip(ns, dts) if isqoi(n)]
-t_plain = [d for (n, d) in zip(ns, dts) if !isstore(n) && !isqoi(n)]
+isckpt(n) = n == ckpt_n
+t_store = [d for (n, d) in zip(ns, dts) if isstore(n) && !isckpt(n)]
+t_qoi = [d for (n, d) in zip(ns, dts) if isqoi(n) && !isckpt(n)]
+t_plain = [d for (n, d) in zip(ns, dts) if !isstore(n) && !isqoi(n) && !isckpt(n)]
 
 med(v) = isempty(v) ? NaN : median(v)
 
@@ -358,24 +401,43 @@ med(v) = isempty(v) ? NaN : median(v)
 #    and it is the only part of the production run that is not per-step.
 # ---------------------------------------------------------------------------------------------
 
-ckpt_file = "$outdir/hf_timing_probe_checkpoint_TEMP.jld2"
-ckpt_time = NaN
-ckpt_bytes = 0
-try
-    results = outm.f
-    c0 = time()
-    u_cpu = Array(u)
-    jldsave(ckpt_file; results, u_cpu)
-    global ckpt_time = time() - c0
-    global ckpt_bytes = filesize(ckpt_file)
-    @printf("checkpoint write: %.1f s for %s (DNS field + %d stored fields)\n",
-        ckpt_time, humanbytes(ckpt_bytes), length(results.data[1].u))
-catch err
-    @warn "checkpoint timing failed" err
-finally
-    # This file is this script's own scratch, named so, and several GiB. Removed here so a probe
-    # does not leave one behind on a shared filesystem.
+# The write already happened, inside the solve. What is left is to price it and to prove the file
+# is real — a checkpoint that serialises but cannot be loaded is worth nothing, and the production
+# run would not find that out until it needed one.
+ckpt_bytes = isfile(ckpt_file) ? filesize(ckpt_file) : 0
+ckpt_step = findfirst(==(ckpt_n), ns)
+# The write, net of the step it rode along with.
+ckpt_time =
+    isnothing(ckpt_step) || isempty(t_plain) ? NaN : dts[ckpt_step] - med(t_plain)
+
+if ckpt_bytes == 0
+    @warn "no checkpoint was written" ckpt_file ckpt_n
+    @warn "`filtersaver`'s `n in checkpoints` branch did not fire — the production run would " *
+          "also write nothing. This is a real failure, not a probe artefact."
+else
+    @printf("checkpoint: %s at n = %d, write cost %.1f s\n",
+        humanbytes(ckpt_bytes), ckpt_n, ckpt_time)
+    try
+        d = load(ckpt_file)
+        ku = size(d["u_cpu"])
+        nf = length(d["results"].data[1].u)
+        nq = length(d["results"].data[1].qoi_hist)
+        @printf("  reads back: u_cpu %s %s, %d stored fields, %d QoI samples\n",
+            string(ku), string(eltype(d["u_cpu"])), nf, nq)
+        ku == (dns.N..., 3) || @warn "checkpoint u_cpu is not the DNS field shape" got = ku expected =
+            (dns.N..., 3)
+    catch err
+        @warn "checkpoint was written but does not load" ckpt_file err
+    end
+end
+
+# Several GiB on a shared filesystem, and not data. `HFT_KEEP_CHECKPOINT=1` keeps it for
+# inspection.
+if get(ENV, "HFT_KEEP_CHECKPOINT", "0") == "1"
+    println("  kept (HFT_KEEP_CHECKPOINT=1): $ckpt_file")
+else
     isfile(ckpt_file) && rm(ckpt_file; force = true)
+    isdir(ckpt_dir) && isempty(readdir(ckpt_dir)) && rm(ckpt_dir)
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -396,7 +458,17 @@ n_plain = nt - n_store - n_qoi
 ckpt_rate = isfinite(ckpt_time) && ckpt_time > 0 ? ckpt_bytes / ckpt_time : NaN   # bytes/s
 ckpt_total = isfinite(ckpt_rate) ? sum(store.checkpoints; init = 0.0) / ckpt_rate : 0.0
 
-proj_block = block_wall / measure_steps * nt + ckpt_total
+# 🔴 Extrapolate from the summed step times, not from the wall around the solve.
+#
+# `block_wall` also carries what `solve_unsteady` pays once: building the processors, the QoI
+# computation that `filtersaver`'s `state[] = state[]` triggers at n = 0, and — the expensive one —
+# the OU priming, whose partial inverse transform is O(N_f^3 N^3). On the smoke that was 4.6 s
+# against 5.8 s of actual stepping, and dividing it across 40 steps then multiplying by 400,000
+# projected 52% high. Production pays it once for 400,000 steps, so it must not be per-step.
+step_wall = sum(dts)
+setup_wall = block_wall - step_wall          # one-off: processors, priming, and step 1
+per_step = (step_wall - (isfinite(ckpt_time) ? ckpt_time : 0.0)) / length(dts)
+proj_block = per_step * nt + ckpt_total
 proj_class =
     n_plain * med(t_plain) + n_qoi * med(t_qoi) + n_store * med(t_store) + ckpt_total
 spread = abs(proj_block - proj_class) / max(proj_block, proj_class)
@@ -407,18 +479,22 @@ dur(s) = s >= 600 ? @sprintf("%.1f h", hrs(s)) : @sprintf("%.0f s", s)
 
 println()
 println("="^88)
-@printf("measured block         %d steps in %.1f s\n", measure_steps, block_wall)
-@printf("  per step (mean)      %.4f s\n", block_wall / measure_steps)
+@printf("measured block         %d steps, %.1f s of stepping\n", measure_steps, step_wall)
+@printf("  per step (mean)      %.4f s   (checkpoint removed)\n", per_step)
+@printf("  one-off setup        %.1f s   (processors, OU priming, step 1; paid once)\n",
+    setup_wall)
 @printf("  plain step           %.4f s   (median of %d)\n", med(t_plain), length(t_plain))
 @printf("  + QoI step           %.4f s   (median of %d, every %d steps)\n",
     med(t_qoi), length(t_qoi), savefreq)
 @printf("  + field-store step   %.4f s   (median of %d, every %d steps)\n",
     med(t_store), length(t_store), plotfreq)
-if isfinite(ckpt_time)
+if isfinite(ckpt_time) && ckpt_bytes > 0
     @printf("  checkpoint write     %.1f s for %s measured  ->  %s/s\n",
         ckpt_time, humanbytes(ckpt_bytes), humanbytes(ckpt_rate))
     @printf("                       %.1f s for production's %d checkpoint(s), %s total\n",
         ckpt_total, n_checkpoints, humanbytes(sum(store.checkpoints; init = 0)))
+else
+    println("  checkpoint write     NOT MEASURED — no checkpoint file was produced")
 end
 println()
 @printf("PROJECTION to tsim = %g  (%d steps: %d plain, %d QoI, %d store)\n",
@@ -458,6 +534,8 @@ jldsave(
     qoi_hist,
     qoi_warm,
     qois,
+    fields,
+    fields_warm,
     params = (;
         n_dns,
         n_les,
@@ -477,7 +555,9 @@ jldsave(
     ),
     timing = (;
         block_wall,
-        per_step = block_wall / measure_steps,
+        step_wall,
+        setup_wall,
+        per_step,
         t_plain = med(t_plain),
         t_qoi = med(t_qoi),
         t_store = med(t_store),
@@ -491,4 +571,4 @@ jldsave(
     ),
     storage = store,
 )
-println("\nWritten: $filename")
+@printf("\nWritten: %s  (%s)\n", filename, humanbytes(filesize(filename)))
